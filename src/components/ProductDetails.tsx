@@ -270,7 +270,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                           </div>
                           {/* Ratings Badge */}
                           <div 
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-colors"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-colors shrink-0 whitespace-nowrap"
                             onClick={() => {
                               const element = document.getElementById("review-form");
                               element?.scrollIntoView({ behavior: "smooth" });
@@ -286,7 +286,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                             </span>
                           </div>
                           
-                          <div className="ml-auto flex flex-wrap items-center gap-4 justify-end">
+                          <div className="ml-auto flex flex-wrap items-center gap-4 justify-end shrink-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-gray-500 hidden sm:inline">Share:</span>
                               <button onClick={() => {
