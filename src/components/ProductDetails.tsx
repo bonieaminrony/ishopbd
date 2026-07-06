@@ -172,7 +172,6 @@ export default function ProductDetails(props: ProductDetailsProps) {
 
   return (
     <>
-      (
           <div className="w-full min-h-screen">
             <Helmet>
               <title>{selectedProduct.name} - i SHOP BD</title>
