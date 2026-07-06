@@ -210,7 +210,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               className="relative bg-transparent w-full flex flex-col md:flex-row overflow-hidden mb-8"
             >
               {/* Integrated Close Button - Stays inside the box corner */}
-              <div className="absolute top-4 right-4 z-[50]">
+              <div className="absolute top-4 right-4 z-[50] hidden md:block">
                 <button
                   onClick={() => {
                     setIsProductDetailsOpen(false);
