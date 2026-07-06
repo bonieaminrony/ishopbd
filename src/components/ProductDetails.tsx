@@ -220,7 +220,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                 </button>
               </div>
               {/* Product Image Gallery */}
-              <div className="w-full md:w-1/2 bg-white flex flex-col items-center justify-center p-4 md:p-6 border-b md:border-b-0 md:border-r border-gray-100 mt-14 md:mt-0">
+              <div className="w-full md:w-1/2 bg-white flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-r border-gray-100 mt-14 md:mt-0">
                   <div className="mb-4 w-full block md:hidden">
                     <span className="text-primary font-black text-xs tracking-widest uppercase mb-2 block flex items-center gap-2">
                       {selectedProduct.category}
@@ -311,7 +311,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       </div>
                     </div>
                   </div>
-                <div className="relative w-full aspect-square bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center group">
+                <div className="relative w-[90%] md:w-[85%] mx-auto aspect-square bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center group">
                   <ZoomableImage
                     keyId={modalDisplayImage}
                     src={modalDisplayImage || selectedProduct.image}
