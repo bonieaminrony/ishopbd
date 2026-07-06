@@ -360,26 +360,21 @@ export default function AdminPanel(props: AdminPanelProps) {
     userListSearch,
   } = props;
 
+  const [settingsTab, setSettingsTab] = React.useState("general");
+
   return (
     <>
       {isAdminOpen && (
-          <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[500] bg-gray-50 flex flex-col">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsAdminOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-white w-[98vw] max-w-[1600px] h-[95vh] overflow-hidden rounded-3xl shadow-2xl flex flex-col"
+              className="relative w-full h-full overflow-hidden flex flex-col md:flex-row bg-white"
             >
-              {/* Admin Header */}
-              <div className="p-4 md:p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 gap-4">
-                <div className="flex items-center justify-between w-full md:w-auto">
+              {/* Admin Sidebar / Header */}
+              <div className="p-4 md:p-6 border-b md:border-b-0 md:border-r flex flex-col bg-gray-50 gap-6 md:w-[280px] shrink-0 md:h-full md:overflow-y-auto no-scrollbar">
+                <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-primary text-white rounded-xl shadow-md shadow-primary/20">
                       <ShieldCheck size={20} />
@@ -401,17 +396,17 @@ export default function AdminPanel(props: AdminPanelProps) {
                   </button>
                 </div>
                 
-                <div className="flex-1 min-w-0 px-2 hidden md:block overflow-x-auto custom-scrollbar pb-2">
-                  <div className="flex flex-nowrap gap-1 bg-gray-100/50 p-1 rounded-2xl border border-gray-200/50 min-w-full w-max items-center justify-start">
+                <div className="flex-1 w-full hidden md:flex flex-col gap-2">
+                  <div className="flex flex-col gap-1.5 w-full">
                     <button
                       onClick={() => {
                         setAdminTab("orders");
                         setShowOnlyPreOrders(false);
                         setAdminOrdersLimit(50);
                       }}
-                      className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "orders" && !showOnlyPreOrders ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && !showOnlyPreOrders ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <History size={16} /> অর্ডারসমূহ ({orderHistory.filter(o => {
+                      <History size={18} /> অর্ডারসমূহ ({orderHistory.filter(o => {
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return !isPreOrder;
                       }).length})
@@ -422,9 +417,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                         setShowOnlyPreOrders(true);
                         setAdminOrdersLimit(50);
                       }}
-                      className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "orders" && showOnlyPreOrders ? "bg-yellow-500 text-white shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && showOnlyPreOrders ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <div className={`w-1.5 h-1.5 rounded-full ${showOnlyPreOrders && adminTab === "orders" ? "bg-white animate-pulse" : "bg-yellow-500"}`} />
+                      <div className={`w-2 h-2 rounded-full ${showOnlyPreOrders && adminTab === "orders" ? "bg-white animate-pulse" : "bg-yellow-500"}`} />
                       পি অর্ডার ({orderHistory.filter(o => {
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return isPreOrder;
@@ -435,86 +430,86 @@ export default function AdminPanel(props: AdminPanelProps) {
                         setAdminTab("incomplete_orders");
                         setShowOnlyPreOrders(false);
                       }}
-                      className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "incomplete_orders" ? "bg-red-500 text-white shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "incomplete_orders" ? "bg-red-500 text-white shadow-md shadow-red-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <ShoppingCart size={16} /> অসম্পূর্ণ ({incompleteOrders.length})
+                      <ShoppingCart size={18} /> অসম্পূর্ণ ({incompleteOrders.length})
                     </button>
                     <button
                       onClick={() => {
                         setAdminTab("support");
                         setShowOnlyPreOrders(false);
                       }}
-                      className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "support" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "support" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <Headset size={16} /> সাপোর্ট ({supportChats.filter(c => c.unreadByAdmin).length})
+                      <Headset size={18} /> সাপোর্ট ({supportChats.filter(c => c.unreadByAdmin).length})
                     </button>
                     {adminViewMode === "full" && (
                       <>
                         <button
                           onClick={() => setAdminTab("products")}
-                          className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "products" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "products" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <PlusCircle size={16} /> পণ্য ({products.length})
+                          <PlusCircle size={18} /> পণ্য ({products.length})
                         </button>
                         <button
                           onClick={() => setAdminTab("categories")}
-                          className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "categories" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "categories" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <LayoutGrid size={16} /> ক্যাটাগরি ({categories.length})
+                          <LayoutGrid size={18} /> ক্যাটাগরি ({categories.length})
                         </button>
                         <button
                           onClick={() => setAdminTab("refunds")}
-                          className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "refunds" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "refunds" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <RefreshCcw size={16} /> রিফান্ড ({refundRequests.filter(r => r.status === "pending").length})
+                          <RefreshCcw size={18} /> রিফান্ড ({refundRequests.filter(r => r.status === "pending").length})
                         </button>
                         <button
                           onClick={() => setAdminTab("users")}
-                          className={`text-xs font-bold transition-all flex items-center justify-center gap-2 px-6 py-2 rounded-xl whitespace-nowrap ${adminTab === "users" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "users" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <Users size={16} /> ইউজার
+                          <Users size={18} /> ইউজার
                         </button>
                         <button
                           onClick={() => setAdminTab("campaigns")}
-                          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center gap-2 ${adminTab === "campaigns" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "campaigns" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <Gift size={16} /> ক্যাম্পেইন
+                          <Gift size={18} /> ক্যাম্পেইন
                         </button>
                         <button
                           onClick={() => setAdminTab("bulk_sms")}
-                          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${adminTab === "bulk_sms" ? "bg-teal-500 text-white shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "bulk_sms" ? "bg-teal-500 text-white shadow-md shadow-teal-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <MessageSquare size={16} /> বাল্ক SMS
+                          <MessageSquare size={18} /> বাল্ক SMS
                         </button>
                         {isMasterAdmin && (
                           <button
                             onClick={() => setAdminTab("profit_analysis")}
-                            className={`px-6 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${adminTab === "profit_analysis" ? "bg-indigo-500 text-white shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                            className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "profit_analysis" ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                           >
-                            <TrendingUp size={16} /> হিসাব-নিকরা
+                            <TrendingUp size={18} /> হিসাব-নিকাশ
                           </button>
                         )}
                         <button
                           onClick={() => setAdminTab("settings")}
-                          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center gap-2 ${adminTab === "settings" ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-secondary"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "settings" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <ShieldCheck size={16} /> সেটিংস
+                          <ShieldCheck size={18} /> সেটিংস
                         </button>
                       </>
                     )}
                   </div>
-                </div>
-                <div className="hidden md:flex gap-2 shrink-0 pb-4">
-                  <button
-                    onClick={() => setIsAdminOpen(false)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-200/50 rounded-full transition-colors"
-                  >
-                    <X size={24} />
-                  </button>
+                  <div className="mt-auto pt-4 border-t">
+                    <button
+                      onClick={() => setIsAdminOpen(false)}
+                      className="text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full text-red-500 hover:bg-red-50"
+                    >
+                      <XCircle size={18} /> ড্যাশবোর্ড বন্ধ করুন
+                    </button>
+                  </div>
                 </div>
               </div>
               {/* Mobile Tab Switcher */}
-              <div className="md:hidden border-b bg-white overflow-x-auto scroll-smooth pb-1">
+              <div className="md:hidden border-b bg-white overflow-x-auto scroll-smooth pb-1 shrink-0">
                 <div className="flex p-2 gap-2 min-w-max">
                   {([
                         { id: "orders", icon: History, label: `অর্ডার (${orderHistory.filter(o => !((o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending")).length})` },
@@ -527,7 +522,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           { id: "users", icon: Users, label: "ইউজার" },
                           { id: "campaigns", icon: Gift, label: "ক্যাম্পেইন" },
                           { id: "bulk_sms", icon: MessageSquare, label: "বাল্ক SMS" },
-                          ...(isMasterAdmin ? [{ id: "profit_analysis", icon: TrendingUp, label: "হিসাব-নিকরা" }] : []),
+                          ...(isMasterAdmin ? [{ id: "profit_analysis", icon: TrendingUp, label: "হিসাব-নিকাশ" }] : []),
                           { id: "settings", icon: ShieldCheck, label: "সেটিংস" },
                         ] : [])
                       ]).map((tab) => (
@@ -556,7 +551,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                 </div>
               </div>
               {/* Admin Content Area */}
-              <div className={`flex-1 ${adminTab === "support" ? "overflow-hidden p-0" : "overflow-y-auto p-4 md:p-8"} bg-gray-50/30 no-scrollbar flex flex-col`}>
+              <div className={`flex-1 w-full md:w-auto h-full ${adminTab === "support" ? "overflow-hidden p-0" : "overflow-y-auto p-4 md:p-8"} bg-gray-50/30 no-scrollbar flex flex-col`}>
                                 {adminTab === "orders" && (
                   <div className="space-y-6">
                     {/* Dashboard Analytics */}
@@ -3533,6 +3528,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                 )}
                 {adminTab === "settings" && (
                   <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
+                    <div className="max-w-4xl mx-auto mb-8 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto no-scrollbar">
+                      <button onClick={() => setSettingsTab('general')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'general' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>সাধারণ সেটিংস</button>
+                      <button onClick={() => setSettingsTab('banners')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'banners' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>হোমপেজ ব্যানার</button>
+                      <button onClick={() => setSettingsTab('admins')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'admins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>অ্যাডমিন ম্যানেজমেন্ট</button>
+                      <button onClick={() => setSettingsTab('users')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'users' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>ইউজার অ্যাক্সেস</button>
+                    </div>
+                    {settingsTab === 'general' && (
                     <div className="space-y-8 max-w-4xl mx-auto">
                       {/* Coupon Management Section */}
                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
@@ -4096,8 +4098,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </button>
                          </div>
                       </div>
+                    )}
                     
                     {/* Banner Management Section (Moved here from separate tab) */}
+                    {settingsTab === 'banners' && (
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                       <h4 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
                         <ImageIcon size={24} className="text-primary" /> হোমপেজ
@@ -4655,9 +4659,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </div>
                       </div>
                     </div>
+                    )}
                         {/* Database Management Section Removed to protect user data */}
                         
                         {/* Admin Management Section */}
+                    {settingsTab === 'admins' && (
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                       <h4 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
                         <ShieldCheck size={24} className="text-primary" />
@@ -4791,6 +4797,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                         ))}
                       </div>
                     </div>
+                    )}
+                    {settingsTab === 'users' && (
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                       <div className="flex items-center justify-between mb-6">
                         <h4 className="text-xl font-bold text-secondary flex items-center gap-2">
@@ -4867,6 +4875,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </table>
                       </div>
                     </div>
+                    )}
+                    {settingsTab === 'general' && (
                     <div className="bg-yellow-50 border border-yellow-100 p-6 rounded-3xl flex items-start gap-4">
                       <ShieldCheck
                         className="text-yellow-600 flex-shrink-0"
@@ -4882,6 +4892,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </p>
                       </div>
                     </div>
+                    )}
                   </div>
                 )}
                 {adminTab === "users" && (

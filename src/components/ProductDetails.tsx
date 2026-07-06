@@ -180,12 +180,12 @@ export default function ProductDetails(props: ProductDetailsProps) {
               <meta property="og:title" content={`${selectedProduct.name} - i SHOP BD`} />
               <meta property="og:description" content={(selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from i SHOP BD.`).substring(0, 160)} />
               <meta property="og:image" content={selectedProduct.image} />
+              <meta property="og:url" content={`https://ishopbd.com/?product=${selectedProduct.id}`} />
               <script type="application/ld+json">
                 {JSON.stringify({
                   "@context": "https://schema.org/",
                   "@type": "Product",
-                  "name": selectedProduct.name,
-                  "image": selectedProduct.image,
+                  "name": selectedProduct.name,                  "image": selectedProduct.image,
                   "description": selectedProduct.description || `Buy ${selectedProduct.name} at the best price.`,
                   "brand": {
                     "@type": "Brand",
