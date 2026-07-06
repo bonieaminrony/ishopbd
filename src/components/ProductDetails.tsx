@@ -220,7 +220,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                 </button>
               </div>
               {/* Product Image Gallery */}
-              <div className="w-full md:w-1/2 bg-transparent flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-transparent border-gray-100 mt-14 md:mt-0">
+              <div className="w-full md:w-1/2 bg-transparent flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-r border-gray-200 mt-14 md:mt-0">
                   <div className="mb-4 w-full block md:hidden">
                     <span className="text-primary font-black text-xs tracking-widest uppercase mb-2 block flex items-center gap-2">
                       {selectedProduct.category}
