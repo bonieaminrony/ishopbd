@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard } from 'lucide-react';
+import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info } from 'lucide-react';
 
 export interface ProductDetailsProps {
   selectedProduct: any;
@@ -204,7 +204,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="relative bg-white/95 backdrop-blur-2xl w-full rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row overflow-hidden border border-white mb-8"
+              className="relative bg-white w-full shadow flex flex-col md:flex-row overflow-hidden border border-gray-200 mb-8 rounded"
             >
               {/* Integrated Close Button - Stays inside the box corner */}
               <div className="absolute top-4 right-4 z-[50]">
@@ -367,117 +367,100 @@ export default function ProductDetails(props: ProductDetailsProps) {
               </div>
               {/* Product Info */}
               <div className="w-full md:w-1/2 p-6 md:p-10 flex flex-col">
-                <div className="mb-6 hidden md:block">
-                  <span className="text-primary font-black text-xs tracking-widest uppercase mb-2 block flex items-center gap-2">
-                    {selectedProduct.category}
-                    {selectedProduct.code && (
-                      <>
-                        <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                        <span className="text-gray-400">Code: {selectedProduct.code}</span>
-                      </>
-                    )}
-                  </span>
-                  <h1 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tight leading-[1.1] mb-4">
+                
+                <div className="mb-4">
+                  {/* Top Action Bar */}
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 hidden md:flex">
+                     <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500 mr-1">Share:</span>
+                        <button onClick={() => {
+                                const shareUrl = new URL(window.location.origin);
+                                shareUrl.searchParams.set("p", selectedProduct.id || "");
+                                window.open(`https://www.facebook.com/dialog/send?link=${shareUrl.toString()}&app_id=291494419107518&redirect_uri=${shareUrl.toString()}`, '_blank');
+                              }} className="text-gray-500 hover:text-blue-600 transition-colors"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.477 2 2 6.145 2 11.258c0 2.899 1.488 5.485 3.82 7.158v3.584l3.472-1.921c.854.238 1.761.365 2.708.365 5.523 0 10-4.145 10-9.258S17.523 2 12 2zm1.096 12.385l-2.775-2.955-5.412 2.955 5.962-6.332 2.836 2.955 5.348-2.955-5.959 6.332z"/></svg></button>
+                        <button onClick={() => {
+                                const shareUrl = new URL(window.location.origin);
+                                shareUrl.searchParams.set("p", selectedProduct.id || "");
+                                window.open(`https://wa.me/?text=${encodeURIComponent(selectedProduct.name + ' ' + shareUrl.toString())}`, '_blank');
+                              }} className="text-gray-500 hover:text-green-500 transition-colors"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
+                        <button onClick={() => {
+                                const shareUrl = new URL(window.location.origin);
+                                shareUrl.searchParams.set("p", selectedProduct.id || "");
+                                navigator.clipboard.writeText(shareUrl.toString());
+                                alert('Link copied to clipboard!');
+                              }} className="text-gray-500 hover:text-gray-900 transition-colors"><LinkIcon size={16} /></button>
+                     </div>
+                     <div className="flex items-center gap-4 text-sm font-medium">
+                        <button onClick={() => handleLikeProduct(selectedProduct.id)} className={`flex items-center gap-1 transition-colors ${likedProducts.includes(selectedProduct.id) ? "text-primary" : "text-gray-600 hover:text-primary"}`}><Bookmark size={16} fill={likedProducts.includes(selectedProduct.id) ? "currentColor" : "none"} /> Save</button>
+                        <button className="flex items-center gap-1 text-gray-600 hover:text-primary transition-colors"><Bookmark size={16} /> Add to Compare</button>
+                     </div>
+                  </div>
+
+                  {/* Title */}
+                  <h1 className="text-[22px] md:text-2xl text-[#1a2b6d] font-normal mb-3 leading-snug">
                     {selectedProduct.name}
                   </h1>
-                  <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
-                    <div className="flex flex-col gap-1 w-full">
-                      <div className="flex items-center gap-3 flex-wrap w-full">
-                        {/* Stock Badge */}
-                        <div className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 ${
-                          selectedProduct.isComingSoon 
-                            ? "bg-amber-50 text-amber-600 border border-amber-200" 
-                            : (selectedProduct.variants && selectedProduct.variants.length > 0
-                              ? selectedProduct.variants.every(v => (v.stock || 0) <= 0)
-                              : (selectedProduct.stock || 0) <= 0)
-                            ? "bg-red-50 text-red-600 border border-red-200" 
-                            : "bg-green-50 text-green-600 border border-green-200"
-                        }`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${
-                            selectedProduct.isComingSoon 
-                              ? "bg-amber-500" 
-                              : (selectedProduct.variants && selectedProduct.variants.length > 0
-                                ? selectedProduct.variants.every(v => (v.stock || 0) <= 0)
-                                : (selectedProduct.stock || 0) <= 0)
-                              ? "bg-red-500" 
-                              : "bg-green-500 animate-pulse"
-                          }`}></div>
-                          {selectedProduct.isComingSoon 
-                            ? "Pre-Order"
-                            : (selectedProduct.variants && selectedProduct.variants.length > 0
-                              ? selectedProduct.variants.every(v => (v.stock || 0) <= 0)
-                              : (selectedProduct.stock || 0) <= 0)
-                            ? "Out of Stock"
-                            : "Stock Available"
-                          }
-                        </div>
-                        {/* Ratings Badge */}
-                        <div 
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-600 cursor-pointer hover:bg-blue-100 transition-colors"
-                          onClick={() => {
-                            const element = document.getElementById("review-form");
-                            element?.scrollIntoView({ behavior: "smooth" });
-                          }}
-                        >
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star key={star} size={12} className={(selectedProduct.rating || 0) >= star ? "text-yellow-500 fill-yellow-500" : "text-blue-200"} />
-                            ))}
-                          </div>
-                          <span className="text-xs font-bold">
-                            Ratings ({selectedProduct.reviewCount || 0})
-                          </span>
-                        </div>
-                        
-                        <div className="ml-auto flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              const shareUrl = new URL(window.location.origin);
-                              shareUrl.searchParams.set("p", selectedProduct.id || "");
-                              const finalUrl = shareUrl.toString();
-                              if (navigator.share) {
-                                navigator.share({ title: selectedProduct.name, url: finalUrl });
-                              } else {
-                                navigator.clipboard.writeText(finalUrl);
-                                alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-                              }
-                            }}
-                            className="p-2 bg-gray-50 text-gray-400 hover:text-primary transition-colors rounded-full"
-                          >
-                            <Share2 size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleLikeProduct(selectedProduct.id)}
-                            className={`p-2 transition-colors rounded-full ${likedProducts.includes(selectedProduct.id) ? "bg-red-50 text-primary" : "bg-gray-50 text-gray-400"}`}
-                          >
-                            <Heart size={18} fill={likedProducts.includes(selectedProduct.id) ? "currentColor" : "none"} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+
+                  {/* Badges */}
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                     <div className="bg-gray-100 text-gray-800 text-xs px-3 py-1.5 rounded-full flex gap-1">
+                        <span className="text-gray-500">Price:</span>
+                        <span className="font-bold">{Number(selectedProduct.price).toLocaleString('en-IN')}৳</span>
+                     </div>
+                     {selectedProduct.oldPrice && (
+                       <div className="bg-gray-100 text-gray-800 text-xs px-3 py-1.5 rounded-full flex gap-1">
+                          <span className="text-gray-500">Regular Price:</span>
+                          <span className="font-bold line-through">{Number(selectedProduct.oldPrice).toLocaleString('en-IN')}৳</span>
+                       </div>
+                     )}
+                     <div className="bg-gray-100 text-gray-800 text-xs px-3 py-1.5 rounded-full flex gap-1">
+                        <span className="text-gray-500">Status:</span>
+                        <span className="font-bold">{
+                            selectedProduct.isComingSoon ? "Pre-Order" :
+                            (selectedProduct.stock || 0) <= 0 && (!selectedProduct.variants || selectedProduct.variants.every(v => (v.stock || 0) <= 0)) ? "Out of Stock" : "In Stock"
+                        }</span>
+                     </div>
+                     {selectedProduct.code && (
+                       <div className="bg-gray-100 text-gray-800 text-xs px-3 py-1.5 rounded-full flex gap-1">
+                          <span className="text-gray-500">Product Code:</span>
+                          <span className="font-bold">{selectedProduct.code}</span>
+                       </div>
+                     )}
+                     <div className="bg-gray-100 text-gray-800 text-xs px-3 py-1.5 rounded-full flex gap-1">
+                        <span className="text-gray-500">Brand:</span>
+                        <span className="font-bold">{selectedProduct.brand || selectedProduct.category || "General"}</span>
+                     </div>
+                  </div>
+                  
+                  {/* Key Features */}
+                  <div className="mt-6 mb-4">
+                     <h3 className="text-[17px] font-medium text-gray-900 mb-3">Key Features</h3>
+                     <div className="text-sm text-gray-700 flex flex-col gap-2">
+                        {(() => {
+                           const rawText = cleanLatex(selectedProduct.description || "");
+                           if (!rawText) return <p>No features available</p>;
+                           
+                           const lines = rawText.split('\n').filter(l => l.trim().length > 5).slice(0, 5);
+                           if (lines.length > 0) {
+                             return lines.map((line, idx) => (
+                               <p key={idx}>{line.replace(/^[-*•]\s*/, '')}</p>
+                             ));
+                           }
+                           return <p>{rawText.substring(0, 150)}...</p>;
+                        })()}
+                     </div>
+                     <button 
+                       onClick={() => {
+                         const element = document.getElementById("product-description-tabs");
+                         element?.scrollIntoView({ behavior: "smooth", block: "start" });
+                       }}
+                       className="text-primary text-sm font-medium hover:underline mt-4 block"
+                     >
+                       View More Info
+                     </button>
                   </div>
                 </div>
-                  <div className="mb-6">
-                    <div className="bg-gradient-to-br from-red-50 to-white border border-red-100/50 rounded-3xl px-6 py-5 flex flex-col w-full mb-3 shadow-sm relative overflow-hidden">
-                      <span className="text-gray-500 text-xs font-bold uppercase tracking-wide mb-1">
-                        PRICE IN BANGLADESH
-                      </span>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-4xl md:text-5xl font-black text-red-600">
-                          ৳ {Number(getProductPrice(selectedProduct, tempSelectedQty)).toLocaleString('en-IN')}
-                        </span>
-                        {selectedProduct.oldPrice && (
-                          <span className="text-xl text-gray-400 line-through font-bold">
-                            ৳ {Number(selectedProduct.oldPrice).toLocaleString('en-IN')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-xs md:text-[13px] text-gray-500 font-medium px-2">
-                      ন্যায্য মূল্যে অরিজিনাল <strong className="text-gray-700">{selectedProduct.name}</strong> আপনার হাতে পৌঁছে দেওয়াই আমাদের মূল লক্ষ্য!
-                    </p>
-                  </div>
-                  <div className="flex flex-row items-start md:items-stretch gap-4 md:gap-6 mb-6">
+                <div className="flex flex-row items-start md:items-stretch gap-4 md:gap-6 mb-6">
                     {/* Variant Selection Logic */}
                     {selectedProduct.variants && selectedProduct.variants.length > 0 ? (
                       <div className="flex-1 min-w-[140px] md:min-w-[200px] w-full flex flex-col gap-4">
@@ -727,7 +710,12 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       </div>
                     </form>
                   )}
+                  
+                  <div className="mt-2 mb-6 p-2 bg-gray-50 border border-gray-200 rounded text-sm text-red-600 flex items-center gap-2 max-w-fit">
+                    <Info size={16} /> Only For Online Order
+                  </div>
                   {/* Wholesale Pricing Tiers */}
+      
                   {selectedProduct.wholesaleTiers && selectedProduct.wholesaleTiers.length > 0 && (
                     <div className="p-4 bg-gray-50/50 rounded-2xl border border-gray-100 shadow-inner mb-8 mt-4">
                       <div className="flex items-center gap-3 mb-4">
