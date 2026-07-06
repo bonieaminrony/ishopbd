@@ -204,7 +204,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="relative bg-white w-full shadow flex flex-col md:flex-row overflow-hidden border border-gray-200 mb-8 rounded"
+              className="relative bg-white w-full flex flex-col md:flex-row overflow-hidden mb-8"
             >
               {/* Integrated Close Button - Stays inside the box corner */}
               <div className="absolute top-4 right-4 z-[50]">
