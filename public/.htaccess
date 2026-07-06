@@ -1,0 +1,135 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Redirect direct index.html and index.php requests to app.php to bypass CDN cache
+  RewriteRule ^index\.html$ app.php [L]
+  RewriteRule ^index\.php$ app.php [L]
+
+  # Route API endpoints to PHP scripts on shared hosting
+  RewriteRule ^api/send-sms$ api/send-sms.php [L]
+  RewriteRule ^api/send-bulk-sms$ api/send-bulk-sms.php [L]
+  RewriteRule ^api/confirm-order$ api/confirm-order.php [L]
+  RewriteRule ^api/send-email$ api/send-email.php [L]
+  RewriteRule ^api/send-push$ api/send-push.php [L]
+  RewriteRule ^api/chat$ api/chat.php [L]
+  RewriteRule ^api/courier/steadfast/bulk$ api/steadfast-bulk.php [L]
+  RewriteRule ^api/steadfast-status$ api/steadfast-status.php [L]
+  RewriteRule ^api/courier/steadfast/fraud/([^/]+)$ api/steadfast-fraud.php?phone=$1 [L,QSA]
+  RewriteRule ^api/verify-admin$ api/verify-admin.php [L]
+  RewriteRule ^api/product-image/(.*)$ api/product-image.php?id=$1 [L,QSA]
+
+  RewriteCond %{REQUEST_URI} !^/api [NC]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /app.php [L]
+</IfModule>
+
+# =========================================================
+# PERFORMANCE OPTIMIZATIONS (GZIP & BROWSER CACHING)
+# =========================================================
+
+# Compress text, html, javascript, css, xml
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/plain
+  AddOutputFilterByType DEFLATE text/html
+  AddOutputFilterByType DEFLATE text/xml
+  AddOutputFilterByType DEFLATE text/css
+  AddOutputFilterByType DEFLATE application/xml
+  AddOutputFilterByType DEFLATE application/xhtml+xml
+  AddOutputFilterByType DEFLATE application/rss+xml
+  AddOutputFilterByType DEFLATE application/javascript
+  AddOutputFilterByType DEFLATE application/x-javascript
+  AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+  AddOutputFilterByType DEFLATE font/eot
+  AddOutputFilterByType DEFLATE font/otf
+  AddOutputFilterByType DEFLATE font/ttf
+</IfModule>
+
+# Browser Caching
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/jpg "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType text/css "access plus 1 month"
+  ExpiresByType application/pdf "access plus 1 month"
+  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresByType application/x-javascript "access plus 1 month"
+  ExpiresByType image/x-icon "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType font/woff "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresDefault "access plus 2 days"
+</IfModule>
+
+# Disable caching for HTML and PHP files
+<FilesMatch "\.(html|php)$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </IfModule>
+</FilesMatch>
+
+# =========================================================
+# SECURITY HEADERS
+# =========================================================
+
+# Block direct browser access to PHP files (must go through rewrite rules)
+<FilesMatch "\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+</FilesMatch>
+
+# Allow only the specific API PHP files
+<FilesMatch "^(index|app|send-sms|send-push|confirm-order|send-email|product-image|chat|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns)\.php$">
+  <IfModule mod_authz_core.c>
+    Require all granted
+  </IfModule>
+</FilesMatch>
+
+# Block web access to .env files
+<FilesMatch "^\.env">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# Block access to hidden files/folders (starting with dot)
+<FilesMatch "^\.">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+</FilesMatch>
+
+# Security Headers
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set X-XSS-Protection "1; mode=block"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Disable directory listing
+Options -Indexes
+
+# Block access to source maps and Node.js files
+<FilesMatch "\.(map|cjs|mjs|ts|tsx)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+  </IfModule>
+</FilesMatch>

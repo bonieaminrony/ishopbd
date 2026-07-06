@@ -1,0 +1,324 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Customer profile containing personal info and wallet balance",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string", "description": "Profile picture URL or Base64 string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "balance": { "type": "number", "description": "Wallet balance in BDT" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "balance"]
+    },
+    "Transaction": {
+      "title": "Wallet Transaction",
+      "description": "Records of deposits, refunds, and purchases using wallet",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["deposit", "refund", "purchase", "adjustment"] },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "createdAt"]
+    },
+    "Order": {
+      "title": "Store Order",
+      "description": "Customer orders for products",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Optional UID for registered users" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "address": { "type": "string" },
+        "deliveryArea": { "type": "string" },
+        "deliveryCharge": { "type": "number" },
+        "appliedCoupon": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "isPreOrder": { "type": "boolean" },
+        "items": { 
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "product": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "price": { "type": "number" },
+                  "image": { "type": "string" },
+                  "isComingSoon": { "type": "boolean" }
+                }
+              },
+              "quantity": { "type": "number" },
+              "color": { "type": "string" },
+              "size": { "type": "string" }
+            }
+          }
+        },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["cod", "bkash", "nagad", "wallet"] },
+        "transId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "shipped", "delivered", "cancelled", "returned"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "customerPhone", "address", "items", "total", "status", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Store products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "discount": { "type": "number" },
+        "image": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "variants": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "image": { "type": "string" },
+              "stock": { "type": "number" },
+              "showExactStock": { "type": "boolean" }
+            }
+          }
+        },
+        "category": { "type": "string" },
+        "brand": { "type": "string" },
+        "isTrending": { "type": "boolean" },
+        "isComingSoon": { "type": "boolean" },
+        "code": { "type": "string", "description": "Unique product code for searching" },
+        "deleted": { "type": "boolean" },
+        "colors": { "type": "array", "items": { "type": "string" } },
+        "stock": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "likes": { "type": "number" },
+        "description": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "image", "category"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categories",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Banner": {
+      "title": "Homepage Banner",
+      "description": "Banners displayed on the homepage slider",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "image": { "type": "string" },
+        "color": { "type": "string" },
+        "objectPosition": { "type": "string", "description": "CSS object-position value (e.g. center, top, bottom)" },
+        "linkedProductId": { "type": "string" },
+        "titleFont": { "type": "string", "description": "Font family for banner title" },
+        "titleWeight": { "type": "string", "enum": ["normal", "bold", "black"], "description": "Font weight for banner title" },
+        "subtitleFont": { "type": "string", "description": "Font family for banner subtitle" },
+        "subtitleWeight": { "type": "string", "enum": ["normal", "bold"], "description": "Font weight for banner subtitle" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "image"]
+    },
+    "Admin": {
+      "title": "Admin User",
+      "description": "Users with administrative privileges",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "moderator", "owner"] },
+        "password": { "type": "string" },
+        "phone": { "type": "string" },
+        "require2FA": { "type": "boolean" },
+        "addedBy": { "type": "string" },
+        "syncedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Review": {
+      "title": "Product Review",
+      "description": "Reviews submitted by customers for products",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "rating", "comment", "createdAt"]
+    },
+    "SupportChat": {
+      "title": "Support Chat",
+      "description": "Real-time chat messages between customers and admins",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Customer UID or Guest Session ID" },
+        "userName": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "unreadByAdmin": { "type": "boolean" },
+        "unreadByUser": { "type": "boolean" },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "image": { "type": "string" },
+              "audio": { "type": "string" },
+              "senderId": { "type": "string" },
+              "senderName": { "type": "string" },
+              "isAdmin": { "type": "boolean" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System or direct notifications to users",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "link": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "type": { "type": "string", "enum": ["broadcast", "direct"] },
+        "sender": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "createdAt"]
+    },
+    "RefundRequest": {
+      "title": "Refund Request",
+      "description": "Requests for refunds by customers",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "userId", "amount", "status", "createdAt"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Marketing campaigns to promote specific products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "productIds": { "type": "array", "items": { "type": "string" } },
+        "slug": { "type": "string", "description": "URL slug for the campaign" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "slug", "isActive"]
+    },
+    "SiteConfig": {
+      "title": "Site Configuration",
+      "description": "Global app settings including coupon codes",
+      "type": "object",
+      "properties": {
+        "couponCode": { "type": "string" },
+        "isCouponPublic": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Wallet histories"
+    },
+    "orders/{orderId}": {
+      "schema": "Order",
+      "description": "System orders"
+    },
+    "products/{productId}": {
+      "schema": "Product",
+      "description": "Store products"
+    },
+    "products/{productId}/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Product specific reviews"
+    },
+    "categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Product categories"
+    },
+    "banners/{bannerId}": {
+      "schema": "Banner",
+      "description": "Homepage promotional banners"
+    },
+    "admins/{adminId}": {
+      "schema": "Admin",
+      "description": "System administrators and moderators"
+    },
+    "support_chats/{chatId}": {
+      "schema": "SupportChat",
+      "description": "Support chat sessions"
+    },
+    "notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "App notifications"
+    },
+    "refund_requests/{refundId}": {
+      "schema": "RefundRequest",
+      "description": "Refund requests"
+    },
+    "campaigns/{campaignId}": {
+      "schema": "Campaign",
+      "description": "Active and past marketing campaigns"
+    },
+    "config/{configId}": {
+      "schema": "SiteConfig",
+      "description": "Global application settings"
+    }
+  }
+}

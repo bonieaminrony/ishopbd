@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@100..800&family=Atma:wght@300;400;500;600;700&family=Baloo+Da+2:wght@400..800&family=Galada&family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@100..900&family=Mina:wght@400;700&family=Noto+Sans+Bengali:wght@100..900&family=Tiro+Bangla:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.maateen.me/solaiman-lipi/font.css" rel="stylesheet" />
+    <title>i SHOP BD (আই শপ বিডি) - Online Shopping in Bangladesh | Gadgets & Electronics</title>
+    <meta name="description" content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের সেরা অনলাইন শপিং শপ। এখানে পাবেন লেটেস্ট গ্যাজেট, ইলেকট্রনিক্স এবং হোম এক্সেসরিজ সবচেয়ে কম দামে। দ্রুত হোম ডেলিভারি ও গুণগত মানের নিশ্চয়তা।" />
+    <meta name="keywords" content="i SHOP BD, আই শপ বিডি, ishopbd, ishop, আইসপ বিডি, buy gadgets online Bangladesh, electronics shop BD, rechargeable fan price in BD, air cooler price in Bangladesh" />
+    <meta name="author" content="i SHOP BD" />
+    <meta name="robots" content="index, follow" />
+    <link rel="icon" type="image/png" href="/logo.png">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ishopbd.com" />
+    <meta property="og:title" content="i SHOP BD - Best Online Shopping in Bangladesh" />
+    <meta property="og:description" content="Shop the latest gadgets and electronics at i SHOP BD. Quality guaranteed with fast home delivery across Bangladesh." />
+    <meta property="og:image" content="/logo.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://ishopbd.com" />
+    <meta property="twitter:title" content="i SHOP BD - Best Online Shopping in Bangladesh" />
+    <meta property="twitter:description" content="Shop the latest gadgets and electronics at i SHOP BD. Quality guaranteed with fast home delivery across Bangladesh." />
+    <meta property="twitter:image" content="/logo.png" />
+
+    <link rel="canonical" href="https://ishopbd.com" />
+
+    <!-- Schema.org for Google Search -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "OnlineStore",
+      "name": "i SHOP BD",
+      "alternateName": "আই শপ বিডি",
+      "url": "https://ishopbd.com",
+      "logo": "https://ishopbd.com/logo.png",
+      "description": "Premium online shop for gadgets, electronics, and accessories in Bangladesh.",
+      "sameAs": [
+        "https://www.facebook.com/ishopbd",
+        "https://www.instagram.com/ishopbd"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+8801234567890",
+        "contactType": "customer service",
+        "areaServed": "BD",
+        "availableLanguage": ["Bengali", "English"]
+      }
+    }
+    </script>
+    <!-- PWA Setup -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#ff4d4f" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-90PDPQL0RJ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-90PDPQL0RJ');
+    </script>
+
+    <!-- Facebook Pixel Code -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window,document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1358996272808579');
+      fbq('track', 'PageView');
+    </script>
+    <!-- End Facebook Pixel Code -->
+  </head>
+  <body>
+    <noscript>
+      <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1358996272808579&ev=PageView&noscript=1"/>
+    </noscript>
+    <div id="root">
+      <style>
+        #initial-loader {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background-color: #ffffff;
+          z-index: 99999;
+          font-family: system-ui, -apple-system, sans-serif;
+        }
+        .loader-spinner {
+          width: 50px;
+          height: 50px;
+          border: 4px solid #ffe5e5;
+          border-top: 4px solid #ff4d4f;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin-bottom: 20px;
+        }
+        .loader-text {
+          color: #ff4d4f;
+          font-size: 1.2rem;
+          font-weight: 600;
+          letter-spacing: 1px;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+      </style>
+      <div id="initial-loader">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">i SHOP BD...</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('SW registered: ', registration);
+          }).catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+        });
+      }
+
+      // Security: Prevent code inspection
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.keyCode == 123) { // F12
+          e.preventDefault();
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == 73) { // Ctrl+Shift+I
+          e.preventDefault();
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == 67) { // Ctrl+Shift+C
+          e.preventDefault();
+        }
+        if (e.ctrlKey && e.shiftKey && e.keyCode == 74) { // Ctrl+Shift+J
+          e.preventDefault();
+        }
+        if (e.ctrlKey && e.keyCode == 85) { // Ctrl+U
+          e.preventDefault();
+        }
+        if (e.ctrlKey && e.keyCode == 83) { // Ctrl+S
+          e.preventDefault();
+        }
+      });
+    </script>
+  </body>
+</html>
+

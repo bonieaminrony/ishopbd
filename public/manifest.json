@@ -1,0 +1,21 @@
+{
+  "short_name": "i SHOP BD",
+  "name": "i SHOP BD (আই শপ বিডি)",
+  "description": "Premium online shop for gadgets, electronics, and accessories in Bangladesh.",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#ff4d4f",
+  "background_color": "#ffffff"
+}
