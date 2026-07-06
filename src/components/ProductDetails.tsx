@@ -204,7 +204,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="relative bg-white w-full rounded-3xl shadow-xl flex flex-col md:flex-row overflow-hidden border border-gray-100 mb-8"
+              className="relative bg-white/95 backdrop-blur-2xl w-full rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row overflow-hidden border border-white mb-8"
             >
               {/* Integrated Close Button - Stays inside the box corner */}
               <div className="absolute top-4 right-4 z-[50]">
@@ -349,7 +349,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                             setModalDisplayImage(img);
                             setUserInteractedWithGallery(true);
                           }}
-                          className={`w-16 h-16 flex-shrink-0 rounded-xl border-2 transition-all p-1 bg-white ${
+                          className={`w-16 h-16 flex-shrink-0 rounded-2xl border-2 transition-all p-1 bg-white hover:scale-105 duration-300 ${
                             modalDisplayImage === img
                               ? "border-primary shadow-md"
                               : "border-transparent hover:border-gray-200"
@@ -377,7 +377,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       </>
                     )}
                   </span>
-                  <h1 className="text-3xl md:text-5xl font-black text-gray-900 leading-tight mb-4">
+                  <h1 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tight leading-[1.1] mb-4">
                     {selectedProduct.name}
                   </h1>
                   <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
@@ -458,7 +458,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   </div>
                 </div>
                   <div className="mb-6">
-                    <div className="bg-secondary/[0.02] border border-secondary/[0.06] rounded-xl px-6 py-4 flex flex-col w-full mb-3">
+                    <div className="bg-gradient-to-br from-red-50 to-white border border-red-100/50 rounded-3xl px-6 py-5 flex flex-col w-full mb-3 shadow-sm relative overflow-hidden">
                       <span className="text-gray-500 text-xs font-bold uppercase tracking-wide mb-1">
                         PRICE IN BANGLADESH
                       </span>
@@ -503,7 +503,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                                       setModalDisplayImage(matchingVariant.image);
                                     }
                                   }}
-                                  className={`px-3 md:px-4 h-[32px] md:h-[36px] flex items-center justify-center rounded-lg md:rounded-lg text-[12px] md:text-sm font-bold transition-all border-2 ${tempSelectedColor === colorName ? "border-primary bg-red-50 text-primary" : "border-gray-50 bg-gray-50/50 hover:border-gray-200 text-gray-500"}`}
+                                  className={`px-4 md:px-5 h-[36px] md:h-[40px] flex items-center justify-center rounded-full text-[13px] md:text-sm font-bold transition-all border ${tempSelectedColor === colorName ? "border-primary bg-primary text-white shadow-md shadow-primary/20" : "border-gray-200 bg-white hover:border-gray-300 text-gray-600 hover:bg-gray-50"}`}
                                 >
                                   {colorName || "ডিফল্ট"}
                                 </button>
@@ -526,7 +526,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                                     setTempSelectedSize(size as string);
                                     setSizeValError(false);
                                   }}
-                                  className={`flex items-center justify-center px-3 md:px-4 h-[32px] md:h-[36px] rounded-lg md:rounded-lg text-[12px] md:text-sm font-bold transition-all border-2 ${tempSelectedSize === size ? "border-primary bg-primary text-white" : "border-gray-50 bg-gray-50/50 text-gray-500"}`}
+                                  className={`flex items-center justify-center px-4 md:px-5 h-[36px] md:h-[40px] rounded-full text-[13px] md:text-sm font-bold transition-all border ${tempSelectedSize === size ? "border-primary bg-primary text-white shadow-md shadow-primary/20" : "border-gray-200 bg-white hover:border-gray-300 text-gray-600 hover:bg-gray-50"}`}
                                 >
                                   {size as string}
                                 </button>
@@ -544,7 +544,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                     <div className="flex flex-col w-full">
                     <h4 className="text-[14px] md:text-[15px] font-bold text-gray-800 mb-1.5 md:mb-2">পরিমাণ (Quantity):</h4>
                     <div className="flex items-center gap-4 w-full">
-                      <div className="flex items-center border-2 border-gray-100 rounded-lg overflow-hidden bg-gray-50 w-full md:flex-1 md:max-w-[140px] h-[32px] md:h-[36px]">
+                      <div className="flex items-center border border-gray-200 rounded-full overflow-hidden bg-white shadow-sm w-full md:flex-1 md:max-w-[140px] h-[36px] md:h-[40px]">
                         <button onClick={() => setTempSelectedQty(Math.max(1, tempSelectedQty - 1))} className="w-10 h-full flex items-center justify-center hover:bg-white text-secondary disabled:opacity-30 border-r border-gray-100" disabled={tempSelectedQty <= 1}>
                           <Minus size={18} />
                         </button>
@@ -576,7 +576,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                 </div>
                                     {/* Inline Order Form (Rendered ABOVE if NOT wholesale mode) */}
                   {!(selectedProduct.wholesaleTiers?.some(t => tempSelectedQty >= t.minQty)) && (
-                    <form id="inline-order-form" onSubmit={handleInlineOrderSubmit} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-4 mt-auto">
+                    <form id="inline-order-form" onSubmit={handleInlineOrderSubmit} className="bg-gradient-to-b from-gray-50 to-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-sm mb-4 mt-auto relative">
                       <h4 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
                         <Zap size={16} className="text-primary" fill="currentColor" /> দ্রুত অর্ডার করুন
                       </h4>
@@ -592,7 +592,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                               onChange={(e) => setInlineOrderPhone(e.target.value)}
                               onFocus={() => setInlinePhoneFocused(true)}
                               onBlur={() => setTimeout(() => setInlinePhoneFocused(false), 250)}
-                              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-primary outline-none transition-colors"
+                              className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm"
                             />
                             {inlinePhoneFocused && savedProfiles.filter(p => p.phone.includes(inlineOrderPhone)).length > 0 && (
                               <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
@@ -609,7 +609,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                               </div>
                             )}
                           </div>
-                          <input id="inline-name-input" required type="text" placeholder="আপনার নাম" value={inlineOrderName} onChange={(e) => setInlineOrderName(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-primary outline-none transition-colors" />
+                          <input id="inline-name-input" required type="text" placeholder="আপনার নাম" value={inlineOrderName} onChange={(e) => setInlineOrderName(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="relative w-full">
@@ -716,9 +716,9 @@ export default function ProductDetails(props: ProductDetailsProps) {
                         )}
                         {inlineOrderSuccess && (<div className="bg-green-50 text-green-700 text-xs font-bold p-3 rounded-xl border border-green-200 flex items-center justify-center gap-2"><Check size={16} /> অর্ডার সফল হয়েছে!</div>)}
                         <div className="flex gap-2 pt-2">
-                          <button type="button" onClick={() => { if (!validateSelections()) return; addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty); setIsProductDetailsOpen(false); }} className="w-12 shrink-0 bg-white border-2 border-primary text-primary flex items-center justify-center rounded-xl hover:bg-red-50 transition-colors" title="Add to Cart"><ShoppingCart size={20} /></button>
-                          <button type="button" onClick={() => { if (!validateSelections()) return; const msg = `হাই, আমি ${selectedProduct.name} অর্ডার করতে চাচ্ছি।\nপরিমাণ: ${tempSelectedQty} পিস\nমূল্য: ৳${getProductPrice(selectedProduct, tempSelectedQty) * tempSelectedQty}`; window.open(`https://wa.me/${(siteConfig?.whatsappNumber || siteConfig?.supportPhone1 || "01777600844").replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }} className="w-12 shrink-0 bg-[#25D366] text-white flex items-center justify-center rounded-xl hover:brightness-110 transition-colors shadow-lg shadow-[#25D366]/20" title="Order via WhatsApp"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
-                          <button type="submit" disabled={isInlineOrderProcessing || inlineOrderSuccess} className="flex-1 bg-primary text-white font-black py-3 rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50 relative overflow-hidden group hover:scale-[1.02] active:scale-95">
+                          <button type="button" onClick={() => { if (!validateSelections()) return; addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty); setIsProductDetailsOpen(false); }} className="w-14 shrink-0 bg-white border-2 border-gray-100 hover:border-primary text-gray-500 hover:text-primary flex items-center justify-center rounded-2xl hover:bg-red-50 hover:shadow-lg transition-all duration-300" title="Add to Cart"><ShoppingCart size={20} /></button>
+                          <button type="button" onClick={() => { if (!validateSelections()) return; const msg = `হাই, আমি ${selectedProduct.name} অর্ডার করতে চাচ্ছি।\nপরিমাণ: ${tempSelectedQty} পিস\nমূল্য: ৳${getProductPrice(selectedProduct, tempSelectedQty) * tempSelectedQty}`; window.open(`https://wa.me/${(siteConfig?.whatsappNumber || siteConfig?.supportPhone1 || "01777600844").replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }} className="w-14 shrink-0 bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white flex items-center justify-center rounded-2xl hover:shadow-xl hover:shadow-[#25D366]/30 hover:-translate-y-1 transition-all duration-300" title="Order via WhatsApp"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
+                          <button type="submit" disabled={isInlineOrderProcessing || inlineOrderSuccess} className="flex-1 bg-gradient-to-r from-primary to-red-600 text-white font-black py-3.5 rounded-2xl hover:shadow-2xl hover:shadow-primary/30 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50 relative overflow-hidden group hover:-translate-y-1 active:scale-95">
                             {isInlineOrderProcessing ? (<div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />) : (<>
                               <span className="relative z-10 flex items-center justify-center gap-2 animate-text-zoom drop-shadow-md">অর্ডার করুন ৳{(getProductPrice(selectedProduct, tempSelectedQty) * tempSelectedQty) + getDeliveryCharge([{product: selectedProduct, quantity: tempSelectedQty, color: tempSelectedColor, size: tempSelectedSize}], inlineOrderArea, null) - (isApplyingRewardPoints ? availableRewardPoints : 0)}</span>
                             </>)}
@@ -835,7 +835,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                               onChange={(e) => setInlineOrderPhone(e.target.value)}
                               onFocus={() => setInlinePhoneFocused(true)}
                               onBlur={() => setTimeout(() => setInlinePhoneFocused(false), 250)}
-                              className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-primary outline-none transition-colors"
+                              className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm"
                             />
                             {inlinePhoneFocused && savedProfiles.filter(p => p.phone.includes(inlineOrderPhone)).length > 0 && (
                               <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
@@ -852,7 +852,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                               </div>
                             )}
                           </div>
-                          <input id="inline-name-input" required type="text" placeholder="আপনার নাম" value={inlineOrderName} onChange={(e) => setInlineOrderName(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-primary outline-none transition-colors" />
+                          <input id="inline-name-input" required type="text" placeholder="আপনার নাম" value={inlineOrderName} onChange={(e) => setInlineOrderName(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="relative w-full">
