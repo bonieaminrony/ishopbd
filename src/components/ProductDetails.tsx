@@ -234,7 +234,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                         </>
                       )}
                     </span>
-                    <h1 className="text-2xl font-black text-gray-900 leading-tight mb-4">
+                    <h1 className="hidden">
                       {selectedProduct.name}
                     </h1>
                     <div className="flex items-center justify-between border-b border-gray-100 pb-4 w-full">
