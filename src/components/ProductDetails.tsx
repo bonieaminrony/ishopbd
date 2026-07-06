@@ -225,7 +225,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               {/* Product Image Gallery */}
               <div className="w-full md:w-1/2 bg-transparent flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-r border-gray-200 mt-14 md:mt-0">
                   <div className="mb-4 w-full block md:hidden">
-                    <span className="text-primary font-black text-xs tracking-widest uppercase mb-2 block flex items-center gap-2">
+                    <span className="hidden">
                       {selectedProduct.category}
                       {selectedProduct.code && (
                         <>
@@ -241,7 +241,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       <div className="flex flex-col gap-1 w-full">
                         <div className="flex items-center gap-3 flex-wrap w-full">
                           {/* Stock Badge */}
-                          <div className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 ${
+                          <div className={`hidden px-2.5 py-1 rounded-md text-xs font-bold items-center gap-1.5 ${
                             selectedProduct.isComingSoon 
                               ? "bg-amber-50 text-amber-600 border border-amber-200" 
                               : (selectedProduct.variants && selectedProduct.variants.length > 0
