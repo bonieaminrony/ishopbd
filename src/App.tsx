@@ -51,6 +51,7 @@ import {Edit3,
   Plus,
   Minus,
   Eye,
+  EyeOff,
   LayoutGrid,
   Truck,
   ShieldCheck,
@@ -1641,6 +1642,7 @@ checkoutWarningText: "সম্মানিত গ্রাহক, রিটা�
   }, [isQuotaExceeded]);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminPasswordError, setAdminPasswordError] = useState(false);
   const [adminViewMode, setAdminViewMode] = useState<"full" | "support_only">("full");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -7888,8 +7890,7 @@ const handleSaveQuickEdit = async () => {
                     {transactions.length === 0 ? (
                       <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
                         <Wallet size={48} className="mx-auto mb-4 text-gray-200" />
-                               <p className="text-sm text-gray-400">এখনো কোনো লেনদেন হয়নি</p>
-                      </div>
+                        <p className="text-sm text-gray-400">এখনো কোনো লেনদেন হয়নি</p>                      </div>
                     ) : (
                       transactions.map((tx: any) => (
                         <div key={tx.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-gray-100 hover:shadow-md transition-all">
@@ -8350,15 +8351,22 @@ const handleSaveQuickEdit = async () => {
                   <>
                     <div className="relative">
                       <input
-                        type="password"
+                        type={showAdminPassword ? "text" : "password"}
                         value={adminPasswordInput}
                         onChange={(e) => setAdminPasswordInput(e.target.value)}
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleVerifyAdminPassword()
                         }
-                        placeholder="ভেরিফিকেশন কোড"
-                        className={`w-full bg-gray-50 border ${adminPasswordError ? "border-red-500" : "border-gray-200"} rounded-2xl py-5 px-6 outline-none focus:ring-2 focus:ring-primary font-bold text-center text-lg tracking-widest`}
+                        placeholder="পাসওয়ার্ড লিখুন..."
+                        className={`w-full bg-gray-50 border ${adminPasswordError ? "border-red-500" : "border-gray-200"} rounded-2xl py-5 pl-6 pr-14 outline-none focus:ring-2 focus:ring-primary font-bold text-center text-lg tracking-widest`}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminPassword(!showAdminPassword)}
+                        className="absolute right-4 top-[35px] -translate-y-1/2 text-gray-400 hover:text-primary transition-colors p-2 z-10"
+                      >
+                        {showAdminPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                      </button>
                       {adminPasswordError && (
                         <motion.p
                           initial={{ opacity: 0, y: -10 }}
