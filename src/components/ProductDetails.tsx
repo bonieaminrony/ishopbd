@@ -204,7 +204,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="relative bg-white w-full flex flex-col md:flex-row overflow-hidden mb-8"
+              className="relative bg-transparent w-full flex flex-col md:flex-row overflow-hidden mb-8"
             >
               {/* Integrated Close Button - Stays inside the box corner */}
               <div className="absolute top-4 right-4 z-[50]">
@@ -220,7 +220,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                 </button>
               </div>
               {/* Product Image Gallery */}
-              <div className="w-full md:w-1/2 bg-white flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-r border-gray-100 mt-14 md:mt-0">
+              <div className="w-full md:w-1/2 bg-transparent flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-transparent border-gray-100 mt-14 md:mt-0">
                   <div className="mb-4 w-full block md:hidden">
                     <span className="text-primary font-black text-xs tracking-widest uppercase mb-2 block flex items-center gap-2">
                       {selectedProduct.category}
