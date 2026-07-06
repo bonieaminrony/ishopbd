@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info } from 'lucide-react';
+import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info, MessageSquare } from 'lucide-react';
 
 export interface ProductDetailsProps {
   selectedProduct: any;
@@ -169,6 +169,9 @@ export default function ProductDetails(props: ProductDetailsProps) {
     handleBuyNow,
     isProductDetailsOpen,
   } = props;
+
+  const [activeTab, setActiveTab] = React.useState('specification');
+
 
   return (
     <>
@@ -1008,310 +1011,263 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   )}
               </div>
           </motion.div>
-            {/* Product description & Reviews (Full width below) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-               <div className="lg:col-span-2 space-y-8">
-                  {(selectedProduct.warranty || selectedProduct.modelName || selectedProduct.features || selectedProduct.inTheBox || (selectedProduct.specifications && selectedProduct.specifications.length > 0)) && (
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-6">
-                      <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                        <Box size={24} className="text-primary" /> প্রোডাক্ট হাইলাইটস
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Left column: Features & Warranty */}
-                        <div className="space-y-6">
-                          {selectedProduct.modelName && (
-                             <div className="flex items-center gap-2 text-sm font-bold text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                               <Tag size={18} className="text-gray-400" />
-                               <span className="text-gray-500">মডেল:</span> {selectedProduct.modelName}
-                             </div>
-                          )}
-                          {selectedProduct.warranty && (
-                             <div className="flex items-center gap-2 text-sm font-bold text-green-700 bg-green-50 p-3 rounded-xl border border-green-200">
-                               <ShieldCheck size={18} className="text-green-500" />
-                               {selectedProduct.warranty}
-                             </div>
-                          )}
-                          {selectedProduct.features && (
-                            <div>
-                              <h4 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">মূল ফিচারসমূহ</h4>
-                              <ul className="space-y-2">
-                                {selectedProduct.features.split('\n').filter(f => f.trim()).map((feature, idx) => (
-                                  <li key={idx} className="flex items-start gap-2 text-sm text-gray-600 font-medium">
-                                    <CheckCircle2 size={16} className="text-primary shrink-0 mt-0.5" />
-                                    <span>{feature}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {selectedProduct.inTheBox && (
-                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                              <h4 className="text-xs font-bold text-blue-700 mb-2 uppercase tracking-wide flex items-center gap-1.5">
-                                <Box size={14} /> বক্সে যা যা থাকছে
-                              </h4>
-                              <p className="text-sm text-blue-900 font-medium">
-                                {selectedProduct.inTheBox}
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                        {/* Star Tech Style Tabs & Sidebar Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-8" id="product-description-tabs">
+               <div className="lg:col-span-3">
+                  {/* Tabs Header */}
+                  <div className="flex flex-wrap gap-2 mb-0 border-b border-gray-200">
+                    <button 
+                      onClick={() => setActiveTab('specification')}
+                      className={`px-6 py-2.5 text-sm md:text-base font-bold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'specification' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                    >
+                      Specification
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('description')}
+                      className={`px-6 py-2.5 text-sm md:text-base font-bold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'description' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                    >
+                      Description
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('reviews')}
+                      className={`px-6 py-2.5 text-sm md:text-base font-bold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'reviews' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                    >
+                      Reviews ({activeReviews.length})
+                    </button>
+                  </div>
+
+                  {/* Tabs Content */}
+                  <div className="bg-white rounded-b-2xl rounded-tr-2xl p-6 shadow-sm border border-gray-100 min-h-[400px]">
+                    
+                    {/* SPECIFICATION TAB */}
+                    {activeTab === 'specification' && (
+                      <div className="animate-in fade-in duration-300">
+                        <h2 className="text-xl font-black text-gray-900 mb-6">Specification</h2>
                         
-                        {/* Right column: Specifications */}
-                        {selectedProduct.specifications && selectedProduct.specifications.length > 0 && (
-                          <div>
-                             <h4 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide flex items-center gap-2">
-                               <List size={16} className="text-gray-400" /> স্পেসিফিকেশন
-                             </h4>
-                             <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">
-                               {selectedProduct.specifications.map((spec, idx) => (
-                                 <div key={idx} className={`flex text-sm border-b border-gray-50 last:border-b-0 ${idx % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
-                                   <div className="w-1/3 p-3 font-bold text-gray-600 border-r border-gray-50">
-                                     {spec.key}
-                                   </div>
-                                   <div className="w-2/3 p-3 font-medium text-gray-800">
-                                     {spec.value}
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
+                        {(selectedProduct.modelName || selectedProduct.features || selectedProduct.inTheBox) && (
+                          <div className="mb-8">
+                            <div className="bg-blue-50/50 px-4 py-2 text-[#2e3192] font-bold rounded mb-4">Basic Information</div>
+                            <div className="border border-gray-100 rounded-lg overflow-hidden">
+                                {selectedProduct.modelName && (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                                    <div className="col-span-1 p-3 text-sm text-gray-600 bg-gray-50 md:bg-transparent md:border-r border-gray-100">Model</div>
+                                    <div className="col-span-2 p-3 text-sm text-gray-900 font-medium">{selectedProduct.modelName}</div>
+                                  </div>
+                                )}
+                                {selectedProduct.features && (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                                    <div className="col-span-1 p-3 text-sm text-gray-600 bg-gray-50 md:bg-transparent md:border-r border-gray-100">Features</div>
+                                    <div className="col-span-2 p-3 text-sm text-gray-900 font-medium whitespace-pre-wrap">{selectedProduct.features}</div>
+                                  </div>
+                                )}
+                                {selectedProduct.warranty && (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                                    <div className="col-span-1 p-3 text-sm text-gray-600 bg-gray-50 md:bg-transparent md:border-r border-gray-100">Warranty</div>
+                                    <div className="col-span-2 p-3 text-sm text-gray-900 font-medium">{selectedProduct.warranty}</div>
+                                  </div>
+                                )}
+                                {selectedProduct.inTheBox && (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                                    <div className="col-span-1 p-3 text-sm text-gray-600 bg-gray-50 md:bg-transparent md:border-r border-gray-100">In The Box</div>
+                                    <div className="col-span-2 p-3 text-sm text-gray-900 font-medium whitespace-pre-wrap">{selectedProduct.inTheBox}</div>
+                                  </div>
+                                )}
+                            </div>
                           </div>
                         )}
+
+                        {selectedProduct.specifications && selectedProduct.specifications.length > 0 && (
+                          <div>
+                            <div className="bg-blue-50/50 px-4 py-2 text-[#2e3192] font-bold rounded mb-4">Detailed Specifications</div>
+                            <div className="border border-gray-100 rounded-lg overflow-hidden">
+                              {selectedProduct.specifications.map((spec, i) => (
+                                <div key={i} className="grid grid-cols-1 md:grid-cols-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                                  <div className="col-span-1 p-3 text-sm text-gray-600 bg-gray-50 md:bg-transparent md:border-r border-gray-100">{spec.name}</div>
+                                  <div className="col-span-2 p-3 text-sm text-gray-900 font-medium">{spec.value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {(!selectedProduct.modelName && !selectedProduct.features && !selectedProduct.inTheBox && (!selectedProduct.specifications || selectedProduct.specifications.length === 0)) && (
+                          <div className="text-gray-500 py-8 text-center italic">No specifications available for this product.</div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                  {selectedProduct.description && (
-                    <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                      <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center justify-center md:justify-start gap-2">
-                        <LayoutGrid size={24} className="text-primary" /> বিস্তারিত বিবরণ
-                      </h3>
-                      <div className="text-gray-600 leading-relaxed font-medium whitespace-pre-wrap">
-                        {cleanLatex(selectedProduct.description || "")}
+                    )}
+
+                    {/* DESCRIPTION TAB */}
+                    {activeTab === 'description' && (
+                      <div className="animate-in fade-in duration-300">
+                        <h2 className="text-xl font-black text-gray-900 mb-6">Description</h2>
+                        {selectedProduct.description ? (
+                          <div className="prose prose-sm md:prose-base max-w-none text-gray-700 leading-relaxed font-medium">
+                            {cleanLatex(selectedProduct.description || "")}
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 py-8 text-center italic">No description available.</div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                  {/* Reviews Section Implementation */}
-                  <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                    <h3 className="text-xl font-black text-gray-900 mb-6 flex items-center justify-center md:justify-start gap-2">
-                      <Star size={24} className="text-primary" /> কাস্টমার রিভিউ
-                    </h3>
-                    {/* Reviews List */}
-                    <div className="space-y-6">
-                      {activeReviews.length > 0 ? (
-                        activeReviews.map((rev) => (
-                          <div key={rev.id} className="border-b border-gray-50 pb-6 last:border-0">
-                             <div className="flex items-center gap-3 mb-2">
-                               <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-500">
-                                 {rev.userName?.[0] || 'U'}
-                               </div>
-                               <div>
-                                 <p className="font-black text-sm text-gray-900">{rev.userName}</p>
-                                 <div className="flex gap-0.5">
-                                   {[1,2,3,4,5].map(s => <Star key={s} size={10} fill={rev.rating >= s ? "currentColor" : "none"} className={rev.rating >= s ? "text-yellow-400" : "text-gray-200"} />)}
-                                 </div>
-                               </div>
+                    )}
+
+                    {/* REVIEWS TAB */}
+                    {activeTab === 'reviews' && (
+                      <div className="animate-in fade-in duration-300">
+                        <h2 className="text-xl font-black text-gray-900 mb-6">Reviews ({activeReviews.length})</h2>
+                        
+                        {/* Write Review Form */}
+                        <div className="mb-10 bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                           <h4 className="text-lg font-black text-gray-900 mb-4">আপনার রেটিং ও রিভিউ দিন</h4>
+                           <div className="space-y-4 max-w-2xl">
+                             <div className="flex gap-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                                    className={`p-1.5 transition-transform hover:scale-110 ${reviewForm.rating >= star ? 'text-amber-500' : 'text-gray-300'}`}
+                                  >
+                                    <Star size={28} fill={reviewForm.rating >= star ? "currentColor" : "none"} />
+                                  </button>
+                                ))}
                              </div>
-                             <p className="text-gray-600 text-sm font-medium">{rev.comment}</p>
-                             {rev.images && rev.images.length > 0 && (
-                               <div className="flex gap-2 flex-wrap mt-3">
-                                 {rev.images.map((img, idx) => (
-                                   <img loading="lazy" key={idx} src={img} alt="Review" className="w-20 h-20 object-cover rounded-xl border border-gray-100 shadow-sm" />
+                             
+                             {!user && (
+                               <input
+                                 type="text"
+                                 placeholder="আপনার নাম"
+                                 value={reviewForm.guestName}
+                                 onChange={(e) => setReviewForm({ ...reviewForm, guestName: e.target.value })}
+                                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary outline-none text-sm font-medium bg-white"
+                               />
+                             )}
+                             
+                             <textarea
+                               placeholder="আপনার কমেন্ট লিখুন..."
+                               value={reviewForm.comment}
+                               onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary outline-none text-sm font-medium h-32 resize-none bg-white"
+                             ></textarea>
+                             
+                             <div className="text-left">
+                               <label htmlFor="reviewImageUpload" className="inline-flex items-center justify-start gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer hover:bg-gray-50 transition-colors">
+                                 <Camera size={18} />
+                                 ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)
+                               </label>
+                               <input
+                                 type="file"
+                                 id="reviewImageUpload"
+                                 accept="image/*"
+                                 multiple
+                                 className="hidden"
+                                 onChange={handleReviewImageUpload}
+                               />
+                             </div>
+                             {reviewForm.images.length > 0 && (
+                               <div className="flex gap-2 flex-wrap mt-2">
+                                 {reviewForm.images.map((img, i) => (
+                                   <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
+                                     <img loading="lazy" src={img} className="w-full h-full object-cover" alt="Review preview" />
+                                     <button
+                                       onClick={() => setReviewForm(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
+                                       className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow-sm text-red-500 hover:scale-110 transition-transform"
+                                     >
+                                       <X size={12} />
+                                     </button>
+                                   </div>
                                  ))}
                                </div>
                              )}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-center text-gray-400 py-10">এই পণ্যে এখনো কোনো রিভিউ নেই।</p>
-                      )}
-                    </div>
-                    
-                    {/* Add Review Form */}
-                    <div id="review-form" className="mt-10 pt-8 border-t border-gray-100">
-                      <h4 className="text-sm font-black text-gray-900 mb-4 text-center md:text-left">আপনার মূল্যবান মতামত দিন:</h4>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => setReviewForm({ ...reviewForm, rating: s })}
-                              className="focus:outline-none transition-transform active:scale-95"
-                            >
-                              <Star
-                                size={24}
-                                fill={reviewForm.rating >= s ? "currentColor" : "none"}
-                                className={reviewForm.rating >= s ? "text-yellow-400" : "text-gray-300"}
-                              />
-                            </button>
-                          ))}
+                             
+                             <button
+                               onClick={() => submitReview(selectedProduct.id)}
+                               disabled={isSubmittingReview}
+                               className="bg-primary text-white font-black py-3 px-8 rounded-xl shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                             >
+                               {isSubmittingReview ? "সাবমিট হচ্ছে..." : "রিভিউ জমা দিন"}
+                             </button>
+                           </div>
                         </div>
-                        
-                        {!user && (
-                          <input
-                            type="text"
-                            placeholder="আপনার নাম"
-                            value={reviewForm.guestName}
-                            onChange={(e) => setReviewForm({ ...reviewForm, guestName: e.target.value })}
-                            className="w-full px-4 py-3 rounded-xl border border-gray-100 focus:border-primary outline-none text-sm font-medium"
-                          />
-                        )}
-                        
-                        <textarea
-                          placeholder="আপনার কমেন্ট লিখুন..."
-                          value={reviewForm.comment}
-                          onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
-                          className="w-full px-4 py-3 rounded-xl border border-gray-100 focus:border-primary outline-none text-sm font-medium h-32 resize-none"
-                        ></textarea>
-                        
-                        <div className="text-center md:text-left">
-                          <label htmlFor="reviewImageUpload" className="inline-flex items-center justify-center md:justify-start gap-2 bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-bold cursor-pointer hover:bg-gray-100 transition-colors">
-                            <Camera size={18} />
-                            ছবি যুক্ত করুন (সর্বোচ্চ ৫টি)
-                          </label>
-                          <input
-                            type="file"
-                            id="reviewImageUpload"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={handleReviewImageUpload}
-                          />
-                        </div>
-                        {reviewForm.images.length > 0 && (
-                          <div className="flex gap-2 flex-wrap mt-2">
-                            {reviewForm.images.map((img, i) => (
-                              <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200">
-                                <img loading="lazy" src={img} className="w-full h-full object-cover" alt="Review preview" />
-                                <button
-                                  onClick={() => setReviewForm(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
-                                  className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow-sm text-red-500 hover:scale-110 transition-transform"
-                                >
-                                  <X size={12} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        <button
-                          onClick={() => submitReview(selectedProduct.id)}
-                          disabled={isSubmittingReview}
-                          className="w-full bg-primary text-white font-black py-4 rounded-2xl shadow-xl shadow-primary/20 hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
-                        >
-                          {isSubmittingReview ? "লোডিং..." : "রিভিউ জমা দিন"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-               </div>
-               <div className="space-y-8">
-                  {selectedProduct.videoUrl && (
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-                       <h3 className="font-black text-gray-900 mb-4 flex items-center gap-2">
-                         <Camera size={20} className="text-primary" /> ভিডিও রিভিউ
-                       </h3>
-                       <div className="aspect-video rounded-2xl overflow-hidden bg-gray-100">
-                         <iframe
-                            width="100%"
-                            height="100%"
-                            src={`https://www.youtube.com/embed/${selectedProduct.videoUrl.split("v=")[1]?.split("&")[0] || selectedProduct.videoUrl.split("/").pop()}`}
-                            title="YouTube Product Video"
-                            frameBorder="0"
-                            allowFullScreen
-                          ></iframe>
-                       </div>
-                    </div>
-                  )}
-                  <div className="bg-gray-900 text-white p-8 rounded-3xl shadow-xl">
-                    <h3 className="text-lg font-black mb-4 flex items-center justify-center md:justify-start gap-2">
-                      <ShieldCheck size={24} className="text-primary" /> কেন আমাদের থেকে কিনবেন?
-                    </h3>
-                    <ul className="space-y-3">
-                      <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold opacity-90"><Truck size={18} className="text-primary" /> দ্রুত ডেলিভারি সারা বাংলাদেশে</li>
-                      <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold opacity-90"><ShieldCheck size={18} className="text-primary" /> ১০০% অরিজিনাল পন্যের নিশ্চয়তা</li>
-                      <li className="flex items-center justify-center md:justify-start gap-3 text-sm font-bold opacity-90"><CreditCard size={18} className="text-primary" /> ক্যাশ অন ডেলিভারি সুবিধা</li>
-                    </ul>
-                  </div>
-                  {/* Delivery & Wholesale Info Box */}
-                  <div className="space-y-3">
-                    {/* Shipping Rules */}
-                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                      <p className="text-sm md:text-base font-black text-secondary uppercase mb-3 flex items-center gap-2">
-                        <Truck size={14} className="text-primary" />
-                        শিপিং চার্জের নিয়ম (ওজন অনুযায়ী)
-                      </p>
-                      <div className="grid grid-cols-2 gap-4 text-base font-bold text-gray-700">
-                        <div className="space-y-2">
-                          <div className="text-secondary font-black border-b border-gray-200 pb-1.5 flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-500" />
-                            ঢাকার মধ্যে
-                          </div>
-                          <div className="flex justify-between">
-                            <span>১ কেজি:</span>
-                            <span className="text-secondary font-black">৳৮০</span>
-                          </div>
-                          <p className="text-sm text-primary font-black mt-1">* প্রতি অতিরিক্ত কেজি: +৳২০</p>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="text-secondary font-black border-b border-gray-200 pb-1.5 flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-amber-500" />
-                            ঢাকার বাইরে
-                          </div>
-                          <div className="flex justify-between">
-                            <span>১ কেজি:</span>
-                            <span className="text-secondary font-black">৳১২০</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>১ কেজি:</span>
-                            <span className="text-secondary font-black">৳১৩০</span>
-                          </div>
-                          <p className="text-sm text-primary font-black mt-1">* প্রতি অতিরিক্ত কেজি: +৳২০</p>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Wholesale Advance Policy */}
-                    {selectedProduct?.wholesaleTiers && selectedProduct.wholesaleTiers.length > 0 && (
-                      <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 border-dashed">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                            <ShieldCheck size={20} className="text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-secondary uppercase">হোলসেল পেমেন্ট পলিসি</p>
-                            <p className="text-sm font-bold text-gray-600 mt-1 leading-relaxed">
-                              মোট বিলের <span className="text-primary font-black text-sm">২০% টাকা</span> এডভান্স প্রদান করতে হবে? বাকি টাকা কন্ডিশনে (ক্যাশ অন ডেলিভারি)।
-                            </p>
-                          </div>
+
+                        {/* Existing Reviews */}
+                        <div className="space-y-6">
+                           {activeReviews.length > 0 ? (
+                             activeReviews.map((review) => (
+                               <div key={review.id} className="border-b border-gray-100 pb-6 last:border-0 last:pb-0">
+                                 <div className="flex items-center gap-3 mb-3">
+                                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-lg">
+                                     {review.userName.charAt(0).toUpperCase()}
+                                   </div>
+                                   <div>
+                                     <h5 className="font-bold text-gray-900 text-sm">{review.userName}</h5>
+                                     <div className="flex text-amber-500 mt-0.5">
+                                       {[...Array(5)].map((_, i) => (
+                                         <Star key={i} size={12} fill={i < review.rating ? "currentColor" : "none"} className={i >= review.rating ? "text-gray-300" : ""} />
+                                       ))}
+                                     </div>
+                                   </div>
+                                   <span className="text-xs text-gray-400 ml-auto font-medium">{new Date(review.createdAt).toLocaleDateString()}</span>
+                                 </div>
+                                 
+                                 <p className="text-gray-700 text-sm leading-relaxed font-medium mb-3">{review.comment}</p>
+                                 
+                                 {review.images && review.images.length > 0 && (
+                                   <div className="flex gap-2 flex-wrap">
+                                     {review.images.map((img, idx) => (
+                                       <div 
+                                         key={idx} 
+                                         className="w-20 h-20 rounded-lg overflow-hidden border border-gray-100 cursor-pointer hover:opacity-90 transition-opacity"
+                                         onClick={() => {
+                                           setModalDisplayImage(img);
+                                           setUserInteractedWithGallery(true);
+                                           window.scrollTo({ top: 0, behavior: "smooth" });
+                                         }}
+                                       >
+                                         <img loading="lazy" src={img} alt="Review" className="w-full h-full object-cover" />
+                                       </div>
+                                     ))}
+                                   </div>
+                                 )}
+                               </div>
+                             ))
+                           ) : (
+                             <div className="text-center py-12 text-gray-400 font-medium">
+                               <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
+                               এখনো কোনো রিভিউ দেওয়া হয়নি।<br/>প্রথম রিভিউটি আপনিই দিন!
+                             </div>
+                           )}
                         </div>
                       </div>
                     )}
                   </div>
                </div>
+               
+               {/* Right Sidebar - Similar Products */}
+               <div className="lg:col-span-1">
+                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sticky top-24">
+                   <h3 className="text-lg font-black text-[#2e3192] text-center mb-6 border-b border-gray-100 pb-3">Similar Product</h3>
+                   <div className="flex flex-col gap-5">
+                     {relatedProducts.slice(0, 5).map((product) => (
+                       <div key={product.id} className="flex gap-3 group cursor-pointer bg-white hover:bg-gray-50 transition-colors rounded-xl p-2 -mx-2" onClick={() => openProductDetails(product)}>
+                         <div className="w-20 h-20 shrink-0 bg-white rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center p-1">
+                           <img src={product.image} alt={product.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-300" />
+                         </div>
+                         <div className="flex flex-col justify-center">
+                           <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-primary transition-colors mb-1">{product.name}</h4>
+                           <div className="flex items-center gap-2">
+                             <span className="text-sm font-black text-[#ef4a23]">৳{product.price}</span>
+                             {product.discount > 0 && (
+                               <span className="text-xs text-gray-400 line-through">৳{Math.round(product.price / (1 - product.discount / 100))}</span>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                     ))}
+                     {relatedProducts.length === 0 && (
+                       <p className="text-sm text-gray-500 text-center italic">No similar products found.</p>
+                     )}
+                   </div>
+                 </div>
+               </div>
             </div>
-            {/* Related Products Section */}
-            {relatedProducts.length > 0 && (
-              <div className="mt-12 mb-12">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-2 h-8 bg-primary rounded-full"></div>
-                  <h3 className="text-xl md:text-2xl font-black text-secondary">
-                    {t("সম্পর্কিত পণ্য", "Related Products")}
-                  </h3>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-1 md:gap-4 px-1">
-                  {relatedProducts.map((product) => (
-                    <ProductCard 
-                      key={product.id}
-                      product={product}
-                      openProductDetails={openProductDetails}
-                      t={t}
-                      handleBuyNow={handleBuyNow}
-                      handleLikeProduct={handleLikeProduct}
-                      isLiked={likedProducts.includes(product.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )
     </>
