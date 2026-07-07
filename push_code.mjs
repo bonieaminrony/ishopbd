@@ -8,12 +8,34 @@ const token = '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';
 
 async function run() {
   try {
+    const branch = await git.currentBranch({ fs, dir });
+    console.log(`Current branch: ${branch}`);
+
+    console.log('Pulling...');
+    try {
+      await git.pull({
+        fs,
+        http,
+        dir,
+        ref: branch,
+        singleBranch: true,
+        author: {
+          name: 'AI Agent',
+          email: 'agent@example.com',
+        },
+        onAuth: () => ({ username: token })
+      });
+      console.log('Pull successful.');
+    } catch (pullErr) {
+      console.error('Pull failed:', pullErr.message);
+      // We will try to proceed anyway just in case
+    }
+
     const status = await git.statusMatrix({ fs, dir });
     
     // Add all changes (modified, added, deleted)
     for (const row of status) {
       const [filepath, head, workdir, stage] = row;
-      // 0 = absent, 1 = identical, 2 = modified
       if (workdir !== head || stage !== head) {
         if (workdir === 0) {
           await git.remove({ fs, dir, filepath });
@@ -37,9 +59,6 @@ async function run() {
 
     console.log(`Committed: ${sha}`);
 
-    const branch = await git.currentBranch({ fs, dir });
-    console.log(`Current branch: ${branch}`);
-
     console.log('Pushing...');
     const pushResult = await git.push({
       fs,
@@ -47,7 +66,6 @@ async function run() {
       dir,
       remote: 'origin',
       ref: branch,
-      force: true,
       onAuth: () => ({ username: token })
     });
     console.log('Push result:', pushResult);
