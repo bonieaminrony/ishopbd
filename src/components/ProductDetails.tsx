@@ -516,209 +516,69 @@ export default function ProductDetails(props: ProductDetailsProps) {
                                 >
                                   {size as string}
                                 </button>
-                            ))}
+                              ))}
                             </div>
                           </div>
                         </div>
                       )}
-                        </div>
-                      </div>
-                  ) : null}
-                  {/* Quantity Selector */}
-                  <div className="flex-1 min-w-[140px] md:min-w-[200px] w-full flex flex-col">
-                    
-                    <div className="flex flex-col w-full">
-                    <h4 className="text-[14px] md:text-[15px] font-bold text-gray-800 mb-1.5 md:mb-2">পরিমাণ (Quantity):</h4>
-                    <div className="flex items-center gap-4 w-full">
-                      <div className="flex items-center border border-gray-200 rounded-full overflow-hidden bg-white shadow-sm w-full md:flex-1 md:max-w-[140px] h-[36px] md:h-[40px]">
-                        <button onClick={() => setTempSelectedQty(Math.max(1, tempSelectedQty - 1))} className="w-10 h-full flex items-center justify-center hover:bg-white text-secondary disabled:opacity-30 border-r border-gray-100" disabled={tempSelectedQty <= 1}>
-                          <Minus size={18} />
-                        </button>
-                        <div className="flex-1 flex items-center justify-center gap-1 min-w-0">
-                          <input 
-                            type="number" 
-                            value={tempSelectedQty === 0 ? "" : tempSelectedQty} 
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              if (!isNaN(val)) setTempSelectedQty(val);
-                              else if (e.target.value === "") setTempSelectedQty(0);
-                            }}
-                            onBlur={() => {
-                              if (tempSelectedQty < 1) setTempSelectedQty(1);
-                            }}
-                            className="w-10 text-center bg-transparent font-bold text-sm text-secondary outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          />
-                          {selectedProduct.unit && (
-                            <span className="font-bold text-secondary text-sm whitespace-nowrap shrink-0">{selectedProduct.unit}</span>
-                          )}
-                        </div>
-                        <button onClick={() => setTempSelectedQty(tempSelectedQty + 1)} className="w-10 h-full flex items-center justify-center hover:bg-white text-secondary border-l border-gray-100">
-                          <Plus size={18} />
-                        </button>
-                      </div>
-                    </div>
                     </div>
                   </div>
-                </div>
-                                    {/* Inline Order Form (Rendered ABOVE if NOT wholesale mode) */}
-                  {!(selectedProduct.wholesaleTiers?.some(t => tempSelectedQty >= t.minQty)) && (
-                    <form id="inline-order-form" onSubmit={handleInlineOrderSubmit} className="bg-gradient-to-b from-gray-50 to-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-sm mb-4 mt-auto relative">
-                      <h4 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
-                        <Zap size={16} className="text-primary" fill="currentColor" /> দ্রুত অর্ডার করুন
-                      </h4>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="relative w-full">
-                            <input
-                              id="inline-phone-input"
-                              required
-                              type="tel"
-                              placeholder="আপনার ফোন নম্বর"
-                              value={inlineOrderPhone}
-                              onChange={(e) => setInlineOrderPhone(e.target.value)}
-                              onFocus={() => setInlinePhoneFocused(true)}
-                              onBlur={() => setTimeout(() => setInlinePhoneFocused(false), 250)}
-                              className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm"
-                            />
-                            {inlinePhoneFocused && savedProfiles.filter(p => p.phone.includes(inlineOrderPhone)).length > 0 && (
-                              <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
-                                {savedProfiles.filter(p => p.phone.includes(inlineOrderPhone)).map((profile, index) => (
-                                  <div
-                                    key={index}
-                                    onMouseDown={() => selectSavedProfile(profile, 'inline')}
-                                    className="px-4 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs flex flex-col gap-0.5 border-b border-gray-50 last:border-none text-left"
-                                  >
-                                    <span className="font-bold text-secondary">{profile.phone}</span>
-                                    {profile.name && <span className="text-gray-400 text-[10px]">{profile.name} - {profile.address}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <input id="inline-name-input" required type="text" placeholder="আপনার নাম" value={inlineOrderName} onChange={(e) => setInlineOrderName(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="relative w-full">
-                            <div className="relative flex items-center">
-                              <input
-                                required
-                                type="text"
-                                placeholder="জেলা সিলেক্ট করুন"
-                                value={isInlineDistrictOpen ? inlineDistrictSearch : inlineOrderDistrict}
-                                onChange={(e) => {
-                                  setInlineDistrictSearch(e.target.value);
-                                  setIsInlineDistrictOpen(true);
-                                }}
-                                onFocus={() => {
-                                  setInlineDistrictSearch("");
-                                  setIsInlineDistrictOpen(true);
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => {
-                                    setIsInlineDistrictOpen(false);
-                                    setInlineDistrictSearch("");
-                                  }, 200);
-                                }}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 pr-10 text-base focus:border-primary outline-none transition-colors"
-                              />
-                              <span className="absolute right-3 pointer-events-none text-gray-400">
-                                <ChevronDown size={18} />
-                              </span>
-                            </div>
-                            {isInlineDistrictOpen && <InlineDistrictModal {...{ ALL_DISTRICTS, inlineDistrictSearch, setInlineOrderDistrict, setInlineOrderThana, setInlineOrderArea, setIsInlineDistrictOpen, inlineOrderDistrict, isInlineDistrictOpen }} />}
-                          </div>
-                          <div className="relative w-full">
-                            <div className="relative flex items-center">
-                              <input
-                                required
-                                type="text"
-                                placeholder="থানা/এলাকা সিলেক্ট করুন"
-                                value={isInlineThanaOpen ? inlineThanaSearch : inlineOrderThana}
-                                onChange={(e) => {
-                                  setInlineThanaSearch(e.target.value);
-                                  setIsInlineThanaOpen(true);
-                                }}
-                                onFocus={() => {
-                                  setInlineThanaSearch("");
-                                  setIsInlineThanaOpen(true);
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => {
-                                    setIsInlineThanaOpen(false);
-                                    setInlineThanaSearch("");
-                                  }, 200);
-                                }}
-                                disabled={!inlineOrderDistrict}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 pr-10 text-base focus:border-primary outline-none transition-colors disabled:opacity-50 disabled:bg-gray-100"
-                              />
-                              <span className="absolute right-3 pointer-events-none text-gray-400">
-                                <ChevronDown size={18} />
-                              </span>
-                            </div>
-                            {isInlineThanaOpen && inlineOrderDistrict && districtThanaMap[inlineOrderDistrict] && (
-                              <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-60 overflow-y-auto">
-                                {districtThanaMap[inlineOrderDistrict].filter(t => 
-                                  t.toLowerCase().includes(inlineThanaSearch.toLowerCase())
-                                ).length > 0 ? (
-                                  districtThanaMap[inlineOrderDistrict].filter(t => 
-                                    t.toLowerCase().includes(inlineThanaSearch.toLowerCase())
-                                  ).map((t) => (
-                                    <div
-                                      key={t}
-                                      onMouseDown={() => {
-                                        setInlineOrderThana(t);
-                                        setIsInlineThanaOpen(false);
-                                      }}
-                                      className={`px-4 py-2.5 hover:bg-red-50 hover:text-primary cursor-pointer text-sm text-left ${
-                                        inlineOrderThana === t ? "bg-red-50 text-primary font-bold" : "text-gray-700"
-                                      }`}
-                                    >
-                                      {t}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                                   ঢাকার মধ্যে
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-</div>
-                        <textarea id="inline-address-input" required placeholder="সম্পূর্ণ ঠিকানা (বাসা, রোড, এলাকা)" value={inlineOrderAddress} onChange={(e) => setInlineOrderAddress(e.target.value)} rows={2} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-primary outline-none transition-colors resize-none" />
-                        <textarea placeholder="অতিরিক্ত নোট লিখুন (ঐচ্ছিক)" value={inlineOrderNote} onChange={(e) => setInlineOrderNote(e.target.value)} rows={2} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-base focus:border-primary outline-none transition-colors resize-none" />
-                        
-                        {availableRewardPoints > 0 && (
-                          <div className="bg-primary/10 p-3 rounded-xl border border-primary/20 flex flex-col md:flex-row items-start md:items-center justify-between my-2 gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="bg-primary text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">GIFT</span>
-                              <span className="text-sm font-bold text-primary">আপনার {availableRewardPoints} রিওয়ার্ড পয়েন্ট আছে! (৳{availableRewardPoints} ছাড়)</span>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                              <input type="checkbox" className="sr-only peer" checked={isApplyingRewardPoints} onChange={() => setIsApplyingRewardPoints(!isApplyingRewardPoints)} />
-                              <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                            </label>
-                          </div>
-                        )}
-                        {inlineOrderSuccess && (<div className="bg-green-50 text-green-700 text-xs font-bold p-3 rounded-xl border border-green-200 flex items-center justify-center gap-2"><Check size={16} /> অর্ডার সফল হয়েছে!</div>)}
-                        <div className="flex gap-2 pt-2">
-                          <button type="button" onClick={() => { if (!validateSelections()) return; addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty); setIsProductDetailsOpen(false); }} className="w-14 shrink-0 bg-white border-2 border-gray-100 hover:border-primary text-gray-500 hover:text-primary flex items-center justify-center rounded-2xl hover:bg-red-50 hover:shadow-lg transition-all duration-300" title="Add to Cart"><ShoppingCart size={20} /></button>
-                          <button type="button" onClick={() => { if (!validateSelections()) return; const msg = `হাই, আমি ${selectedProduct.name} অর্ডার করতে চাচ্ছি।\nপরিমাণ: ${tempSelectedQty} পিস\nমূল্য: ৳${getProductPrice(selectedProduct, tempSelectedQty) * tempSelectedQty}`; window.open(`https://wa.me/${(siteConfig?.whatsappNumber || siteConfig?.supportPhone1 || "01777600844").replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }} className="w-14 shrink-0 bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white flex items-center justify-center rounded-2xl hover:shadow-xl hover:shadow-[#25D366]/30 hover:-translate-y-1 transition-all duration-300" title="Order via WhatsApp"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
-                          <button type="submit" disabled={isInlineOrderProcessing || inlineOrderSuccess} className="flex-1 bg-gradient-to-r from-primary to-red-600 text-white font-black py-3.5 rounded-2xl hover:shadow-2xl hover:shadow-primary/30 transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50 relative overflow-hidden group hover:-translate-y-1 active:scale-95">
-                            {isInlineOrderProcessing ? (<div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />) : (<>
-                              <span className="relative z-10 flex items-center justify-center gap-2 animate-text-zoom drop-shadow-md">অর্ডার করুন ৳{(getProductPrice(selectedProduct, tempSelectedQty) * tempSelectedQty) + getDeliveryCharge([{product: selectedProduct, quantity: tempSelectedQty, color: tempSelectedColor, size: tempSelectedSize}], inlineOrderArea, null) - (isApplyingRewardPoints ? availableRewardPoints : 0)}</span>
-                            </>)}
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  )}
+                ) : null}
+            {/* Quantity Selector */}
+            <div className="flex-1 min-w-[140px] md:min-w-[200px] w-full flex flex-col">
+              <div className="flex flex-col w-full">
+                <h4 className="text-[14px] md:text-[15px] font-bold text-gray-800 mb-1.5 md:mb-2">পরিমাণ (Quantity):</h4>
+                <div className="flex items-center gap-4 w-full mt-2">
+                  <div className="flex items-center border border-gray-200 bg-white shadow-sm w-[120px] shrink-0 h-[36px] md:h-[40px] rounded">
+                    <button onClick={() => setTempSelectedQty(Math.max(1, tempSelectedQty - 1))} className="w-10 h-full flex items-center justify-center hover:bg-gray-50 text-black font-bold disabled:opacity-30" disabled={tempSelectedQty <= 1}>
+                      <Minus size={18} />
+                    </button>
+                    <div className="flex-1 flex items-center justify-center gap-1 min-w-0 border-l border-r border-gray-100 h-full">
+                      <input 
+                        type="number" 
+                        value={tempSelectedQty === 0 ? "" : tempSelectedQty} 
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val)) setTempSelectedQty(val);
+                          else if (e.target.value === "") setTempSelectedQty(0);
+                        }}
+                        onBlur={() => {
+                          if (tempSelectedQty < 1) setTempSelectedQty(1);
+                        }}
+                        className="w-full text-center bg-transparent font-bold text-sm text-secondary outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      {selectedProduct.unit && (
+                        <span className="font-bold text-secondary text-sm whitespace-nowrap shrink-0 pr-1">{selectedProduct.unit}</span>
+                      )}
+                    </div>
+                    <button onClick={() => setTempSelectedQty(tempSelectedQty + 1)} className="w-10 h-full flex items-center justify-center hover:bg-gray-50 text-black font-bold">
+                      <Plus size={18} />
+                    </button>
+                  </div>
                   
+                  <button 
+                    type="button" 
+                    onClick={() => { 
+                      if (!validateSelections()) return; 
+                      const isWholesale = selectedProduct.wholesaleTiers?.some(t => tempSelectedQty >= t.minQty);
+                      if (isWholesale && sumValues(wholesaleSizeQty) !== tempSelectedQty) {
+                        alert("দয়া করে সাইজ অনুযায়ী সঠিক পরিমাণ সিলেক্ট করুন।");
+                        return;
+                      }
+                      handleBuyNow(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty, isWholesale ? wholesaleSizeQty : undefined); 
+                      setIsProductDetailsOpen(false); 
+                    }} 
+                    className="flex-1 bg-[#3f51b5] hover:bg-[#303f9f] text-white font-bold text-sm md:text-base h-[36px] md:h-[40px] rounded transition-all flex items-center justify-center shadow"
+                  >
+                    Buy Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
                   <div className="mt-2 mb-6 p-2 bg-gray-50 border border-gray-200 rounded text-sm text-red-600 flex items-center gap-2 max-w-fit">
                     <Info size={16} /> Only For Online Order
                   </div>
-                  {/* Wholesale Pricing Tiers */}
-      
                   {selectedProduct.wholesaleTiers && selectedProduct.wholesaleTiers.length > 0 && (
                     <div className="p-4 bg-gray-50/50 rounded-2xl border border-gray-100 shadow-inner mb-8 mt-4">
                       <div className="flex items-center gap-3 mb-4">
@@ -808,207 +668,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       )}
                     </div>
                   )}
-                                    {/* Inline Order Form (Rendered BELOW if wholesale mode is active) */}
-                  {(selectedProduct.wholesaleTiers?.some(t => tempSelectedQty >= t.minQty)) && (
-                    <form id="inline-order-form-wholesale" onSubmit={handleInlineOrderSubmit} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mt-4">
-                      <h4 className="text-base md:text-lg font-bold text-secondary mb-4 flex items-center gap-2">
-                        <Zap size={16} className="text-primary" fill="currentColor" /> দ্রুত অর্ডার করুন (হোলসেল)
-                      </h4>
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="relative w-full">
-                            <input
-                              id="inline-phone-input"
-                              required
-                              type="tel"
-                              placeholder="আপনার ফোন নম্বর"
-                              value={inlineOrderPhone}
-                              onChange={(e) => setInlineOrderPhone(e.target.value)}
-                              onFocus={() => setInlinePhoneFocused(true)}
-                              onBlur={() => setTimeout(() => setInlinePhoneFocused(false), 250)}
-                              className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm"
-                            />
-                            {inlinePhoneFocused && savedProfiles.filter(p => p.phone.includes(inlineOrderPhone)).length > 0 && (
-                              <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
-                                {savedProfiles.filter(p => p.phone.includes(inlineOrderPhone)).map((profile, index) => (
-                                  <div
-                                    key={index}
-                                    onMouseDown={() => selectSavedProfile(profile, 'inline')}
-                                    className="px-4 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs flex flex-col gap-0.5 border-b border-gray-50 last:border-none text-left"
-                                  >
-                                    <span className="font-bold text-secondary">{profile.phone}</span>
-                                    {profile.name && <span className="text-gray-400 text-[10px]">{profile.name} - {profile.address}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <input id="inline-name-input" required type="text" placeholder="আপনার নাম" value={inlineOrderName} onChange={(e) => setInlineOrderName(e.target.value)} className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-3.5 text-base focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all shadow-sm" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="relative w-full">
-                            <div className="relative flex items-center">
-                              <input
-                                required
-                                type="text"
-                                placeholder="জেলা সিলেক্ট করুন"
-                                value={isInlineDistrictOpenWholesale ? inlineDistrictSearchWholesale : inlineOrderDistrict}
-                                onChange={(e) => {
-                                  setInlineDistrictSearch(e.target.value);
-                                  setIsInlineDistrictOpen(true);
-                                }}
-                                onFocus={() => {
-                                  setInlineDistrictSearch("");
-                                  setIsInlineDistrictOpen(true);
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => {
-                                    setIsInlineDistrictOpen(false);
-                                    setInlineDistrictSearch("");
-                                  }, 200);
-                                }}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 pr-10 text-base focus:border-primary outline-none transition-colors"
-                              />
-                              <span className="absolute right-3 pointer-events-none text-gray-400">
-                                <ChevronDown size={18} />
-                              </span>
-                            </div>
-                            {isInlineDistrictOpenWholesale && (
-                              <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-60 overflow-y-auto">
-                                {ALL_DISTRICTS.filter(d => 
-                                  d.toLowerCase().includes(inlineDistrictSearchWholesale.toLowerCase())
-                                ).length > 0 ? (
-                                  ALL_DISTRICTS.filter(d => 
-                                    d.toLowerCase().includes(inlineDistrictSearchWholesale.toLowerCase())
-                                  ).map((d) => (
-                                    <div
-                                      key={d}
-                                      onMouseDown={() => {
-                                        setInlineOrderDistrict(d);
-                                        setInlineOrderThana("");
-                                        if (d === "Dhaka") {
-                                          setInlineOrderArea("inside");
-                                        } else {
-                                          setInlineOrderArea("outside");
-                                        }
-                                        setIsInlineDistrictOpen(false);
-                                      }}
-                                      className={`px-4 py-2.5 hover:bg-red-50 hover:text-primary cursor-pointer text-sm text-left ${
-                                        inlineOrderDistrict === d ? "bg-red-50 text-primary font-bold" : "text-gray-700"
-                                      }`}
-                                    >
-                                      {d}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                                   ঢাকার মধ্যে
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="relative w-full">
-                            <div className="relative flex items-center">
-                              <input
-                                required
-                                type="text"
-                                placeholder="থানা/এলাকা সিলেক্ট করুন"
-                                value={isInlineThanaOpenWholesale ? inlineThanaSearchWholesale : inlineOrderThana}
-                                onChange={(e) => {
-                                  setInlineThanaSearch(e.target.value);
-                                  setIsInlineThanaOpen(true);
-                                }}
-                                onFocus={() => {
-                                  setInlineThanaSearch("");
-                                  setIsInlineThanaOpen(true);
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => {
-                                    setIsInlineThanaOpen(false);
-                                    setInlineThanaSearch("");
-                                  }, 200);
-                                }}
-                                disabled={!inlineOrderDistrict}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:border-primary outline-none transition-colors disabled:opacity-50 disabled:bg-gray-100"
-                              />
-                              <span className="absolute right-3 pointer-events-none text-gray-400">
-                                <ChevronDown size={18} />
-                              </span>
-                            </div>
-                            {isInlineThanaOpenWholesale && inlineOrderDistrict && districtThanaMap[inlineOrderDistrict] && (
-                              <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-60 overflow-y-auto">
-                                {districtThanaMap[inlineOrderDistrict].filter(t => 
-                                  t.toLowerCase().includes(inlineThanaSearchWholesale.toLowerCase())
-                                ).length > 0 ? (
-                                  districtThanaMap[inlineOrderDistrict].filter(t => 
-                                    t.toLowerCase().includes(inlineThanaSearchWholesale.toLowerCase())
-                                  ).map((t) => (
-                                    <div
-                                      key={t}
-                                      onMouseDown={() => {
-                                        setInlineOrderThana(t);
-                                        setIsInlineThanaOpen(false);
-                                      }}
-                                      className={`px-4 py-2.5 hover:bg-red-50 hover:text-primary cursor-pointer text-sm text-left ${
-                                        inlineOrderThana === t ? "bg-red-50 text-primary font-bold" : "text-gray-700"
-                                      }`}
-                                    >
-                                      {t}
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                                   ঢাকার মধ্যে
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-</div>
-                        <textarea id="inline-address-input" required placeholder="সম্পূর্ণ ঠিকানা (বাসা, রোড, এলাকা)" value={inlineOrderAddress} onChange={(e) => setInlineOrderAddress(e.target.value)} rows={2} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none transition-colors resize-none" />
-                        <textarea placeholder="অতিরিক্ত নোট লিখুন (ঐচ্ছিক)" value={inlineOrderNote} onChange={(e) => setInlineOrderNote(e.target.value)} rows={2} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none transition-colors resize-none" />
-                        
-                        {availableRewardPoints > 0 && (
-                          <div className="bg-primary/10 p-3 rounded-xl border border-primary/20 flex flex-col md:flex-row items-start md:items-center justify-between my-2 gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="bg-primary text-white text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">GIFT</span>
-                              <span className="text-sm font-bold text-primary">আপনার {availableRewardPoints} রিওয়ার্ড পয়েন্ট আছে! (৳{availableRewardPoints} ছাড়)</span>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                              <input type="checkbox" className="sr-only peer" checked={isApplyingRewardPoints} onChange={() => setIsApplyingRewardPoints(!isApplyingRewardPoints)} />
-                              <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                            </label>
-                          </div>
-                        )}
-                        {inlineOrderSuccess && (<div className="bg-green-50 text-green-700 text-xs font-bold p-3 rounded-xl border border-green-200 flex items-center justify-center gap-2"><Check size={16} /> অর্ডার সফল হয়েছে!</div>)}
-                        <div className="flex gap-2 pt-2">
-                          <button type="button" onClick={() => { 
-                            const totalWholesale = sumValues(wholesaleSizeQty);
-                            if (totalWholesale !== tempSelectedQty) {
-                              alert("ইমেইল এবং পাসওয়ার্ড উভয়ই লিখুন।");
-                              return;
-                            }
-                            addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty, wholesaleSizeQty);
-                            setIsProductDetailsOpen(false); 
-                          }} className="w-12 shrink-0 bg-white border-2 border-primary text-primary flex items-center justify-center rounded-xl hover:bg-red-50 transition-colors" title="Add to Cart"><ShoppingCart size={20} /></button>
-                          <button type="button" onClick={() => { const totalWholesale = sumValues(wholesaleSizeQty); if (totalWholesale !== tempSelectedQty) { alert("দয়া করে সাইজ অনুযায়ী সঠিক পরিমাণ সিলেক্ট করুন?"); return; } const price = getProductPrice(selectedProduct, totalWholesale) * totalWholesale; const msg = `হাই, আমি ${selectedProduct.name} অর্ডার করতে চাচ্ছি (হোলসেল)।\nপরিমাণ: ${tempSelectedQty} পিস\n\nমূল্য: ৳${price}`; window.open(`https://wa.me/${(siteConfig?.whatsappNumber || siteConfig?.supportPhone1 || "01777600844").replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }} className="w-12 shrink-0 bg-[#25D366] text-white flex items-center justify-center rounded-xl hover:brightness-110 transition-colors shadow-lg shadow-[#25D366]/20" title="Order via WhatsApp"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
-                          <button type="submit" disabled={isInlineOrderProcessing || inlineOrderSuccess} onClick={(e) => {
-                            const totalWholesale = sumValues(wholesaleSizeQty);
-                            if (totalWholesale !== tempSelectedQty) {
-                              e.preventDefault();
-                              alert("দয়া করে সাইজ অনুযায়ী সঠিক পরিমাণ সিলেক্ট করুন।");
-                              return;
-                            }
-                          }} className="flex-1 bg-primary text-white font-black py-3 rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50 relative overflow-hidden group hover:scale-[1.02] active:scale-95">
-                            {isInlineOrderProcessing ? (<div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />) : (<>
-                              <span className="relative z-10 flex items-center justify-center gap-2 animate-text-zoom drop-shadow-md">অর্ডার করুন ৳{(wholesaleSizeQty && Object.keys(wholesaleSizeQty).length > 0 ? getProductPrice(selectedProduct, sumValues(wholesaleSizeQty)) * sumValues(wholesaleSizeQty) : getProductPrice(selectedProduct, tempSelectedQty) * tempSelectedQty) + getDeliveryCharge([{product: selectedProduct, quantity: sumValues(wholesaleSizeQty) || tempSelectedQty, color: tempSelectedColor, size: tempSelectedSize}], inlineOrderArea, null) - (isApplyingRewardPoints ? availableRewardPoints : 0)}</span>
-                            </>)}
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  )}
+                                    
               </div>
           </motion.div>
                         {/* Star Tech Style Tabs & Sidebar Layout */}
@@ -1018,19 +678,19 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   <div className="flex flex-wrap gap-2 mb-0 border-b border-gray-200">
                     <button 
                       onClick={() => setActiveTab('specification')}
-                      className={`px-6 py-2.5 text-sm md:text-base font-bold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'specification' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'specification' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
                     >
                       Specification
                     </button>
                     <button 
                       onClick={() => setActiveTab('description')}
-                      className={`px-6 py-2.5 text-sm md:text-base font-bold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'description' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'description' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
                     >
                       Description
                     </button>
                     <button 
                       onClick={() => setActiveTab('reviews')}
-                      className={`px-6 py-2.5 text-sm md:text-base font-bold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'reviews' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'reviews' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
                     >
                       Reviews ({activeReviews.length})
                     </button>
@@ -1042,7 +702,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                     {/* SPECIFICATION TAB */}
                     {activeTab === 'specification' && (
                       <div className="animate-in fade-in duration-300">
-                        <h2 className="text-xl font-black text-gray-900 mb-6">Specification</h2>
+                        <h2 className="text-lg font-bold text-gray-800 mb-4">Specification</h2>
                         
                         {(selectedProduct.modelName || selectedProduct.features || selectedProduct.inTheBox) && (
                           <div className="mb-8">
@@ -1098,7 +758,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                     {/* DESCRIPTION TAB */}
                     {activeTab === 'description' && (
                       <div className="animate-in fade-in duration-300">
-                        <h2 className="text-xl font-black text-gray-900 mb-6">Description</h2>
+                        <h2 className="text-lg font-bold text-gray-800 mb-4">Description</h2>
                         {selectedProduct.description ? (
                           <div className="prose prose-sm md:prose-base max-w-none text-gray-700 leading-relaxed font-medium">
                             {cleanLatex(selectedProduct.description || "")}
@@ -1112,7 +772,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                     {/* REVIEWS TAB */}
                     {activeTab === 'reviews' && (
                       <div className="animate-in fade-in duration-300">
-                        <h2 className="text-xl font-black text-gray-900 mb-6">Reviews ({activeReviews.length})</h2>
+                        <h2 className="text-lg font-bold text-gray-800 mb-4">Reviews ({activeReviews.length})</h2>
                         
                         {/* Write Review Form */}
                         <div className="mb-10 bg-gray-50 p-6 rounded-2xl border border-gray-100">
@@ -1242,7 +902,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                
                {/* Right Sidebar - Similar Products */}
                <div className="lg:col-span-1">
-                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sticky top-24">
+                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sticky top-24 lg:mt-[45px]">
                    <h3 className="text-lg font-black text-[#2e3192] text-center mb-6 border-b border-gray-100 pb-3">Similar Product</h3>
                    <div className="flex flex-col gap-5">
                      {relatedProducts.slice(0, 5).map((product) => (

@@ -365,7 +365,7 @@ export default function AdminPanel(props: AdminPanelProps) {
   return (
     <>
       {isAdminOpen && (
-          <div className="fixed inset-0 z-[500] bg-gray-50 flex flex-col">
+          <div className="fixed inset-0 z-[500] bg-gray-50 flex flex-col font-['Inter']">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -381,7 +381,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-gray-900 tracking-tight leading-tight">
-                        চলমান ক্যাম্পেইন
+                        Active Campaigns
                       </h3>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
                         i SHOP BD
@@ -406,7 +406,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       }}
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && !showOnlyPreOrders ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <History size={18} /> অর্ডারসমূহ ({orderHistory.filter(o => {
+                      <History size={18} /> Orders ({orderHistory.filter(o => {
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return !isPreOrder;
                       }).length})
@@ -420,7 +420,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && showOnlyPreOrders ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
                       <div className={`w-2 h-2 rounded-full ${showOnlyPreOrders && adminTab === "orders" ? "bg-white animate-pulse" : "bg-yellow-500"}`} />
-                      পি অর্ডার ({orderHistory.filter(o => {
+                      Pre Order ({orderHistory.filter(o => {
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return isPreOrder;
                       }).length})
@@ -432,7 +432,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       }}
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "incomplete_orders" ? "bg-red-500 text-white shadow-md shadow-red-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <ShoppingCart size={18} /> অসম্পূর্ণ ({incompleteOrders.length})
+                      <ShoppingCart size={18} /> Incomplete ({incompleteOrders.length})
                     </button>
                     <button
                       onClick={() => {
@@ -441,7 +441,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       }}
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "support" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <Headset size={18} /> সাপোর্ট ({supportChats.filter(c => c.unreadByAdmin).length})
+                      <Headset size={18} /> Support ({supportChats.filter(c => c.unreadByAdmin).length})
                     </button>
                     {adminViewMode === "full" && (
                       <>
@@ -449,51 +449,51 @@ export default function AdminPanel(props: AdminPanelProps) {
                           onClick={() => setAdminTab("products")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "products" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <PlusCircle size={18} /> পণ্য ({products.length})
+                          <PlusCircle size={18} /> Products ({products.length})
                         </button>
                         <button
                           onClick={() => setAdminTab("categories")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "categories" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <LayoutGrid size={18} /> ক্যাটাগরি ({categories.length})
+                          <LayoutGrid size={18} /> Categories ({categories.length})
                         </button>
                         <button
                           onClick={() => setAdminTab("refunds")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "refunds" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <RefreshCcw size={18} /> রিফান্ড ({refundRequests.filter(r => r.status === "pending").length})
+                          <RefreshCcw size={18} /> Refunds ({refundRequests.filter(r => r.status === "pending").length})
                         </button>
                         <button
                           onClick={() => setAdminTab("users")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "users" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <Users size={18} /> ইউজার
+                          <Users size={18} /> Users
                         </button>
                         <button
                           onClick={() => setAdminTab("campaigns")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "campaigns" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <Gift size={18} /> ক্যাম্পেইন
+                          <Gift size={18} /> Campaigns
                         </button>
                         <button
                           onClick={() => setAdminTab("bulk_sms")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "bulk_sms" ? "bg-teal-500 text-white shadow-md shadow-teal-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <MessageSquare size={18} /> বাল্ক SMS
+                          <MessageSquare size={18} /> Bulk SMS
                         </button>
                         {isMasterAdmin && (
                           <button
                             onClick={() => setAdminTab("profit_analysis")}
                             className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "profit_analysis" ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                           >
-                            <TrendingUp size={18} /> হিসাব-নিকাশ
+                            <TrendingUp size={18} /> Accounts
                           </button>
                         )}
                         <button
                           onClick={() => setAdminTab("settings")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "settings" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <ShieldCheck size={18} /> সেটিংস
+                          <ShieldCheck size={18} /> Settings
                         </button>
                       </>
                     )}
@@ -503,7 +503,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       onClick={() => setIsAdminOpen(false)}
                       className="text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full text-red-500 hover:bg-red-50"
                     >
-                      <XCircle size={18} /> ড্যাশবোর্ড বন্ধ করুন
+                      <XCircle size={18} /> Close Dashboard
                     </button>
                   </div>
                 </div>
@@ -513,17 +513,17 @@ export default function AdminPanel(props: AdminPanelProps) {
                 <div className="flex p-2 gap-2 min-w-max">
                   {([
                         { id: "orders", icon: History, label: `অর্ডার (${orderHistory.filter(o => !((o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending")).length})` },
-                        { id: "preorder", icon: CircleDot, label: `পি অর্ডার (${orderHistory.filter(o => (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending").length})` },
-                        { id: "support", icon: Headset, label: "সাপোর্ট" },
+                        { id: "preorder", icon: CircleDot, label: `Pre Order (${orderHistory.filter(o => (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending").length})` },
+                        { id: "support", icon: Headset, label: "Support" },
                         ...(adminViewMode === "full" ? [
-                          { id: "products", icon: PlusCircle, label: "পণ্য" },
-                          { id: "categories", icon: LayoutGrid, label: "ক্যাটাগরি" },
-                          { id: "refunds", icon: RefreshCcw, label: "রিফান্ড" },
-                          { id: "users", icon: Users, label: "ইউজার" },
-                          { id: "campaigns", icon: Gift, label: "ক্যাম্পেইন" },
-                          { id: "bulk_sms", icon: MessageSquare, label: "বাল্ক SMS" },
-                          ...(isMasterAdmin ? [{ id: "profit_analysis", icon: TrendingUp, label: "হিসাব-নিকাশ" }] : []),
-                          { id: "settings", icon: ShieldCheck, label: "সেটিংস" },
+                          { id: "products", icon: PlusCircle, label: "Products" },
+                          { id: "categories", icon: LayoutGrid, label: "Categories" },
+                          { id: "refunds", icon: RefreshCcw, label: "Refunds" },
+                          { id: "users", icon: Users, label: "Users" },
+                          { id: "campaigns", icon: Gift, label: "Campaigns" },
+                          { id: "bulk_sms", icon: MessageSquare, label: "Bulk SMS" },
+                          ...(isMasterAdmin ? [{ id: "profit_analysis", icon: TrendingUp, label: "Accounts" }] : []),
+                          { id: "settings", icon: ShieldCheck, label: "Settings" },
                         ] : [])
                       ]).map((tab) => (
                     <button
@@ -556,13 +556,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                   <div className="space-y-6">
                     {/* Dashboard Analytics */}
                     <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-lg font-black text-secondary">অ্যানালিটিক্স রিপোর্ট</h4>
+                      <h4 className="text-lg font-bold text-secondary">Analytics Report</h4>
                       <select
                         value={reportTimeframe}
                         onChange={(e) => setReportTimeframe(e.target.value)}
                         className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-600 outline-none focus:ring-2 focus:ring-primary shadow-sm cursor-pointer"
                       >
-                        <option value="28d">লাস্ট ২৮ দিন</option>
+                        <option value="28d">Last 28 Days</option>
                         {(() => {
                           const months = [];
                           for (let i = 1; i <= 3; i++) {
@@ -576,9 +576,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                           }
                           return months;
                         })()}
-                        <option value="1y">১ বছর</option>
-                        <option value="3y">৩ বছর</option>
-                        <option value="lifetime">লাইফটাইম</option>
+                        <option value="1y">1 Year</option>
+                        <option value="3y">3 Years</option>
+                        <option value="lifetime">Lifetime</option>
                       </select>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
@@ -627,28 +627,28 @@ export default function AdminPanel(props: AdminPanelProps) {
                           <>
                             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between gap-2">
                               <div className="flex items-center gap-2 text-gray-500">
-                                <ShoppingBag size={14} /> <span className="text-[11px] font-bold">মোট অর্ডার</span>
+                                <ShoppingBag size={14} /> <span className="text-[11px] font-bold">Total Orders</span>
                               </div>
-                              <span className="text-2xl font-black text-secondary">{totalOrders}</span>
+                              <span className="text-2xl font-bold text-secondary">{totalOrders}</span>
                             </div>
                             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between gap-2">
                               <div className="flex items-center gap-2 text-gray-500">
-                                <Clock size={14} /> <span className="text-[11px] font-bold">পেন্ডিং অর্ডার</span>
+                                <Clock size={14} /> <span className="text-[11px] font-bold">Pending Orders</span>
                               </div>
-                              <span className="text-2xl font-black text-orange-500">{pendingOrders}</span>
+                              <span className="text-2xl font-bold text-orange-500">{pendingOrders}</span>
                             </div>
                             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between gap-2">
                               <div className="flex items-center gap-2 text-gray-500">
-                                <TrendingUp size={14} /> <span className="text-[11px] font-bold">মোট সেলস</span>
+                                <TrendingUp size={14} /> <span className="text-[11px] font-bold">Total Sales</span>
                               </div>
-                              <span className="text-2xl font-black text-primary">৳{totalSales.toLocaleString('en-IN')}</span>
+                              <span className="text-2xl font-bold text-primary">৳{totalSales.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between gap-2">
                               <div className="flex items-center gap-2 text-gray-500">
-                                <CheckCircle size={14} /> <span className="text-[11px] font-bold">সাকসেস রেট</span>
+                                <CheckCircle size={14} /> <span className="text-[11px] font-bold">Success Rate</span>
                               </div>
                               <div className="flex flex-col gap-1.5">
-                                <span className={`text-xl font-black ${successRate >= 60 ? 'text-emerald-500' : 'text-rose-500'}`}>{successRate}%</span>
+                                <span className={`text-xl font-bold ${successRate >= 60 ? 'text-emerald-500' : 'text-rose-500'}`}>{successRate}%</span>
                                 <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                   <div className={`h-full ${successRate >= 60 ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${Math.min(successRate, 100)}%` }}></div>
                                 </div>
@@ -660,26 +660,26 @@ export default function AdminPanel(props: AdminPanelProps) {
                     </div>
                     <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
                       <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                        <h4 className="text-lg font-black text-secondary flex items-center gap-2">
+                        <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
                           <History size={20} className="text-primary" />
-                         সাম্প্রতিক অর্ডারসমূহ
+                         Recent Orders
                         </h4>
                         
                         {/* Order Status Filters */}
                         <div className="flex flex-wrap items-center gap-1 bg-gray-100/80 p-1 rounded-2xl border border-gray-200/30">
                           {[
-                            { id: "all", label: "সব" },
-                            { id: "pending", label: "পেন্ডিং" },
-                            { id: "confirmed", label: "কনফার্মড" },
-                            { id: "shipped", label: "শিফট" },
-                            { id: "delivered", label: "ডেলিভারড" },
-                            { id: "returned", label: "রিটার্ন" },
-                            { id: "cancelled", label: "ক্যান্সেল" }
+                            { id: "all", label: "All" },
+                            { id: "pending", label: "Pending" },
+                            { id: "confirmed", label: "Confirmed" },
+                            { id: "shipped", label: "Shipped" },
+                            { id: "delivered", label: "Delivered" },
+                            { id: "returned", label: "Returned" },
+                            { id: "cancelled", label: "Cancelled" }
                           ].map((tab) => (
                             <button
                               key={tab.id}
                               onClick={() => setSelectedOrderStatusFilter(tab.id)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all whitespace-nowrap ${
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                                 selectedOrderStatusFilter === tab.id
                                   ? "bg-primary text-white shadow-sm"
                                   : "text-gray-500 hover:text-secondary hover:bg-white/50"
@@ -711,9 +711,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                           onChange={e => setAdminOrderAreaFilter(e.target.value)}
                           className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold text-gray-600 outline-none focus:ring-2 focus:ring-primary shadow-sm cursor-pointer"
                         >
-                          <option value="all">সব এরিয়া</option>
-                          <option value="inside">ইনসাইড ঢাকা</option>
-                          <option value="outside">আউটসাইড ঢাকা</option>
+                          <option value="all">All Areas</option>
+                          <option value="inside">Inside Dhaka</option>
+                          <option value="outside">Outside Dhaka</option>
                         </select>
                         <div className="flex gap-2 flex-1 min-w-[150px]">
                           <div className="relative flex-1">
@@ -723,7 +723,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             />
                             <input
                               type="text"
-                              placeholder="ফোন নাম্বার দিয়ে খুঁজুন..."
+                              placeholder="Search by Phone Number..."
                               value={orderSearchQuery}
                               onChange={(e) =>
                                 setOrderSearchQuery(e.target.value)
@@ -745,7 +745,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
                             className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
                           >
-                            <Landmark size={16} /> এক্সেল এক্সপোর্ট <ChevronDown size={14} />
+                            <Landmark size={16} /> Excel Export <ChevronDown size={14} />
                           </button>
                           {isExportDropdownOpen && (
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -756,7 +756,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
                               >
-                                <Download size={14} /> আজকের রিপোর্ট
+                                <Download size={14} /> Todayকের রিপোর্ট
                               </button>
                               <button
                                 onClick={() => {
@@ -784,7 +784,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
                               >
-                                <Landmark size={14} /> সব অর্ডার এক্সপোর্ট
+                                <Landmark size={14} /> All অর্ডার এক্সপোর্ট
                               </button>
                             </div>
                           )}
@@ -802,13 +802,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                           if (isNewDateGroup) {
                             lastDateText = dateText;
                           }
-                          const isToday = dateText.startsWith("আজ");
+                          const isToday = dateText.startsWith("Today");
                           return (
                             <React.Fragment key={order.id}>
                               {isNewDateGroup && (
                                 <div className="flex items-center gap-3 py-3 px-1 mt-4 first:mt-1">
                                   <div className={`h-[1.5px] flex-1 ${isToday ? 'bg-gradient-to-r from-transparent to-primary/40' : 'bg-gradient-to-r from-transparent to-secondary/30'}`}></div>
-                                  <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-[11px] font-black shadow-sm shrink-0 transition-all ${
+                                  <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-[11px] font-bold shadow-sm shrink-0 transition-all ${
                                     isToday 
                                       ? 'bg-primary/[0.06] text-primary border-primary/20 shadow-primary/5' 
                                       : 'bg-secondary/[0.04] text-secondary border-secondary/15 shadow-secondary/5'
@@ -865,7 +865,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           
                           <div className="flex flex-col flex-1 min-w-0 justify-between h-[88px]">
                             <div className="flex items-center gap-2 w-full min-w-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); handleQuickEditOrderItems(order); }}>
-                                <span className="text-[12px] font-black text-secondary truncate">
+                                <span className="text-[12px] font-bold text-secondary truncate">
                                   {order.items.map((i:any) => `${i.product?.name || 'Unknown'} x${i.quantity}`).join(', ')}
                                 </span>
                                 <button 
@@ -875,7 +875,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   <Edit3 size={12} />
                                 </button>
                               </div>
-                            <span className="text-[13px] font-black text-red-600 truncate">
+                            <span className="text-[13px] font-bold text-red-600 truncate">
                               {order.customerName}
                             </span>
                             
@@ -890,8 +890,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     if(stats.total === 0) return null;
                                     return (
                                       <div className="flex items-center gap-1.5">
-                                        <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-[2px] rounded-full border border-slate-200">মোট: {stats.total}</span>
-                                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-[2px] rounded-full border border-emerald-200">সফল: {stats.delivered}</span>
+                                        <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-[2px] rounded-full border border-slate-200">Total: {stats.total}</span>
+                                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-[2px] rounded-full border border-emerald-200">Success: {stats.delivered}</span>
                                       </div>
                                     );
                                   })()}
@@ -941,7 +941,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         <div className="absolute -top-2 right-3 w-4 h-4 bg-white border-t border-l border-gray-100 transform rotate-45"></div>
                                         <div className="relative p-4 bg-white rounded-2xl z-10">
                                           <div className="flex justify-between items-center mb-2">
-                                            <p className="text-[10px] text-gray-500">প্রাপক: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
+                                            <p className="text-[10px] text-gray-500">Recipient: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
                                             <button onClick={() => setIndividualSmsOrder(null)} className="text-gray-400 hover:text-red-500">
                                               <X size={14} />
                                             </button>
@@ -949,7 +949,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                           <textarea
                                             value={individualSmsMessage}
                                             onChange={(e) => setIndividualSmsMessage(e.target.value)}
-                                            placeholder="আপনার কমেন্ট লিখুন..."
+                                            placeholder="Write your comment..."
                                             className="w-full h-24 p-2 border rounded-xl text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none mb-3"
                                           ></textarea>
                                           <div className="flex justify-center">
@@ -959,7 +959,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               className="bg-green-500 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-600 disabled:opacity-50 transition-all active:scale-95 w-full shadow-sm shadow-green-500/20"
                                             >
                                               {isSendingIndividualSms ? (
-                                                "পাঠানো হচ্ছে..."
+                                                "Sending..."
                                               ) : (
                                                 <>
                                                   <MessageSquare size={14} /> SMS পাঠান
@@ -987,7 +987,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             
                             <div className="flex items-center justify-between gap-2 w-full mt-1">
                               <div className="bg-white flex-1 px-2.5 py-[5px] rounded-lg border border-gray-200 text-[11px] text-gray-600 font-medium truncate shadow-sm" title={order.address}>
-                                {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'কোনো ঠিকানা নেই'}
+                                {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'No address found'}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <select
@@ -1053,7 +1053,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     <div className="hidden lg:block overflow-x-auto rounded-2xl border border-gray-100 bg-slate-50">
                       <table className="w-full text-left min-w-[1000px] border-separate border-spacing-y-2">
                         <thead>
-                          <tr className="text-[10px] text-slate-500 uppercase font-black tracking-widest bg-slate-50">
+                          <tr className="text-[10px] text-slate-500 uppercase font-bold tracking-widest bg-slate-50">
                             <th className="px-4 py-3 w-10">
                               <input 
                                 type="checkbox" 
@@ -1086,7 +1086,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               if (isNewDateGroup) {
                                 lastDateText = dateText;
                               }
-                              const isToday = dateText.startsWith("আজ");
+                              const isToday = dateText.startsWith("Today");
                               return (
                                 <React.Fragment key={order.id}>
                                   {isNewDateGroup && (
@@ -1098,7 +1098,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                           ) : (
                                             <Clock size={15} />
                                           )}
-                                          <span className="text-[13px] font-black tracking-wide">{dateText}</span>
+                                          <span className="text-[13px] font-bold tracking-wide">{dateText}</span>
                                         </div>
                                       </td>
                                     </tr>
@@ -1141,7 +1141,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   </div>
                                   <div className="flex flex-col justify-center min-w-0">
                                       <div className="flex items-center gap-2 group cursor-pointer" onClick={(e) => { e.stopPropagation(); handleQuickEditOrderItems(order); }}>
-                                        <span className="text-[12px] font-black text-secondary truncate">
+                                        <span className="text-[12px] font-bold text-secondary truncate">
                                           {order.items.map((i:any) => `${i.product?.name || 'Unknown'} x${i.quantity}`).join(', ')}
                                         </span>
                                         <button 
@@ -1158,8 +1158,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </td>
                               <td className="p-4 text-left">
                                 <div className="flex flex-col items-start">
-                                  <span className="text-xl font-black text-red-600">৳{order.total}</span>
-                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase mt-1 border whitespace-nowrap ${order.deliveryArea === 'inside' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+                                  <span className="text-xl font-bold text-red-600">৳{order.total}</span>
+                                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase mt-1 border whitespace-nowrap ${order.deliveryArea === 'inside' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
                                     {order.deliveryArea === 'inside' ? 'Inside Dhaka' : 'Outside Dhaka'}
                                   </span>
                                 </div>
@@ -1193,19 +1193,19 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   ) : (
                                     <>
                                       <div className="flex items-center gap-2 flex-nowrap max-w-[350px]">
-                                        <span className="text-[14px] font-black text-slate-800 truncate shrink" title={order.customerName}>
+                                        <span className="text-[14px] font-bold text-slate-800 truncate shrink" title={order.customerName}>
                                           {order.customerName}
                                         </span>
                                         {(() => {
                                           const custStats = getCustomerStats(order.customerPhone);
                                           if (custStats.cancelled > custStats.delivered && custStats.cancelled >= 1) {
-                                            return <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-2 py-0.5 rounded-full border border-rose-200 animate-pulse shrink-0" title="High Cancel Rate">RISK</span>;
+                                            return <span className="bg-rose-100 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-rose-200 animate-pulse shrink-0" title="High Cancel Rate">RISK</span>;
                                           }
                                           if (custStats.delivered > custStats.cancelled && custStats.delivered >= 1) {
-                                            return <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-2 py-0.5 rounded-full border border-emerald-200 shrink-0" title="Good Customer">GOOD</span>;
+                                            return <span className="bg-emerald-100 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0" title="Good Customer">GOOD</span>;
                                           }
                                           if (custStats.delivered === 0 && custStats.cancelled === 0) {
-                                            return <span className="bg-blue-100 text-blue-700 text-[9px] font-black px-2 py-0.5 rounded-full border border-blue-200 animate-pulse shrink-0" title="New Customer">VERIFY</span>;
+                                            return <span className="bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-blue-200 animate-pulse shrink-0" title="New Customer">VERIFY</span>;
                                           }
                                           return null;
                                         })()}
@@ -1236,9 +1236,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         title="Action"
                                       >
                                         <div className="flex items-center justify-between gap-2">
-                                          <span className="opacity-80">কুরিয়ার (Steadfast):</span>
+                                          <span className="opacity-80">Courier (Steadfast):</span>
                                           <div className="flex items-center gap-1">
-                                            {isFraud && <span className="bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded animate-pulse">FRAUD</span>}
+                                            {isFraud && <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse">FRAUD</span>}
                                             <button 
                                               onClick={(e) => {
                                                 e.stopPropagation();
@@ -1251,18 +1251,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                                             </button>
                                           </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] font-black">
-                                          <div>মোট: <span className="text-secondary">{report.total_parcel}</span></div>
-                                          <div>সফল: <span className="text-green-600">{report.total_delivered}</span></div>
-                                          <div>বাতিল: <span className="text-red-500">{report.total_cancelled}</span></div>
-                                          <div>হার: <span className={successRate < 60 ? "text-red-500" : "text-green-600"}>{successRate}%</span></div>
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] font-bold">
+                                          <div>Total: <span className="text-secondary">{report.total_parcel}</span></div>
+                                          <div>Success: <span className="text-green-600">{report.total_delivered}</span></div>
+                                          <div>Cancelled: <span className="text-red-500">{report.total_cancelled}</span></div>
+                                          <div>Rate: <span className={successRate < 60 ? "text-red-500" : "text-green-600"}>{successRate}%</span></div>
                                         </div>
                                       </div>
                                     );
                                   })()}
                                   <div className="flex items-start gap-1 mt-0.5">
                                     <span className="text-[11px] text-slate-400 font-medium line-clamp-1" title={order.address}>
-                                      {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'কোএ¥াও ঠিকানা নেই'}
+                                      {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'No address'}
                                     </span>
                                   </div>
 {order.steadfastStatus && (
@@ -1333,11 +1333,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     <div className="flex flex-col gap-2 w-fit shrink-0 justify-center mx-auto h-[68px]">
                                       <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100/70 rounded-full px-3 py-1 w-[90px] shadow-sm transition-transform hover:scale-105">
                                         <span className="text-[10px] font-bold text-emerald-700">Success:</span>
-                                        <span className="text-[11px] font-black text-emerald-600">{stats.delivered}</span>
+                                        <span className="text-[11px] font-bold text-emerald-600">{stats.delivered}</span>
                                       </div>
                                       <div className="flex items-center justify-between bg-rose-50 border border-rose-100/70 rounded-full px-3 py-1 w-[90px] shadow-sm transition-transform hover:scale-105">
                                         <span className="text-[10px] font-bold text-rose-700">Cancel:</span>
-                                        <span className={`text-[11px] font-black ${stats.cancelled > 0 ? 'text-rose-600' : 'text-rose-400'}`}>{stats.cancelled}</span>
+                                        <span className={`text-[11px] font-bold ${stats.cancelled > 0 ? 'text-rose-600' : 'text-rose-400'}`}>{stats.cancelled}</span>
                                       </div>
                                     </div>
                                   );
@@ -1354,8 +1354,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               e.stopPropagation();
                                               setIndividualSmsOrder(individualSmsOrder?.id === order.id ? null : order);
                                               const orderId = String(order.orderId || order.id).slice(-6).toUpperCase();
-                                              let startPart = (siteConfig?.smsTemplateStart || '').trim() || 'প্রিয় গ্রাহক, আপনার অর্ডারটি কনফার্ম হয়েছে।';
-                                              const endPart = (siteConfig?.smsTemplateEnd || '').trim() || 'iShop BD ব্যবহার করার জন্য ধন্যবাদ।';
+                                              let startPart = (siteConfig?.smsTemplateStart || '').trim() || 'Dear customer, your order is confirmed.';
+                                              const endPart = (siteConfig?.smsTemplateEnd || '').trim() || 'Thank you for using iShop BD.';
                                               if (startPart.includes('') && order.customerName) {
                                                 startPart = startPart.replace('', order.customerName);
                                               }
@@ -1367,7 +1367,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                                   return `${name} (${qty} টি)`;
                                                 }).join('\n');
                                               }
-                                              const defaultMessage = `${startPart}\nপণ্য:\n${productDetails}\nঅর্ডার নং: #${orderId}\nমোট বিল: ৳${order.total}\n${endPart}`;
+                                              const defaultMessage = `${startPart}\nProducts:\n${productDetails}\nঅর্ডার নং: #${orderId}\nমোট বিল: ৳${order.total}\n${endPart}`;
                                               setIndividualSmsMessage(defaultMessage);
                                             }} 
                                             className="flex items-center justify-center gap-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200/60 rounded-full px-3 h-8 w-[100px] shadow-sm text-sky-600 transition-colors" title="Send SMS">
@@ -1387,7 +1387,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                                 <div className="absolute -top-2 right-8 w-4 h-4 bg-white border-t border-l border-gray-100 transform rotate-45"></div>
                                                 <div className="relative p-4 bg-white rounded-2xl z-10">
                                                   <div className="flex justify-between items-center mb-2">
-                                                    <p className="text-[10px] text-gray-500">প্রাপক: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
+                                                    <p className="text-[10px] text-gray-500">Recipient: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
                                                     <button onClick={() => setIndividualSmsOrder(null)} className="text-gray-400 hover:text-red-500">
                                                       <X size={14} />
                                                     </button>
@@ -1395,7 +1395,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                                   <textarea
                                                     value={individualSmsMessage}
                                                     onChange={(e) => setIndividualSmsMessage(e.target.value)}
-                                                    placeholder="আপনার মেসেজ লিখুন..."
+                                                    placeholder="Write your message..."
                                                     className="w-full h-24 p-2 border rounded-xl text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none mb-3"
                                                   ></textarea>
                                                   <div className="flex justify-center">
@@ -1405,7 +1405,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                                       className="bg-green-500 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-600 disabled:opacity-50 transition-all active:scale-95 w-full shadow-sm shadow-green-500/20"
                                                     >
                                                       {isSendingIndividualSms ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                                                      {isSendingIndividualSms ? "পাঠানো হচ্ছে..." : "পাঠিয়ে দিন"}
+                                                      {isSendingIndividualSms ? "Sending..." : "Send Now"}
                                                     </button>
                                                   </div>
                                                 </div>
@@ -1416,7 +1416,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         {loadingCourierReports[order.customerPhone] ? (
                                           <div className="flex items-center justify-center gap-1.5 bg-gray-50 border border-gray-200/70 rounded-lg px-3 h-8 w-[100px] shadow-sm text-gray-500">
                                             <Loader2 size={12} className="animate-spin" />
-                                            <span className="text-[11px] font-bold">চেকিং...</span>
+                                            <span className="text-[11px] font-bold">Checking...</span>
                                           </div>
                                         ) : courierReports[order.customerPhone] ? (
                                           <button
@@ -1536,9 +1536,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                       <div className="flex justify-center mt-6 mb-10">
                         <button
                           onClick={() => setAdminOrdersLimit(prev => prev + 50)}
-                          className="bg-white border-2 border-primary text-primary px-8 py-3 rounded-2xl font-black text-sm hover:bg-primary hover:text-white transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                          className="bg-white border-2 border-primary text-primary px-8 py-3 rounded-2xl font-bold text-sm hover:bg-primary hover:text-white transition-all shadow-lg active:scale-95 flex items-center gap-2"
                         >
-                          <Plus size={18} /> তড়িৎ আরও লোড করুন ({filteredOrders.length - adminOrdersLimit}টি বাকি)
+                          <Plus size={18} /> Load More ({filteredOrders.length - adminOrdersLimit} remaining)
                         </button>
                       </div>
                     )}
@@ -1547,10 +1547,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                 {adminTab === "incomplete_orders" && (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-<h2 className="text-xl font-black text-gray-800">অসম্পূর্ণ অর্ডারসমূহ</h2>
+<h2 className="text-xl font-bold text-gray-800">Incomplete Orders</h2>
                       <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 flex items-center gap-2">
-                        <span className="text-sm text-gray-500 font-bold">মোট:</span>
-                        <span className="text-lg font-black text-primary">{incompleteOrders.length}</span>
+                        <span className="text-sm text-gray-500 font-bold">Total:</span>
+                        <span className="text-lg font-bold text-primary">{incompleteOrders.length}</span>
                       </div>
                     </div>
                     
@@ -1558,18 +1558,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                       {incompleteOrders.length === 0 ? (
                         <div className="p-12 text-center">
                           <ShoppingCart className="mx-auto text-gray-300 mb-4" size={48} />
-<h3 className="text-lg font-bold text-gray-400">কোনো অসম্পূর্ণ অর্ডার নেই</h3>
+<h3 className="text-lg font-bold text-gray-400">No incomplete orders</h3>
                         </div>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-left border-collapse">
                             <thead>
                               <tr className="bg-gray-50 border-b border-gray-100">
-                                <th className="p-4 text-xs font-black text-gray-500 uppercase tracking-wider">কাস্টমার</th>
-                                <th className="p-4 text-xs font-black text-gray-500 uppercase tracking-wider">পণ্য</th>
-                                <th className="p-4 text-xs font-black text-gray-500 uppercase tracking-wider">ধাপ</th>
-                                <th className="p-4 text-xs font-black text-gray-500 uppercase tracking-wider">তারিখ</th>
-                                <th className="p-4 text-xs font-black text-gray-500 uppercase tracking-wider text-right">অ্যাকশন</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Customer</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Products</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Step</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -1592,7 +1592,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     </div>
                                   </td>
                                   <td className="p-4">
-                                    <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase ${order.type === 'cart_checkout' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${order.type === 'cart_checkout' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                       {order.type === 'cart_checkout' ? 'Cart Order' : 'Direct Order'}
                                     </span>
                                   </td>
@@ -1625,7 +1625,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               <div className="absolute -top-2 right-8 w-4 h-4 bg-white border-t border-l border-gray-100 transform rotate-45"></div>
                                               <div className="relative p-4 bg-white rounded-2xl z-10">
                                                 <div className="flex justify-between items-center mb-2">
-                                                  <p className="text-[10px] text-gray-500">প্রাপক: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
+                                                  <p className="text-[10px] text-gray-500">Recipient: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
                                                   <button onClick={() => setIndividualSmsOrder(null)} className="text-gray-400 hover:text-red-500">
                                                     <X size={14} />
                                                   </button>
@@ -1633,7 +1633,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                                 <textarea
                                                   value={individualSmsMessage}
                                                   onChange={(e) => setIndividualSmsMessage(e.target.value)}
-                                                  placeholder="আপনার কমেন্ট লিখুন..."
+                                                  placeholder="Write your comment..."
                                                   className="w-full h-24 p-2 border rounded-xl text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none mb-3"
                                                 ></textarea>
                                                 <div className="flex justify-center">
@@ -1643,7 +1643,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                                     className="bg-green-500 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-600 disabled:opacity-50 transition-all active:scale-95 w-full shadow-sm shadow-green-500/20"
                                                   >
                                                     {isSendingIndividualSms ? (
-                                                      "পাঠানো হচ্ছে..."
+                                                      "Sending..."
                                                     ) : (
                                                       <>
                                                         <MessageSquare size={14} /> SMS পাঠান
@@ -1682,8 +1682,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                           <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
                             <PlusCircle size={20} className="text-primary" />
                             {editingProduct?.id
-                              ? "পণ্য এডিট করুন"
-                              : "নতুন পণ্য যোগ করুন"}
+                              ? "Products এডিট করুন"
+                              : "নতুন Products Add"}
                           </h4>
                           {editingProduct && (
                             <button
@@ -1695,7 +1695,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           )}
                         </div>
                         <form onSubmit={saveProduct} className="space-y-4">
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-black text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Tag size={16} className="text-primary" /> বেসিক ইনফরমেশন</h5>
+                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Tag size={16} className="text-primary" /> Basic Information</h5>
                           <div id="field-name">
                             <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
                               প্রোডাক্ট নাম
@@ -1720,7 +1720,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   }));
                               }}
                               className={`w-full bg-gray-50 border ${productFormErrors.name ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold`}
-                              placeholder="e.g. স্মার্ট ওয়াচ সিরিজ ৯"
+                              placeholder="e.g. Smart Watch সিরিজ ৯"
                             />
                           </div>
                                                     <div id="field-sms-name">
@@ -1768,11 +1768,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                             />
                           </div>
                           </div>
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-black text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Wallet size={16} className="text-primary" /> প্রাইসিং ও স্টক</h5>
+                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Wallet size={16} className="text-primary" /> Pricing & Stock</h5>
                           <div className={`grid gap-4 ${isMasterAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
                             {isMasterAdmin && (
                               <div>
-                                <label className="block text-[10px] font-black text-indigo-500 uppercase mb-1.5">
+                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1.5">
                                   ক্রয়মূল্য (৳) - গোপন
                                 </label>
                                 <input
@@ -1856,19 +1856,19 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full bg-gray-50/50 border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-primary focus:bg-white text-sm font-bold transition-all cursor-pointer"
                               >
-                                <option value="piece">পিস (Piece)</option>
-                                <option value="kg">কেজি (KG)</option>
-                                <option value="gm">গ্রাম (Gram)</option>
-                                <option value="liter">লিটার (Liter)</option>
-                                <option value="ml">মিলি (ML)</option>
-                                <option value="packet">প্যাকেট (Packet)</option>
-                                <option value="box">বক্স (Box)</option>
-                                <option value="set">সেট (Set)</option>
+                                <option value="piece">Piece</option>
+                                <option value="kg">KG</option>
+                                <option value="gm">Gram</option>
+                                <option value="liter">Liter</option>
+                                <option value="ml">ML</option>
+                                <option value="packet">Packet</option>
+                                <option value="box">Box</option>
+                                <option value="set">Set</option>
                               </select>
                             </div>
                             <div>
                               <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">
-                                স্টক (Quantity)
+                                Stock (Quantity)
                               </label>
                               <div className="relative">
                                 <input
@@ -1909,7 +1909,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           </div>
                           
                           </div>
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-black text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><ImageIcon size={16} className="text-primary" /> মিডিয়া ও এসইও</h5>
+                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><ImageIcon size={16} className="text-primary" /> Media & SEO</h5>
                           <div id="field-tags">
                             <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
                               ট্যাগ (Google Search এবং ওয়েবসাইটের সার্চের জন্য)
@@ -1934,7 +1934,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <input
                                 type="text"
                                 className="flex-1 bg-transparent outline-none text-sm min-w-[150px] px-2 py-1 font-bold text-gray-700"
-                                placeholder={(!editingProduct?.tags || editingProduct.tags.trim() === '') ? "যেমন: smartwatch, apple watch (কমা বা এন্টার চাপুন)" : "আরও ট্যাগ লিখুন..."}
+                                placeholder={(!editingProduct?.tags || editingProduct.tags.trim() === '') ? "e.g. smartwatch, apple watch (Comma or Enter to add)" : "Add more tags..."}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' || e.key === ',') {
                                     e.preventDefault();
@@ -1994,7 +1994,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     }));
                                 }}
                                 className={`w-full bg-gray-50 border ${productFormErrors.image ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs`}
-                                placeholder="ছবির লিংক দিন (https://...)"
+                                placeholder="Image Link (https://...)"
                               />
                               <div className="relative">
                                 <input
@@ -2069,7 +2069,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     className="text-gray-400"
                                   />
                                   <span className="text-[8px] font-bold text-gray-400 mt-1">
-                                     যোগ করুন
+                                     Add
                                   </span>
                                   <input
                                     key={editingProduct?.images?.length || 0}
@@ -2084,16 +2084,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                           </div>
                           </div>
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-black text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2">🎨 ভেরিয়েন্ট ও সাইজ</h5>
+                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2">🎨 Variants & Sizes</h5>
                           <div>
                             <label className="block text-[11px] font-bold text-gray-500 uppercase mb-3 text-center bg-gray-100 py-1 rounded-full">
-                              পণ্যের ভেরিয়েন্ট (Size & Stock Management)
+                              Productsের ভেরিয়েন্ট (Size & Stock Management)
                             </label>
                             <div className="space-y-4">
                                   <div className="bg-blue-50 p-4 rounded-2xl mb-4 border border-blue-100">
-                                    <h5 className="text-sm font-bold text-blue-600 uppercase mb-2">▶ স্টক/করুন? অর্ডার? করুন নিয়ম:</h5>
-                                    <p className="text-xs font-medium text-blue-500 mb-1.5">â€¢ যদি সাইজ বা করুন? না থাকে, তাহলে Size এ 'Free' লিখে দিন।</p>
-                                    <p className="text-xs font-medium text-blue-500">â€¢ প্রতিটি সাইজ বা কালারের জন্য আলাদাভাবে স্টক (Quantity) যুক্ত করুন?</p>
+                                    <h5 className="text-sm font-bold text-blue-600 uppercase mb-2">▶ Stock Rules:</h5>
+                                    <p className="text-xs font-medium text-blue-500 mb-1.5">â€¢ যদি সাইজ বা করুন? না থাকে, তাহলে Size এ 'Free' Write here.</p>
+                                    <p className="text-xs font-medium text-blue-500">â€¢ প্রতিটি সাইজ বা কালারের জন্য আলাদাভাবে Stock (Quantity) যুক্ত করুন?</p>
                                   </div>
                                   
                               {editingProduct?.variants?.map((variant, idx) => (
@@ -2127,7 +2127,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     
                                     <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-3">
                                       <div className="space-y-1">
-                                        <label className="text-[9px] font-bold text-gray-400 uppercase">করুন? (ঐচ্ছিক)</label>
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase">Color (Optional)</label>
                                         <input
                                           type="text"
                                           value={variant.name}
@@ -2139,7 +2139,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               return { ...prev, variants: newVariants };
                                             });
                                           }}
-                                          placeholder="যেমন: লাল"
+                                          placeholder="e.g. Red"
                                           className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-lg py-2 px-3 text-xs font-bold outline-none focus:ring-1 focus:ring-primary"
                                         />
                                       </div>
@@ -2157,12 +2157,12 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               return { ...prev, variants: newVariants };
                                             });
                                           }}
-                                          placeholder="যেমন: XL"
+                                          placeholder="e.g. XL"
                                           className="w-full bg-red-50 border border-primary/20 rounded-lg py-2 px-3 text-xs font-bold text-primary outline-none focus:ring-2 focus:ring-primary/30"
                                         />
                                       </div>
                                       <div className="space-y-1 col-span-2 md:col-span-1">
-                                        <label className="text-[9px] font-bold text-emerald-600 uppercase">স্টক (Quantity)</label>
+                                        <label className="text-[9px] font-bold text-emerald-600 uppercase">Stock (Quantity)</label>
                                         <div className="relative">
                                           <input
                                             type="number"
@@ -2218,7 +2218,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         }}
                                         id={`showStock-${idx}`}
                                       />
-                                      <label htmlFor={`showStock-${idx}`} className="text-[10px] font-bold text-gray-500">স্টক সংখ্যা দেখান</label>
+                                      <label htmlFor={`showStock-${idx}`} className="text-[10px] font-bold text-gray-500">Show Stock Count</label>
                                     </div>
                                   </div>
                                   <div className="absolute -top-2 -right-2 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2258,7 +2258,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 onClick={addVariant}
                                 className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 text-xs font-bold flex items-center justify-center gap-2 hover:bg-gray-50 hover:border-primary/20 hover:text-primary transition-all group"
                               >
-                                <Plus size={18} className="group-hover:scale-125 transition-transform" /> নতুন সাইজ বা কালার যোগ করুন
+                                <Plus size={18} className="group-hover:scale-125 transition-transform" /> নতুন সাইজ বা কালার Add
                               </button>
                             </div>
                           </div>
@@ -2279,7 +2279,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           </div>
                           <div>
                             <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                              পণ্য বিস্তারিত তথ্য (Description)
+                              Products বিস্তারিত তথ্য (Description)
                             </label>
                             <textarea
                               value={editingProduct?.description || ""}
@@ -2289,7 +2289,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               }}
                               rows={3}
                               className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-medium no-scrollbar"
-                              placeholder="পণ্য সম্পর্কে বিস্তারিত লিখুন..."
+                              placeholder="Products সম্পর্কে বিস্তারিত লিখুন..."
                             />
                           </div>
                           <div>
@@ -2316,7 +2316,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               {editingProduct?.wholesaleTiers?.map((tier, idx) => (
                                 <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded-2xl border border-amber-100 shadow-sm">
                                   <div className="flex-1">
-                                    <label className="text-[9px] font-bold text-gray-400 uppercase">ন্যূনতম পরিমাণ (Min Qty)</label>
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase">Minimum Qty</label>
                                     <input 
                                       type="number"
                                       value={tier.minQty}
@@ -2331,7 +2331,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     />
                                   </div>
                                   <div className="flex-1">
-<label className="text-[9px] font-bold text-gray-400 uppercase">মূল্য (Price Per Pc)</label>
+<label className="text-[9px] font-bold text-gray-400 uppercase">Price (Per Pc)</label>
                                     <input 
                                       type="number"
                                       value={tier.price}
@@ -2366,7 +2366,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full py-3 border-2 border-dashed border-amber-200 rounded-2xl text-amber-600 text-[11px] font-bold flex items-center justify-center gap-2 hover:bg-amber-100 transition-all"
                               >
-                                <Plus size={16} /> নতুন হোলসেল রেট যোগ করুন
+                                <Plus size={16} /> নতুন হোলসেল রেট Add
                               </button>
                               
                               <p className="text-[10px] text-amber-500 font-bold mt-2 text-center">
@@ -2376,7 +2376,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           </div>
                           <div id="field-category">
                             <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-              ক্যাটাগরি
+              Categories
                               {productFormErrors.category && (
                                 <span className="text-red-500 normal-case">
               নাম দিতে হবে
@@ -2396,7 +2396,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               }}
                               className={`w-full bg-gray-50 border ${productFormErrors.category ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold`}
                             >
-                              <option value="">নির্বাচন করুন</option>
+                              <option value="">Select</option>
                               {categories.map((cat) => (
                                 <option key={cat.id} value={cat.name}>
                                   {cat.name}
@@ -2530,8 +2530,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                               className="flex-1 bg-primary text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 transition-all active:scale-95"
                             >
                               {editingProduct?.id
-                                ? "পণ্য এডিট করুন"
-                              : "পণ্য যোগ করুন"}
+                                ? "Products এডিট করুন"
+                              : "Products Add"}
                             </button>
                             {editingProduct && (
                               <button
@@ -2611,7 +2611,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   <div className="flex justify-end gap-2 items-center">
-                                    <label className="relative inline-flex items-center cursor-pointer mr-2" title={p.isPublished !== false ? "পাবলিশড (ওয়েবসাইটে দেখাচ্ছে)" : "আনপাবলিশড (হাইড করা আছে)"}>
+                                    <label className="relative inline-flex items-center cursor-pointer mr-2" title={p.isPublished !== false ? "Published (Live)" : "Unpublished (Hidden)"}>
                                       <input
                                         type="checkbox"
                                         checked={p.isPublished !== false}
@@ -2695,7 +2695,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 mb-8">
                       <h4 className="text-lg font-bold text-secondary mb-6 flex items-center gap-2">
                         <LayoutGrid size={20} className="text-primary" />
-                        সাম্প্রতিক অর্ডারসমূহ
+                        Recent Orders
                       </h4>
                       <form onSubmit={saveCategory} className="flex gap-4 mb-8">
                         <input
@@ -2709,10 +2709,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                             })
                           }
                           className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-primary font-bold"
-                          placeholder="e.g. স্মার্ট ওয়াচ"
+                          placeholder="e.g. Smart Watch"
                         />
                         <button className="bg-primary text-white font-bold px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 transition-all active:scale-95">
-                          {editingCategory?.id ? "আপডেট" : "যোগ করুন"}
+                          {editingCategory?.id ? "Update" : "Add"}
                         </button>
                       </form>
                       <div className="space-y-3">
@@ -2752,7 +2752,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     : "text-red-500 hover:bg-red-50 active:scale-95 border border-transparent hover:border-red-100"
                                 }`}
                               >
-                                {deletingCatId === String(cat.id) ? "মুছছি..." : "মুছুন"}
+                                {deletingCatId === String(cat.id) ? "Deleting..." : "Delete"}
                               </button>
                             </div>
                           </div>
@@ -2766,7 +2766,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     {/* Chat List */}
                     <div className={`w-full md:w-80 border-r overflow-y-auto bg-gray-50/50 ${selectedChat ? "hidden md:flex" : "flex"} flex-col`}>
                       <div className="p-4 border-b bg-white sticky top-0 z-10">
-                        <h4 className="font-bold text-secondary uppercase tracking-widest text-xs">মোট চ্যাট</h4>
+                        <h4 className="font-bold text-secondary uppercase tracking-widest text-xs">Total Chats</h4>
                       </div>
                       {supportChats.length === 0 ? (
                         <div className="p-8 text-center text-gray-400 text-sm">
@@ -2820,7 +2820,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 className={`flex ${msg.isAdmin ? "justify-end" : "justify-start"}`}
                               >
                                 <div className={`flex flex-col gap-1 max-w-[80%] ${msg.isAdmin ? "items-end" : "items-start"}`}>
-                                  <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider px-1">
+                                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider px-1">
                                     {msg.senderName}   {new Date(msg.createdAt).toLocaleTimeString()}
                                   </span>
                                   <div
@@ -2850,8 +2850,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                             <Mic size={14} />
                                           </div>
                                           <div>
-                                            <p className={`text-[10px] font-bold uppercase tracking-widest ${msg.isAdmin ? 'text-white' : 'text-gray-400'}`}>অ্যাডমিন</p>
-                                            <p className={`text-[9px] font-bold ${msg.isAdmin ? 'text-white/60' : 'text-gray-300'}`}>সাউন্ড অন করে শুনুন</p>
+                                            <p className={`text-[10px] font-bold uppercase tracking-widest ${msg.isAdmin ? 'text-white' : 'text-gray-400'}`}>Admin</p>
+                                            <p className={`text-[9px] font-bold ${msg.isAdmin ? 'text-white/60' : 'text-gray-300'}`}>Turn on sound to listen</p>
                                           </div>
                                         </div>
                                         <audio
@@ -2932,7 +2932,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 type="text"
                                 value={replyMessage}
                                 onChange={(e) => setReplyMessage(e.target.value)}
-                                placeholder="রিপ্লাই লিখুন..."
+                                placeholder="Write a reply..."
                                 className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-6 pr-14 py-4 text-sm font-bold focus:border-primary outline-none transition-all"
                               />
                               <button
@@ -2961,7 +2961,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           <div className="w-24 h-24 bg-gray-100 rounded-[2.5rem] flex items-center justify-center mb-6 text-gray-300">
                             <Headset size={48} />
                           </div>
-                          <h4 className="text-xl font-bold text-secondary mb-2">অ্যাডমিন প্যানেল</h4>
+                          <h4 className="text-xl font-bold text-secondary mb-2">Admin প্যানেল</h4>
                           <p className="text-sm font-medium leading-relaxed max-w-xs">
                            বামে থাকা লিস্ট থেকে একটি চ্যাট সিলেক্ট করে মেসেজ দেখুন এবং রিপ্লাই দিন।
                           </p>
@@ -2975,18 +2975,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                     <div className="max-w-4xl mx-auto space-y-6">
                        <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                           <div>
-                             <h4 className="text-xl font-bold text-secondary">রিফান্ড রিকুয়েস্ট</h4>
-                             <p className="text-xs text-gray-400 font-bold">কাস্টমারদের রিফান্ড রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
+                             <h4 className="text-xl font-bold text-secondary">Refunds রিকুয়েস্ট</h4>
+                             <p className="text-xs text-gray-400 font-bold">Customerদের Refunds রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
                           </div>
                           <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl flex items-center gap-2 font-bold text-xs">
-                             <Clock size={16} /> পেন্ডিং: {refundRequests.filter(r => r.status === "pending").length}
+                             <Clock size={16} /> Pending: {refundRequests.filter(r => r.status === "pending").length}
                           </div>
                        </div>
                        <div className="grid gap-4">
                           {refundRequests.length === 0 ? (
                             <div className="text-center py-20 bg-white rounded-3xl border border-gray-100">
                                <RefreshCcw size={48} className="mx-auto mb-4 text-gray-100" />
-                               <p className="text-sm text-gray-400">এখনো কোনো রিফান্ড রিকোয়েস্ট আসেনি</p>
+                               <p className="text-sm text-gray-400">এখনো কোনো Refunds রিকোয়েস্ট আসেনি</p>
                             </div>
                           ) : (
                             refundRequests.sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map((refund) => (
@@ -3000,19 +3000,19 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         }`}>
                                            {refund.status}
                                         </span>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ID: #{String(refund.id).slice(-6).toUpperCase()}</p>
+                                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">ID: #{String(refund.id).slice(-6).toUpperCase()}</p>
                                      </div>
                                      <div>
                                         <h5 className="font-bold text-secondary">{refund.userName}</h5>
                                         <p className="text-xs text-gray-400 font-bold">{refund.userEmail}</p>
                                      </div>
                                      <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">রিফান্ডের করুন:</p>
+                                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1">Refundsের করুন:</p>
                                         <p className="text-sm font-bold text-secondary italic">"{refund.reason}"</p>
                                      </div>
                                      <div className="flex gap-4">
                                         <div>
-                                           <p className="text-[9px] font-bold text-gray-400 uppercase">অর্ডার ID</p>
+                                           <p className="text-[9px] font-bold text-gray-400 uppercase">Order ID</p>
                                            <p className="text-xs font-bold text-secondary">#{String(refund.orderId).slice(-6).toUpperCase()}</p>
                                         </div>
                                         <div>
@@ -3032,7 +3032,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                            </button>
                                            <button 
                                               onClick={async () => {
-                                                 if(window.confirm("আপনি কি এই রিকোয়েস্টটি রিজেক্ট করতে চান?")) {
+                                                 if(window.confirm("Reject this request?")) {
                                                     await updateDoc(doc(db, "refund_requests", refund.id), { status: "rejected", updatedAt: new Date().toISOString() });
                                                  }
                                               }}
@@ -3044,7 +3044,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                      )}
                                      {refund.status !== "pending" && (
                                         <div className="text-right">
-                                           <p className="text-[9px] font-bold text-gray-400 uppercase">আপডেট টাই?</p>
+                                           <p className="text-[9px] font-bold text-gray-400 uppercase">Update টাই?</p>
                                            <p className="text-[10px] font-bold text-gray-500">{new Date(refund.updatedAt || refund.createdAt).toLocaleString("bn-BD")}</p>
                                         </div>
                                      )}
@@ -3062,32 +3062,32 @@ export default function AdminPanel(props: AdminPanelProps) {
                     <div className="lg:col-span-1">
                       <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 sticky top-0">
                         <h4 className="text-lg font-bold text-secondary mb-6 flex items-center gap-2">
-                          <Gift size={20} className="text-primary" /> {editingCampaign?.id ? "এডিট ক্যাম্পেইন" : "নতুন ক্যাম্পেইন"}
+                          <Gift size={20} className="text-primary" /> {editingCampaign?.id ? "এডিট Campaigns" : "নতুন Campaigns"}
                         </h4>
                         <form onSubmit={saveCampaign} className="space-y-4">
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">ক্যাম্পেইন নাম</label>
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Campaigns নাম</label>
                             <input
                               type="text"
                               value={editingCampaign?.name || ""}
                               onChange={(e) => setEditingCampaign({ ...editingCampaign, name: e.target.value } as any)}
-                              placeholder="যেমন: ঈদ ধামাকা"
+                              placeholder="e.g. Eid Dhamaka"
                               className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">URL  (Slug)</label>
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">URL  (Slug)</label>
                             <input
                               type="text"
                               value={editingCampaign?.slug || ""}
                               onChange={(e) => setEditingCampaign({ ...editingCampaign, slug: e.target.value } as any)}
-                              placeholder="যেমন: eid-dhamaka"
+                              placeholder="e.g. eid-dhamaka"
                               className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
                             />
-                            <p className="text-[10px] text-gray-400 mt-1 italic">ইউনিক হতে হবে। উদা: ?campaign=eid-dhamaka</p>
+                            <p className="text-[10px] text-gray-400 mt-1 italic">Must be unique. e.g. ?campaign=eid-dhamaka</p>
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">ব্যানার আপলোড</label>
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Upload Banner</label>
                             <div className="space-y-3">
                               <input
                                 type="file"
@@ -3105,14 +3105,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 ) : (
                                   <>
                                     <Upload size={20} className="text-gray-300" />
-                                    <span className="text-[10px] font-bold text-gray-400 mt-1">ইমেজ আপলোড করুন</span>
+                                    <span className="text-[10px] font-bold text-gray-400 mt-1">Upload Image</span>
                                   </>
                                 )}
                               </label>
                             </div>
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">প্রোডাক্ট সিলেক্ট করুন ({editingCampaign?.productIds?.length || 0})</label>
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Select Products ({editingCampaign?.productIds?.length || 0})</label>
                             <div className="max-h-60 overflow-y-auto border border-gray-100 rounded-xl p-2 space-y-1 bg-gray-50 no-scrollbar">
                                {products.filter(p => !p.deleted).map(p => {
                                   const isSelected = editingCampaign?.productIds?.includes(p.id);
@@ -3144,7 +3144,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 onChange={(e) => setEditingCampaign({ ...editingCampaign, isActive: e.target.checked } as any)}
                                 className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                              />
-                             <label className="text-xs font-bold text-gray-600">ক্যাম্পেইনটি লাইভ করুন</label>
+                             <label className="text-xs font-bold text-gray-600">Campaignsটি লাইভ করুন</label>
                           </div>
                           <div className="flex gap-2 pt-2">
                              <button
@@ -3169,7 +3169,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     {/* Campaign List */}
                     <div className="lg:col-span-2 space-y-4">
                        <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
-                         <History size={20} className="text-primary" /> বিদ্যমান ক্যাম্পেইনসমূহ
+                         <History size={20} className="text-primary" /> বিদ্যমান Campaignsসমূহ
                        </h4>
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {campaigns.map(campaign => (
@@ -3217,7 +3217,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           {campaigns.length === 0 && (
                              <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-gray-100 border-dashed">
                                 <Gift size={48} className="mx-auto mb-4 text-gray-100" />
-                                <p className="text-gray-400 font-bold uppercase text-xs">কোনো ক্যাম্পেইন পাওয়া যায়নি</p>
+                                <p className="text-gray-400 font-bold uppercase text-xs">কোনো Campaigns পাওয়া যায়নি</p>
                              </div>
                           )}
                        </div>
@@ -3232,21 +3232,21 @@ export default function AdminPanel(props: AdminPanelProps) {
                       <div className="bg-gradient-to-r from-teal-500 to-emerald-600 p-6 md:p-8 rounded-[2rem] text-white shadow-lg">
                         <div className="flex items-center gap-3 mb-2">
                           <MessageSquare size={28} />
-                          <h3 className="text-2xl font-black">বাল্ক SMS</h3>
+                          <h3 className="text-2xl font-bold">Bulk SMS</h3>
                         </div>
-                        <p className="text-teal-100 text-sm">সকল গ্রাহকের ফোন নাম্বারে Bulk SMS পাঠান</p>
+                        <p className="text-teal-100 text-sm">Send Bulk SMS to all customer phone numbers</p>
                         <div className="flex flex-wrap gap-4 mt-4">
                           <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl">
-                            <span className="text-xs text-teal-100">মোট ইউনিক নম্বর</span>
-                            <p className="text-xl font-black">{allOrderPhones.length}</p>
+                            <span className="text-xs text-teal-100">Total Unique Numbers</span>
+                            <p className="text-xl font-bold">{allOrderPhones.length}</p>
                           </div>
                           <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl">
-                            <span className="text-xs text-teal-100">সিলেক্টেড</span>
-                            <p className="text-xl font-black">{bulkSmsSelectedPhones.size}</p>
+                            <span className="text-xs text-teal-100">Selected</span>
+                            <p className="text-xl font-bold">{bulkSmsSelectedPhones.size}</p>
                           </div>
                           <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl">
-                            <span className="text-xs text-teal-100">মোট অর্ডার</span>
-                            <p className="text-xl font-black">{orderHistory.length}</p>
+                            <span className="text-xs text-teal-100">Total Orders</span>
+                            <p className="text-xl font-bold">{orderHistory.length}</p>
                           </div>
                         </div>
                       </div>
@@ -3258,7 +3258,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         <textarea
                           value={bulkSmsMessage}
                           onChange={(e) => setBulkSmsMessage(e.target.value)}
-                          placeholder="আপনার কমেন্ট লিখুন..."
+                          placeholder="Write your comment..."
                           className="w-full border border-gray-200 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none resize-none min-h-[120px] bg-gray-50/50"
                         />
                         <div className="flex items-center justify-between mt-3">
@@ -3293,7 +3293,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div className="flex items-center gap-2">
                               <div className="w-4 h-4 border-2 border-teal-400/40 border-t-teal-500 rounded-full animate-spin" />
                               <span className="text-sm font-bold text-teal-700">
-                                SMS পাঠানো হচ্ছে... ব্যাচ {bulkSmsProgress.batchNum}/{bulkSmsProgress.totalBatches}
+                                SMS Sending... ব্যাচ {bulkSmsProgress.batchNum}/{bulkSmsProgress.totalBatches}
                               </span>
                             </div>
                             <span className="text-xs font-bold text-teal-600 bg-white px-3 py-1 rounded-full border border-teal-200">
@@ -3307,10 +3307,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                             />
                           </div>
                           <div className="flex gap-6 text-xs">
-                            <span className="text-teal-700 font-bold">পাঠানো হয়েছে: {bulkSmsProgress.sent}</span>
-                            {bulkSmsProgress.failed > 0 && <span className="text-red-500 font-bold">  ব্যর্থ: {bulkSmsProgress.failed}</span>}
-                            <span className="text-gray-500">মোট: {bulkSmsProgress.total}</span>
-                            <span className="text-gray-400">বাকি: {bulkSmsProgress.total - bulkSmsProgress.sent - bulkSmsProgress.failed}</span>
+                            <span className="text-teal-700 font-bold">Sent: {bulkSmsProgress.sent}</span>
+                            {bulkSmsProgress.failed > 0 && <span className="text-red-500 font-bold">  Failed: {bulkSmsProgress.failed}</span>}
+                            <span className="text-gray-500">Total: {bulkSmsProgress.total}</span>
+                            <span className="text-gray-400">Remaining: {bulkSmsProgress.total - bulkSmsProgress.sent - bulkSmsProgress.failed}</span>
                           </div>
                         </div>
                       )}
@@ -3326,9 +3326,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <h4 className="font-bold text-gray-800">SMS পাঠানোর ফলাফল</h4>
                           </div>
                           <div className="flex gap-6 text-sm">
-                            <span className="text-green-600 font-bold"> সফল: {bulkSmsResult.successCount}</span>
-                            <span className="text-red-500 font-bold">  ব্যর্থ: {bulkSmsResult.failCount}</span>
-                            <span className="text-gray-500">মোট: {bulkSmsResult.total}</span>
+                            <span className="text-green-600 font-bold"> Success: {bulkSmsResult.successCount}</span>
+                            <span className="text-red-500 font-bold">  Failed: {bulkSmsResult.failCount}</span>
+                            <span className="text-gray-500">Total: {bulkSmsResult.total}</span>
                           </div>
                         </div>
                       )}
@@ -3340,7 +3340,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
                             <input
                               type="text"
-                              placeholder="ফোন নাম্বার দিয়ে খুঁজুন..."
+                              placeholder="Search by Phone Number..."
                               value={bulkSmsSearch}
                               onChange={(e) => { setBulkSmsSearch(e.target.value); setBulkSmsPage(0); }}
                               className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-gray-50/50"
@@ -3380,13 +3380,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                               }}
                               className="px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors whitespace-nowrap"
                             >
-                              সব সিলেক্ট ({allOrderPhones.filter(p => !bulkSmsSearch || p.includes(bulkSmsSearch)).length})
+                              All সিলেক্ট ({allOrderPhones.filter(p => !bulkSmsSearch || p.includes(bulkSmsSearch)).length})
                             </button>
                             <button
                               onClick={() => setBulkSmsSelectedPhones(new Set())}
                               className="px-4 py-2.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-100 transition-colors whitespace-nowrap"
                             >
-                              সব রিসেট করুন
+                              All রিসেট করুন
                             </button>
                           </div>
                         </div>
@@ -3400,10 +3400,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <>
                               <div className="flex items-center justify-between mb-3 px-1">
                                 <span className="text-xs text-gray-400">
-                                 পেজ {bulkSmsPage + 1}/{totalPages || 1} | এই পেজে আছে: {pagePhones.length} টা | সিলেক্টেড: <span className="text-teal-600 font-bold">{pageSelectedCount}</span>
+                                 পেজ {bulkSmsPage + 1}/{totalPages || 1} | এই পেজে আছে: {pagePhones.length} টা | Selected: <span className="text-teal-600 font-bold">{pageSelectedCount}</span>
                                 </span>
                                 <span className="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">
-                                   মোট: {filtered.length} টা
+                                   Total: {filtered.length} টা
                                 </span>
                               </div>
                               {pagePhones.length > 0 ? (
@@ -3437,7 +3437,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                           <div className="flex flex-col truncate items-start">
                                             <span className="truncate">{phone}</span>
                                             <span className="text-[10px] text-gray-500 font-normal truncate mt-0.5">
-                                              {orderHistory.find((o: any) => o.customerPhone === phone)?.customerName || 'অজানা কাস্টমার'}
+                                              {orderHistory.find((o: any) => o.customerPhone === phone)?.customerName || 'Unknown Customer'}
                                             </span>
                                           </div>
                                         </div>
@@ -3458,7 +3458,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 <div className="text-center py-12">
                                   <Phone size={48} className="mx-auto mb-4 text-gray-200" />
                                   <p className="text-gray-400 font-bold text-sm">
-                                    {bulkSmsSearch ? "কোনো ফোন নাম্বার পাওয়া যায়নি" : "কোনো অর্ডার থেকে নম্বর পাওয়া যায়নি"}
+                                    {bulkSmsSearch ? "No phone number found" : "কোনো অর্ডার থেকে নম্বর পাওয়া যায়নি"}
                                   </p>
                                 </div>
                               )}
@@ -3529,10 +3529,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                 {adminTab === "settings" && (
                   <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
                     <div className="max-w-4xl mx-auto mb-8 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto no-scrollbar">
-                      <button onClick={() => setSettingsTab('general')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'general' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>সাধারণ সেটিংস</button>
-                      <button onClick={() => setSettingsTab('banners')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'banners' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>হোমপেজ ব্যানার</button>
-                      <button onClick={() => setSettingsTab('admins')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'admins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>অ্যাডমিন ম্যানেজমেন্ট</button>
-                      <button onClick={() => setSettingsTab('users')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'users' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>ইউজার অ্যাক্সেস</button>
+                      <button onClick={() => setSettingsTab('general')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'general' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>সাধারণ Settings</button>
+                      <button onClick={() => setSettingsTab('banners')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'banners' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Homepage Banners</button>
+                      <button onClick={() => setSettingsTab('admins')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'admins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Admin ম্যানেজমেন্ট</button>
+                      <button onClick={() => setSettingsTab('users')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'users' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Users Access</button>
                     </div>
                     {settingsTab === 'general' && (
                     <div className="space-y-8 max-w-4xl mx-auto">
@@ -3540,7 +3540,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                          <div className="flex items-center justify-between mb-8">
                            <h4 className="text-xl font-bold text-secondary flex items-center gap-2">
-                             <Tag size={24} className="text-primary" /> কুপন সেটিংস
+                             <Tag size={24} className="text-primary" /> কুপন Settings
                            </h4>
                            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold">
                               ব্যবহার হয়েছে: {orderHistory.filter(o => o.appliedCoupon === (siteConfig?.couponCode || "ISHOPBD5")).length} বার
@@ -3549,19 +3549,19 @@ export default function AdminPanel(props: AdminPanelProps) {
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                            <div>
                               <div className="flex justify-between items-center mb-2 ml-1">
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">কান্ট্রি কোড</label>
+                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">Country Code</label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
                                   <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isCouponPublic ? 'bg-primary' : 'bg-gray-300'}`}>
                                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${siteConfig?.isCouponPublic ? 'translate-x-4' : 'translate-x-0'}`} />
                                   </div>
                                   <input type="checkbox" className="hidden" checked={siteConfig?.isCouponPublic || false} onChange={(e) => setSiteConfig(prev => prev ? {...prev, isCouponPublic: e.target.checked} : null)} />
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-primary transition-colors">{siteConfig?.isCouponPublic ? 'Active' : 'Hidden'}</span>
+                                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest group-hover:text-primary transition-colors">{siteConfig?.isCouponPublic ? 'Active' : 'Hidden'}</span>
                                 </label>
                               </div>
                               <input type="text" value={siteConfig?.couponCode || ""} onChange={(e) => setSiteConfig(prev => prev ? {...prev, couponCode: e.target.value.toUpperCase()} : null)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold tracking-widest" placeholder="e.g. ISHOPBD10" />
                             </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                               মডেল নাম/নাম্বার (Model)
                             </label>
                             <input
@@ -3576,7 +3576,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                               ওয়ারেন্টি (Warranty)
                             </label>
                             <input
@@ -3591,7 +3591,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                               বক্সে যা যা আছে (In the Box)
                             </label>
                             <input
@@ -3606,7 +3606,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5">
+                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                               হাইলাইটেড ফিচার্স (Key Features) - প্রতি লাইনে একটি করে
                             </label>
                             <textarea
@@ -3679,26 +3679,26 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full py-3 border-2 border-dashed border-blue-200 rounded-2xl text-blue-600 text-[11px] font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"
                               >
-                                <Plus size={16} /> নতুন স্পেসিফিকেশন যোগ করুন
+                                <Plus size={16} /> নতুন স্পেসিফিকেশন Add
                               </button>
                             </div>
                           </div>
                             <div>
                               <div className="flex justify-between items-center mb-2 ml-1">
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">হোয়াটসঅ্যাপ অর্ডার নাম্বার</label>
+                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">WhatsApp Order Number</label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
                                   <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isWhatsappEnabled !== false ? 'bg-primary' : 'bg-gray-300'}`}>
                                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${siteConfig?.isWhatsappEnabled !== false ? 'translate-x-4' : 'translate-x-0'}`} />
                                   </div>
                                   <input type="checkbox" className="hidden" checked={siteConfig?.isWhatsappEnabled !== false} onChange={(e) => setSiteConfig(prev => prev ? {...prev, isWhatsappEnabled: e.target.checked} : null)} />
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-primary transition-colors">{siteConfig?.isWhatsappEnabled !== false ? 'Active' : 'Hidden'}</span>
+                                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest group-hover:text-primary transition-colors">{siteConfig?.isWhatsappEnabled !== false ? 'Active' : 'Hidden'}</span>
                                 </label>
                               </div>
                               <input type="text" value={siteConfig?.whatsappNumber || ""} onChange={(e) => setSiteConfig(prev => prev ? {...prev, whatsappNumber: e.target.value} : null)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold tracking-widest" placeholder="e.g. 88017XXXXXXXX" />
                             </div>
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest text-[#D12053]">
+                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-[#D12053]">
                                    বিকাশ নাম্বার (Send Money)
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
@@ -3711,7 +3711,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                      checked={siteConfig?.isBkashEnabled} 
                                      onChange={(e) => setSiteConfig(prev => prev ? {...prev, isBkashEnabled: e.target.checked} : null)}
                                    />
-                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-primary transition-colors">
+                                   <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest group-hover:text-primary transition-colors">
                                      {siteConfig?.isBkashEnabled ? "Active" : "Hidden"}
                                    </span>
                                  </label>
@@ -3727,7 +3727,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest text-[#23A354]">
+                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-[#23A354]">
                                    বিকাশ নাম্বার (Send Money)
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
@@ -3740,7 +3740,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                      checked={siteConfig?.isNagadEnabled} 
                                      onChange={(e) => setSiteConfig(prev => prev ? {...prev, isNagadEnabled: e.target.checked} : null)}
                                    />
-                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-[#23A354] transition-colors">
+                                   <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest group-hover:text-[#23A354] transition-colors">
                                      {siteConfig?.isNagadEnabled ? "Active" : "Hidden"}
                                    </span>
                                  </label>
@@ -3756,7 +3756,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest text-[#8C3494]">
+                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-[#8C3494]">
                                    রকেট নাম্বার (Send Money)
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
@@ -3769,7 +3769,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                      checked={siteConfig?.isRocketEnabled} 
                                      onChange={(e) => setSiteConfig(prev => prev ? {...prev, isRocketEnabled: e.target.checked} : null)}
                                    />
-                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-[#8C3494] transition-colors">
+                                   <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest group-hover:text-[#8C3494] transition-colors">
                                      {siteConfig?.isRocketEnabled ? "Active" : "Hidden"}
                                    </span>
                                  </label>
@@ -3785,7 +3785,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest text-secondary">
+                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-secondary">
                                    অতিরিক্ত গ্যালারি ছবি
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
@@ -3798,7 +3798,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                      checked={siteConfig?.isBankEnabled} 
                                      onChange={(e) => setSiteConfig(prev => prev ? {...prev, isBankEnabled: e.target.checked} : null)}
                                    />
-                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-secondary transition-colors">
+                                   <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest group-hover:text-secondary transition-colors">
                                      {siteConfig?.isBankEnabled ? "Active" : "Hidden"}
                                    </span>
                                  </label>
@@ -3814,8 +3814,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             <div className="md:col-span-2 p-5 bg-gray-50/50 rounded-2xl border border-gray-100 flex items-center justify-between mt-2">
                               <div>
-                                <h5 className="text-xs font-bold text-secondary uppercase tracking-widest">ক্যাশ অন ডেলিভারি (COD) অপশন</h5>
-                                <p className="text-[10px] text-gray-400 font-bold mt-0.5">অর্ডার চেকআউটে ক্যাশ অন ডেলিভারি অপশনটি দেখাবে কিনা</p>
+                                <h5 className="text-xs font-bold text-secondary uppercase tracking-widest">Cash on Delivery (COD) Option</h5>
+                                <p className="text-[10px] text-gray-400 font-bold mt-0.5">Show Cash on Delivery option at checkout</p>
                               </div>
                               <label className="flex items-center gap-3 cursor-pointer group">
                                 <div className={`w-14 h-7 rounded-full p-1 transition-colors ${siteConfig?.isCodEnabled ? 'bg-primary' : 'bg-gray-300'}`}>
@@ -3828,12 +3828,12 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   onChange={(e) => setSiteConfig(prev => prev ? {...prev, isCodEnabled: e.target.checked} : null)}
                                 />
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest group-hover:text-primary transition-colors min-w-[60px]">
-                                  {siteConfig?.isCodEnabled ? "চালু আছে" : "বন্ধ আছে"}
+                                  {siteConfig?.isCodEnabled ? "Enabled" : "Disabled"}
                                 </span>
                               </label>
                             </div>
                            <div className="md:col-span-2">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 আমাদের সম্পর্কে (About Us)
                               </label>
                               <textarea
@@ -3844,7 +3844,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               />
                            </div>
                            <div className="md:col-span-2">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 গোপনীয়তা নীতি (Privacy Policy)
                               </label>
                               <textarea
@@ -3854,8 +3854,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                               />
                            </div>
                            <div className="md:col-span-2">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
-                                রিফান্ড পলিসি (Refund Policy)
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
+                                Refunds পলিসি (Refund Policy)
                               </label>
                               <textarea
                                 value={siteConfig?.refundPolicy || ""}
@@ -3864,7 +3864,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               />
                            </div>
                            <div className="md:col-span-2">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 নিয়ম ও শর্তাবলী (Terms & Conditions)
                               </label>
                               <textarea
@@ -3874,7 +3874,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               />
                            </div>
                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 অতিরিক্ত গ্যালারি ছবি
                               </label>
                               <textarea
@@ -3886,37 +3886,37 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                             {/* SMS Template */}
                             <div className="md:col-span-2 bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                              <p className="text-xs font-bold text-blue-700 mb-3">কনফার্মেশন এসএমএস টেমপ্লেট (স্বয়ংক্রিয় এসএমএস)</p>
+                              <p className="text-xs font-bold text-blue-700 mb-3">Confirmation SMS Template</p>
                               <div className="space-y-3">
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-widest">প্রথম অংশ / শুরুর বার্তা</label>
+                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-widest">First part / Start message</label>
                                   <textarea
                                     value={siteConfig?.smsTemplateStart || ""}
                                     onChange={(e) => setSiteConfig(prev => prev ? {...prev, smsTemplateStart: e.target.value} : null)}
                                     className="w-full bg-white border border-blue-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm h-20 resize-none no-scrollbar"
-                                    placeholder="যেমন: প্রিয় কাস্টমার, আপনার অর্ডারটি অর্ডার হয়েছে?"
+                                    placeholder="যেমন: প্রিয় Customer, আপনার অর্ডারটি অর্ডার হয়েছে?"
                                   />
                                 </div>
                                 <div className="bg-white border-2 border-dashed border-blue-300 rounded-xl px-4 py-3 text-xs text-blue-500">
-                                   <strong>ক্যাশ অন ডেলিভারি:</strong><br/>
-                                  পণ্য: [পণ্যের নাম ও পরিমাণ]<br/>
+                                   <strong>Cash on Delivery:</strong><br/>
+                                  Products: [Productsের নাম ও পরিমাণ]<br/>
                                   অর্ডার নং: [অর্ডার নম্বর]<br/>
                                   মোট বিল: ৳[টাকা]
                                 </div>
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-widest">শেষ অংশ / অতিরিক্ত বার্তা</label>
+                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-widest">Last part / Additional message</label>
                                   <textarea
                                     value={siteConfig?.smsTemplateEnd || ""}
                                     onChange={(e) => setSiteConfig(prev => prev ? {...prev, smsTemplateEnd: e.target.value} : null)}
                                     className="w-full bg-white border border-blue-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm h-20 resize-none no-scrollbar"
-                                    placeholder="যেমন: কোনো প্রয়োজনে আমাদের সাথে যোগাযোগ করুন: 01777600844"
+                                    placeholder="যেমন: কোনো প্রয়োজনে আমাদের সাথে যোগাAdd: 01777600844"
                                   />
                                 </div>
                                 {/* Toggle */}
                                 <div className="flex items-center justify-between bg-white border border-blue-100 rounded-xl px-4 py-3">
                                   <div>
-                                    <p className="text-sm font-bold text-gray-700">কনফার্ম এসএমএস চালু</p>
-                                    <p className="text-xs text-gray-400">চালু করলে অর্ডার করুন পর কাস্টমার এসএমএস পাবে?</p>
+                                    <p className="text-sm font-bold text-gray-700">Confirm SMS Enabled</p>
+                                    <p className="text-xs text-gray-400">চালু করলে অর্ডার করুন পর Customer এসএমএস পাবে?</p>
                                   </div>
                                   <input
                                     type="checkbox"
@@ -3929,11 +3929,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                            </div>
                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 এআই চ্যাটবট (AI Bot)
                               </label>
                               <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 h-12">
-                                <span className="text-sm font-medium text-gray-700">চেক করুন</span>
+                                <span className="text-sm font-medium text-gray-700">Check</span>
                                 <input
                                   type="checkbox"
                                   checked={siteConfig?.isAiEnabled || false}
@@ -3944,7 +3944,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            {siteConfig?.isAiEnabled && (
                              <div className="md:col-span-2">
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                   Gemini API Key
                                 </label>
                                 <input
@@ -3958,9 +3958,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                            )}
                             {/* Steadfast Courier Settings */}
                             <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 space-y-4">
-                              <h4 className="font-bold text-gray-800 text-sm">কুরিয়ার সেটিংস (Steadfast)</h4>
+                              <h4 className="font-bold text-gray-800 text-sm">কুরিয়ার Settings (Steadfast)</h4>
                               <div>
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                    Steadfast API Key
                                  </label>
                                  <input
@@ -3972,7 +3972,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                  />
                               </div>
                               <div>
-                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                    Steadfast Secret Key
                                  </label>
                                  <input
@@ -3986,10 +3986,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             {/* Pathao Courier Settings */}
                             <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 space-y-4">
-                              <h4 className="font-bold text-gray-800 text-sm">কুরিয়ার সেটিংস (Pathao)</h4>
+                              <h4 className="font-bold text-gray-800 text-sm">কুরিয়ার Settings (Pathao)</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                      Pathao Client ID
                                    </label>
                                    <input
@@ -4001,7 +4001,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                    />
                                 </div>
                                 <div>
-                                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                      Pathao Client Secret
                                    </label>
                                    <input
@@ -4013,7 +4013,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                    />
                                 </div>
                                 <div>
-                                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                      Pathao Username (Email)
                                    </label>
                                    <input
@@ -4025,7 +4025,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                    />
                                 </div>
                                 <div>
-                                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                      Pathao Password
                                    </label>
                                    <input
@@ -4039,7 +4039,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                             </div>
                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 অতিরিক্ত গ্যালারি ছবি
                               </label>
                               <input
@@ -4050,7 +4050,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               />
                            </div>
                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 অতিরিক্ত গ্যালারি ছবি
                               </label>
                               <input
@@ -4061,7 +4061,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               />
                            </div>
                            <div className="md:col-span-2">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                 অতিরিক্ত গ্যালারি ছবি
                               </label>
                               <input
@@ -4079,8 +4079,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   <Eye size={20} />
                                </div>
                                <div>
-                                   <p className="text-xs font-bold text-gray-900">পাবলিক করুন</p>
-                                   <p className="text-[10px] text-gray-400 font-bold">কাস্টমাররা চেকআউট পেজে এই কোডটি দেখতে পাবে</p>
+                                   <p className="text-xs font-bold text-gray-900">Make Public</p>
+                                   <p className="text-[10px] text-gray-400 font-bold">Customerরা চেকআউট পেজে এই কোডটি দেখতে পাবে</p>
                                </div>
                              </div>
                              <button
@@ -4110,7 +4110,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         <div>
                           <div className="space-y-4">
                             <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                 অতিরিক্ত গ্যালারি ছবি
                               </label>
                               <input
@@ -4132,11 +4132,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       })
                                 }
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                placeholder="e.g. সেরা মানের পণ্য"
+                                placeholder="e.g. সেরা মানের Products"
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                 সাব-টাইটেল
                               </label>
                               <input
@@ -4158,11 +4158,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       })
                                 }
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                placeholder="e.g. ১০০% অরিজিনাল পন্যের নিশ্চয়তা"
+                                placeholder="e.g. 100% Original Product Guarantee"
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">লিঙ্ক বা প্রোডাক্ট আইডি (Link)</label>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1.5 ml-1">Link or Product ID</label>
                               <select
                                 value={
                                   editingBanner
@@ -4182,7 +4182,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
                               >
-                                <option value="">কোনো লিংক নেই</option>
+                                <option value="">No link</option>
                                 {products.map((p) => (
                                   <option key={p.id} value={p.id}>
                                     {p.name}
@@ -4194,7 +4194,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div className="space-y-4">
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                     টাইটেল ফন্ট
                                   </label>
                                   <select
@@ -4224,7 +4224,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                     টাইটেল ওয়েট
                                   </label>
                                   <select
@@ -4254,7 +4254,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                     সাব-টাইটেল ফন্ট
                                   </label>
                                   <select
@@ -4284,7 +4284,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                     সাব-টাইটেল ওয়েট
                                   </label>
                                   <select
@@ -4313,7 +4313,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                     টাইটেল সাইজ
                                   </label>
                                   <select
@@ -4335,14 +4335,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     }
                                     className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-primary text-xs font-bold"
                                   >
-                                    <option value="text-xl md:text-3xl">ছোট (Small)</option>
-                                    <option value="text-2xl md:text-4xl">স্ট্যান্ডার্ড (Default)</option>
-                                    <option value="text-3xl md:text-5xl">বড় (Large)</option>
-                                    <option value="text-4xl md:text-6xl">খুব বড় (Extra Large)</option>
+                                    <option value="text-xl md:text-3xl">Small</option>
+                                    <option value="text-2xl md:text-4xl">Standard (Default)</option>
+                                    <option value="text-3xl md:text-5xl">Large</option>
+                                    <option value="text-4xl md:text-6xl">Extra Large</option>
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
                                     সাব-টাইটেল সাইজ
                                   </label>
                                   <select
@@ -4364,10 +4364,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     }
                                     className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-primary text-xs font-bold"
                                   >
-                                    <option value="text-xs md:text-sm">ছোট (Small)</option>
-                                    <option value="text-sm md:text-base">স্ট্যান্ডার্ড (Default)</option>
-                                    <option value="text-base md:text-lg">বড় (Large)</option>
-                                    <option value="text-lg md:text-xl">খুব বড় (Extra Large)</option>
+                                    <option value="text-xs md:text-sm">Small</option>
+                                    <option value="text-sm md:text-base">Standard (Default)</option>
+                                    <option value="text-base md:text-lg">Large</option>
+                                    <option value="text-lg md:text-xl">Extra Large</option>
                                   </select>
                                 </div>
                               </div>
@@ -4375,7 +4375,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
                               <div className="space-y-1">
                                 <div className="flex justify-between items-center">
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">
                                     পজিশন (X)
                                   </label>
                                   <span className="text-[10px] font-bold text-primary">
@@ -4423,7 +4423,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                               <div className="space-y-1">
                                 <div className="flex justify-between items-center">
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">
                                     পজিশন (Y)
                                   </label>
                                   <span className="text-[10px] font-bold text-primary">
@@ -4471,7 +4471,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                             </div>
                             <div className="mb-6">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest px-1">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest px-1">
                                 ব্যানার টাইএª
                                </label>
                               <div className="grid grid-cols-2 gap-2">
@@ -4504,7 +4504,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                             </div>
                             <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 tracking-widest">
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
               ব্যানারের ছবি
                               </label>
                               <div
@@ -4536,7 +4536,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       size={24}
                                       className="text-gray-300 mb-2"
                                     />
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                    <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">
               ছবি আপলোড করুন
                                     </span>
                                   </>
@@ -4558,8 +4558,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 className="flex-1 bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:bg-black transition-all active:scale-95 text-xs uppercase"
                               >
                                 {editingBanner
-                                  ? "ব্যানার আপডেট করুন"
-                                  : "ব্যানার যোগ করুন"}
+                                  ? "ব্যানার Update করুন"
+                                  : "ব্যানার Add"}
                               </button>
                               {editingBanner && (
                                 <button
@@ -4667,11 +4667,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                       <h4 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
                         <ShieldCheck size={24} className="text-primary" />
-                       সাম্প্রতিক অর্ডারসমূহ
+                       Recent Orders
                       </h4>
                       <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-4 tracking-widest">
-                          {editingAdmin ? "অ্যাডমিন/মডারেটর এডিট করুন" : "নতুন অ্যাডমিন/মডারেটর যোগ করুন"}
+                        <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-4 tracking-widest">
+                          {editingAdmin ? "Admin/Moderator এডিট করুন" : "নতুন Admin/Moderator Add"}
                         </label>
                         <div className="flex flex-col xl:flex-row gap-3">
                           <input
@@ -4680,7 +4680,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             value={(editingAdmin ? editingAdmin.email : newAdminEmail) || ""}
                             onChange={(e) => editingAdmin ? null : setNewAdminEmail(e.target.value)}
                             className={`flex-[2] border border-gray-200 rounded-2xl py-3 px-5 outline-none focus:ring-2 focus:ring-primary font-bold text-sm min-w-0 ${editingAdmin ? 'bg-gray-100' : 'bg-white'}`}
-                            placeholder="ইমেইল অ্যাড্রেস লিখুন..."
+                            placeholder="Enter Email Address..."
                           />
                           <input
                             type="text"
@@ -4691,7 +4691,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 : setNewAdminPassword(e.target.value)
                             }
                             className="flex-1 bg-white border border-gray-200 rounded-2xl py-3 px-5 outline-none focus:ring-2 focus:ring-primary font-bold text-sm min-w-0"
-                            placeholder="পাসওয়ার্ড..."
+                            placeholder="Password..."
                           />
                           <input
                             type="text"
@@ -4702,7 +4702,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 : setNewAdminPhone(e.target.value)
                             }
                             className="flex-1 bg-white border border-gray-200 rounded-2xl py-3 px-5 outline-none focus:ring-2 focus:ring-primary font-bold text-sm min-w-0"
-                            placeholder="ফোন নম্বর (2FA)..."
+                            placeholder="Phone Number (2FA)..."
                           />
                           <select
                             value={editingAdmin ? editingAdmin.role : newAdminRole}
@@ -4713,16 +4713,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                             }
                             className="bg-white border border-gray-200 rounded-2xl py-3 px-5 outline-none focus:ring-2 focus:ring-primary font-bold text-sm shrink-0"
                           >
-                            <option value="moderator">মডারেটর</option>
-                            <option value="admin">অ্যাডমিন</option>
-                            <option value="owner">অনর</option>
+                            <option value="moderator">Moderator</option>
+                            <option value="admin">Admin</option>
+                            <option value="owner">Other</option>
                           </select>
                           <div className="flex gap-2">
                              <button
                                onClick={editingAdmin ? handleUpdateAdmin : handleAddAdmin}
                                className="bg-secondary text-white font-bold px-6 py-3 rounded-2xl shadow-lg hover:bg-black transition-all active:scale-95 shrink-0 whitespace-nowrap text-sm"
                              >
-                               {editingAdmin ? "আপডেট" : "যোগ করুন"}
+                               {editingAdmin ? "Update" : "Add"}
                              </button>
                              {editingAdmin && (
                                <button
@@ -4740,7 +4740,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       </div>
                       <div className="space-y-4">
                         <h5 className="font-bold text-secondary text-sm">
-                         সক্রিয় ইউজারসমূহ ({adminList.length})
+                         সক্রিয় Usersসমূহ ({adminList.length})
                         </h5>
                         {adminList.map((admin) => (
                           <div
@@ -4803,7 +4803,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       <div className="flex items-center justify-between mb-6">
                         <h4 className="text-xl font-bold text-secondary flex items-center gap-2">
                           <Users size={24} className="text-primary" />
-                         সাম্প্রতিক অর্ডারসমূহ
+                         Recent Orders
                         </h4>
                         <button 
                           onClick={async () => {
@@ -4830,9 +4830,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                         <table className="w-full text-left">
                           <thead>
                             <tr className="border-b border-gray-100">
-                              <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">ইউজার</th>
-                              <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">অ্যাক্সেস</th>
-                              <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">অ্যাকশন</th>
+                              <th className="pb-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">Users</th>
+                              <th className="pb-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-right">Access</th>
+                              <th className="pb-4 text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50">
@@ -4861,14 +4861,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       onClick={() => handleEditUserBalance(u)}
                                       className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg hover:bg-blue-100 transition-all"
                                    >
-                                     ব্যালেন্স আপডেট
+                                     ব্যালেন্স Update
                                    </button>
                                  </td>
                                </tr>
                              ))}
                              {userList.length === 0 && !isUsersLoading && (
                                <tr>
-                                 <td colSpan={3} className="py-8 text-center text-gray-400 text-sm italic">কোন ইউজার পাওয়া যায়নি</td>
+                                 <td colSpan={3} className="py-8 text-center text-gray-400 text-sm italic">কোন Users পাওয়া যায়নি</td>
                                </tr>
                              )}
                           </tbody>
@@ -4904,44 +4904,44 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <Bell size={24} />
                          </div>
                          <div>
-                            <h4 className="text-xl font-bold text-secondary">নোটিফিকেশন পাঠান</h4>
-<p className="text-xs text-gray-500 font-bold">নতুন প্রোডাক্ট বা অফারের তথ্য সব গ্রাহককে পাঠান</p>
+                            <h4 className="text-xl font-bold text-secondary">Send Notification</h4>
+<p className="text-xs text-gray-500 font-bold">নতুন প্রোডাক্ট বা অফারের তথ্য All গ্রাহককে পাঠান</p>
                          </div>
                       </div>
                       
                       <form onSubmit={handleSendBulkNotification} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                          <div className="space-y-4">
                             <div>
-                               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">শিরোনাম (Title)</label>
+                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1.5 ml-1">Title</label>
                                <input 
                                   required
                                   type="text"
                                   value={bulkNotifForm.title}
                                   onChange={e => setBulkNotifForm({...bulkNotifForm, title: e.target.value})}
-                                  placeholder="যেমন: ধামাকা অফার!"
+                                  placeholder="e.g. Dhamaka Offer!"
                                   className="w-full bg-white border border-gray-100 rounded-2xl py-4 px-6 text-sm font-bold focus:border-primary outline-none transition-all shadow-sm"
                                />
                             </div>
                             <div>
-                               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">লিঙ্ক বা প্রোডাক্ট আইডি (Link)</label>
+                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1.5 ml-1">Link or Product ID</label>
                                <input 
                                   type="text"
                                   value={bulkNotifForm.link}
                                   onChange={e => setBulkNotifForm({...bulkNotifForm, link: e.target.value})}
-                                  placeholder="যেমন: p123"
+                                  placeholder="e.g. p123"
                                   className="w-full bg-white border border-gray-100 rounded-2xl py-4 px-6 text-sm font-bold focus:border-primary outline-none transition-all shadow-sm"
                                />
                             </div>
                          </div>
                          <div className="flex flex-col gap-4">
                             <div className="flex-1">
-                               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">বিস্তারিত অ্যাডমিন</label>
+                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1.5 ml-1">বিস্তারিত Admin</label>
                                <textarea 
                                   required
                                   rows={4}
                                   value={bulkNotifForm.message}
                                   onChange={e => setBulkNotifForm({...bulkNotifForm, message: e.target.value})}
-                          placeholder="মেসেজটি এখানে লিখুন..."
+                          placeholder="Write your message here..."
                                   className="w-full bg-white border border-gray-100 rounded-2xl py-4 px-6 text-sm font-bold focus:border-primary outline-none transition-all shadow-sm resize-none"
                                />
                             </div>
@@ -4969,14 +4969,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                          <Bell size={24} />
                        </div>
                        <div>
-                         <h4 className="text-xl font-bold text-secondary">সব নোটিফিকেশন হিস্ট্রি</h4>
-                         <p className="text-xs text-gray-400 font-bold">কাস্টমারদের রিফান্ড রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
+                         <h4 className="text-xl font-bold text-secondary">All নোটিফিকেশন হিস্ট্রি</h4>
+                         <p className="text-xs text-gray-400 font-bold">Customerদের Refunds রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
                        </div>
                      </div>
                      {notifications.filter((n: any) => n.type === "broadcast" || n.userId === "all").length === 0 ? (
                        <div className="flex flex-col items-center justify-center py-12 text-gray-300">
                          <Bell size={48} className="mb-3 opacity-30" />
-                         <p className="text-sm font-bold">কোনো নোটিফিকেশন পাওয়া যায়নি</p>
+                         <p className="text-sm font-bold">No notification found</p>
                        </div>
                      ) : (
                        <div className="space-y-3 max-h-96 overflow-y-auto no-scrollbar pr-1">
@@ -5000,11 +5000,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       {notif.link}
                                    </span>
                                  )}
-                                 <p className="text-[10px] text-gray-300 mt-1.5">প্রেরক: {notif.sender || "system"}</p>
+                                 <p className="text-[10px] text-gray-300 mt-1.5">Sender: {notif.sender || "system"}</p>
                                </div>
                                <button
                                  onClick={async () => {
-                                   if (!window.confirm("আপনি কি এই রিফান্ড রিকোয়েস্টটি অ্যাপ্রুভ করতে চান? এটি ইউজারের ব্যালেন্সে টাকা যোগ করে দেবে।")) return;
+                                   if (!window.confirm("আপনি কি এই Refunds রিকোয়েস্টটি অ্যাপ্রুভ করতে চান? এটি Usersের ব্যালেন্সে টাকা যোগ করে দেবে।")) return;
                                    try {
                                      if (notif.userId === 'all') {
                                        const dismissedStr = localStorage.getItem('dismissedNotifs') || '[]';
@@ -5016,9 +5016,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                                      } else {
                                        await deleteDoc(doc(db, "notifications", notif.id));
                                      }
-                                     toast.success("কুপন সফলভাবে প্রয়োগ করা হয়েছে! আপনি ফ্রি ডেলিভারি পাচ্ছেন।");
+                                     toast.success("Coupon applied successfully! You get Free Delivery.");
                                    } catch (err) {
-                                     toast.error("ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।");
+                                     toast.error("Wrong password! Try again.");
                                    }
                                  }}
                                  className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-400 rounded-xl hover:bg-red-100 hover:text-red-600 flex-shrink-0 transition-colors"
@@ -5039,8 +5039,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                <Users size={24} />
                             </div>
                             <div>
-                               <h4 className="text-xl font-bold text-secondary">গ্রাহক তালিক?</h4>
-                             <p className="text-xs text-gray-400 font-bold">কাস্টমারদের রিফান্ড রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
+                               <h4 className="text-xl font-bold text-secondary">Customer List</h4>
+                             <p className="text-xs text-gray-400 font-bold">Customerদের Refunds রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
                             </div>
                          </div>
                          
@@ -5050,7 +5050,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                type="text"
                                value={userListSearch}
                                onChange={e => setUserListSearch(e.target.value)}
-                               placeholder="ইমেইল বা ফোন নাম্বার দিয়ে খুঁজুন..."
+                               placeholder="Search by Email or Phone..."
                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 pl-14 pr-6 text-sm font-bold focus:border-primary outline-none transition-all shadow-inner"
                             />
                          </div>
@@ -5059,9 +5059,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                         <table className="w-full text-left">
                           <thead>
                             <tr className="border-b border-gray-50">
-                              <th className="py-4 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">ইউজার</th>
-                              <th className="py-4 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">অ্যাক্সেস</th>
-                              <th className="py-4 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">অ্যাকশন</th>
+                              <th className="py-4 px-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">Users</th>
+                              <th className="py-4 px-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">Access</th>
+                              <th className="py-4 px-2 text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-50">
@@ -5077,7 +5077,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                             {u.displayName ? u.displayName[0] : <User size={16} />}
                                          </div>
                                          <div>
-                                            <p className="font-bold text-secondary text-sm">{u.displayName || "অজানা ইউজার"}</p>
+                                            <p className="font-bold text-secondary text-sm">{u.displayName || "অজানা Users"}</p>
                                             <p className="text-[10px] text-gray-400 font-bold">
                                               {u.email?.endsWith("@mobile.user") ? u.email.replace("@mobile.user", "") : u.email}
                                             </p>
@@ -5100,14 +5100,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                             onClick={() => handleEditUserBalance(u)}
                                             className="bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-[10px] font-bold hover:bg-blue-100 active:scale-95 transition-all"
                                           >
-                                            ব্যালেন্স আপডেট
+                                            ব্যালেন্স Update
                                           </button>
                                        </div>
                                    </td>
                                 </tr>
                              ))}
                              {userList.length === 0 && (
-                                <tr><td colSpan={3} className="py-12 text-center text-gray-400 text-xs italic">কোন ডেটা পাওয়া যায়নি</td></tr>
+                                <tr><td colSpan={3} className="py-12 text-center text-gray-400 text-xs italic">No data found</td></tr>
                              )}
                           </tbody>
                         </table>

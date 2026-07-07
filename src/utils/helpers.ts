@@ -21,14 +21,14 @@ export const getOrderLocalDateString = (order: any) => {
 };
 
 export const formatOrderGroupDate = (dateStrOrObj: any) => {
-  if (!dateStrOrObj || dateStrOrObj === "N/A") return "অন্যান্য";
+  if (!dateStrOrObj || dateStrOrObj === "N/A") return "Other";
   
   let datePart = "";
   let dateObj: Date | null = null;
   
   if (dateStrOrObj instanceof Date) {
     dateObj = dateStrOrObj;
-    datePart = dateObj.toLocaleDateString("bn-BD");
+    datePart = dateObj.toLocaleDateString("en-US");
   } else {
     datePart = String(dateStrOrObj).trim();
   }
@@ -60,23 +60,17 @@ export const formatOrderGroupDate = (dateStrOrObj: any) => {
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
   
-  const todayStrBn = today.toLocaleDateString("bn-BD");
-  const yesterdayStrBn = yesterday.toLocaleDateString("bn-BD");
+  const todayStrBn = today.toLocaleDateString("en-US");
+  const yesterdayStrBn = yesterday.toLocaleDateString("en-US");
   const todayStrEn = today.toLocaleDateString("en-US");
   const yesterdayStrEn = yesterday.toLocaleDateString("en-US");
 
-  const bnMonths = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
-  const toBengaliDigits = (num: number | string) => {
-    const englishToBengaliMap: Record<string, string> = {
-      '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪',
-      '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯'
-    };
-    return String(num).replace(/[0-9]/g, m => englishToBengaliMap[m] || m);
-  };
+  const enMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const toBengaliDigits = (num: number | string) => String(num);
 
   const getFormattedDateText = (d: Date) => {
     const day = d.getDate();
-    const month = bnMonths[d.getMonth()];
+    const month = enMonths[d.getMonth()];
     const year = d.getFullYear();
     return `${toBengaliDigits(day)} ${month}, ${toBengaliDigits(year)}`;
   };
@@ -86,18 +80,18 @@ export const formatOrderGroupDate = (dateStrOrObj: any) => {
     const isYesterday = dateObj.toDateString() === yesterday.toDateString();
     
     if (isToday) {
-      return `আজ (${getFormattedDateText(dateObj)})`;
+      return `Today (${getFormattedDateText(dateObj)})`;
     } else if (isYesterday) {
-      return `গতকাল (${getFormattedDateText(dateObj)})`;
+      return `Yesterday (${getFormattedDateText(dateObj)})`;
     } else {
       return getFormattedDateText(dateObj);
     }
   }
   
   if (datePart === todayStrBn || datePart === todayStrEn) {
-    return `আজ (${datePart})`;
+    return `Today (${datePart})`;
   } else if (datePart === yesterdayStrBn || datePart === yesterdayStrEn) {
-    return `গতকাল (${datePart})`;
+    return `Yesterday (${datePart})`;
   }
   
   return datePart;
