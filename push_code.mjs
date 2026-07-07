@@ -47,6 +47,7 @@ async function run() {
       dir,
       remote: 'origin',
       ref: branch,
+      force: true,
       onAuth: () => ({ username: token })
     });
     console.log('Push result:', pushResult);
