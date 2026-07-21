@@ -59,51 +59,51 @@ export default function AuthModal(props: AuthModalProps) {
                   <User size={32} />
                 </div>
                 <h3 className="text-3xl font-black text-secondary">
-                  {authModalType === "login" ? "লগইন করুন" : "নতুন একাউন্ট"}
+                  {authModalType === "login" ? "Log In" : "Create Account"}
                 </h3>
                 <p className="text-base text-gray-500 font-bold mt-2">
-                  {authModalType === "login" ? "অর্ডার ট্র‍্যাক করতে লগইন করুন" : "নতুন একাউন্ট তৈরি করে শপিং করুন"}
+                  {authModalType === "login" ? "Please login to track your orders" : "Create a new account to start shopping"}
                 </p>
               </div>
               <form onSubmit={handleCustomAuth} className="space-y-5">
                 {authModalType === "signup" && (
                   <div>
                     <label className="block text-sm font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">
-                      আপনার নাম
+                      Your Name
                     </label>
                     <input
                       required
                       type="text"
                       value={authName}
                       onChange={(e) => setAuthName(e.target.value)}
-                      placeholder="পুরো নাম লিখুন"
+                      placeholder="Enter your full name"
                       className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 text-base font-bold focus:border-primary outline-none transition-all"
                     />
                   </div>
                 )}
                 <div>
                   <label className="block text-sm font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">
-                    ইমেইল বা ফোন নম্বর
+                    Email or Phone Number
                   </label>
                   <input
                     required
                     type="text"
                     value={authIdentifier}
                     onChange={(e) => setAuthIdentifier(e.target.value)}
-                    placeholder="example@mail.com বা 01xxxxxxxxx"
+                    placeholder="example@mail.com or 01xxxxxxxxx"
                     className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 text-base font-bold focus:border-primary outline-none transition-all"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">
-                    পাসওয়ার্ড
+                    Password
                   </label>
                   <input
                     required
                     type="password"
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
-                    placeholder="আপনার পাসওয়ার্ড"
+                    placeholder="Your Password"
                     className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 text-base font-bold focus:border-primary outline-none transition-all"
                   />
                 </div>
@@ -116,7 +116,7 @@ export default function AuthModal(props: AuthModalProps) {
                     <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
-                      {authModalType === "login" ? "লগইন" : "একাউন্ট তৈরি করুন"}
+                      {authModalType === "login" ? "Login" : "Create Account"}
                       <ArrowRight size={20} />
                     </>
                   )}
@@ -128,7 +128,7 @@ export default function AuthModal(props: AuthModalProps) {
                     <div className="w-full border-t border-gray-100"></div>
                   </div>
                   <div className="relative bg-white px-4 text-xs font-black text-gray-400 uppercase tracking-widest">
-                    অথবা
+                    OR
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -160,9 +160,9 @@ export default function AuthModal(props: AuthModalProps) {
                   className="text-sm font-bold text-gray-500 hover:text-primary transition-colors"
                 >
                   {authModalType === "login" ? (
-                    <>একাউন্ট নেই? <span className="text-secondary font-black ml-1">রেজিস্ট্রেশন করুন</span></>
+                    <>Don't have an account? <span className="text-secondary font-black ml-1">Register</span></>
                   ) : (
-                    <>ইতিমধ্যেই একাউন্ট আছে? <span className="text-secondary font-black ml-1">লগইন করুন</span></>
+                    <>Already have an account? <span className="text-secondary font-black ml-1">Login</span></>
                   )}
                 </button>
               </div>

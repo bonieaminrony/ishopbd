@@ -259,7 +259,7 @@ export default function ShopList(props: ShopListProps) {
         {/* Flash Sale Section */}
         {console.log("Flash sale render - cache bust v7")}
         {!isProductDetailsOpen && !activeCampaign && flashSaleProducts.length > 0 && (
-          <section className="mb-10 relative p-[2px] rounded-[2.6rem] overflow-hidden shadow-2xl shadow-red-500/10 transform-gpu">
+          <section id="flash-sale-section" className="mb-10 relative p-[2px] rounded-[2.6rem] overflow-hidden shadow-2xl shadow-red-500/10 transform-gpu">
             {/* Running Border Effect Background */}
             <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#f00b24_0%,#ff3d54_25%,transparent_40%,#f00b24_50%,#ff3d54_75%,transparent_90%,#f00b24_100%)] animate-[spin_4s_linear_infinite] origin-center pointer-events-none z-0"></div>
             
@@ -392,17 +392,19 @@ export default function ShopList(props: ShopListProps) {
           )}
           {filteredProducts.length > productsPerPage && (
             <div className="mt-12 flex justify-center items-center gap-2 flex-wrap">
-              <button
+              <motion.button
+                whileHover={currentPage !== 1 ? { scale: 1.02 } : {}}
+                whileTap={currentPage !== 1 ? { scale: 0.98 } : {}}
                 onClick={() => {
                   setCurrentPage(prev => Math.max(1, prev - 1));
                   document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 disabled={currentPage === 1}
-                className="px-4 py-2 rounded-xl border border-gray-200 hover:border-primary disabled:opacity-50 transition-colors flex items-center gap-2 font-bold text-sm"
+                className="px-4 py-2 rounded-xl border border-gray-200 bg-white hover:border-primary disabled:opacity-40 disabled:pointer-events-none transition-all duration-300 flex items-center gap-2 font-medium text-sm text-gray-500 hover:text-primary shadow-sm hover:shadow-md cursor-pointer"
               >
-                <ChevronLeft size={18} />
-                <span>a</span>
-              </button>
+                <ChevronLeft size={16} />
+                <span>{t("আগের", "Prev")}</span>
+              </motion.button>
               
               <div className="flex items-center gap-2">
                 {Array.from({ length: Math.ceil(filteredProducts.length / productsPerPage) }).map((_, i) => {
@@ -412,42 +414,48 @@ export default function ShopList(props: ShopListProps) {
                     pageNum === Math.ceil(filteredProducts.length / productsPerPage) || 
                     (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
                   ) {
+                    const isActive = currentPage === pageNum;
                     return (
-                      <button
+                      <motion.button
                         key={pageNum}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => {
                           setCurrentPage(pageNum);
                           document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                         }}
-                        className={`w-10 h-10 rounded-xl font-bold transition-all ${
-                          currentPage === pageNum 
-                            ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                            : "bg-white border border-gray-200 text-gray-500 hover:border-primary"
+                        className={`w-10 h-10 rounded-xl transition-all duration-300 flex items-center justify-center cursor-pointer ${
+                          isActive 
+                            ? "bg-primary text-white shadow-lg shadow-primary/30 border border-primary font-semibold scale-105" 
+                            : "bg-white border border-gray-200 text-gray-500 font-medium hover:text-primary hover:border-primary hover:shadow-sm"
                         }`}
                       >
                         {pageNum}
-                      </button>
+                      </motion.button>
                     );
                   } else if (
                     (pageNum === currentPage - 2 && pageNum > 1) || 
                     (pageNum === currentPage + 2 && pageNum < Math.ceil(filteredProducts.length / productsPerPage))
                   ) {
-                    return <span key={pageNum} className="text-gray-400">...</span>;
+                    return <span key={pageNum} className="text-gray-400 px-1 font-medium">...</span>;
                   }
                   return null;
                 })}
               </div>
-              <button
+              
+              <motion.button
+                whileHover={currentPage !== Math.ceil(filteredProducts.length / productsPerPage) ? { scale: 1.02 } : {}}
+                whileTap={currentPage !== Math.ceil(filteredProducts.length / productsPerPage) ? { scale: 0.98 } : {}}
                 onClick={() => {
                   setCurrentPage(prev => Math.min(Math.ceil(filteredProducts.length / productsPerPage), prev + 1));
                   document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 disabled={currentPage === Math.ceil(filteredProducts.length / productsPerPage)}
-                className="px-4 py-2 rounded-xl border border-gray-200 hover:border-primary disabled:opacity-50 transition-colors flex items-center gap-2 font-bold text-sm"
+                className="px-4 py-2 rounded-xl border border-gray-200 bg-white hover:border-primary disabled:opacity-40 disabled:pointer-events-none transition-all duration-300 flex items-center gap-2 font-medium text-sm text-gray-500 hover:text-primary shadow-sm hover:shadow-md cursor-pointer"
               >
-                <span></span>
-                <ChevronRight size={18} />
-              </button>
+                <span>{t("পরবর্তী", "Next")}</span>
+                <ChevronRight size={16} />
+              </motion.button>
             </div>
           )}
         </div>

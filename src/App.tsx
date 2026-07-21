@@ -641,7 +641,7 @@ function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const { isQuotaExceeded, setIsQuotaExceeded, adminReplyingTo, setAdminReplyingTo, chatReplyingTo, setChatReplyingTo, isProfileOpen, setIsProfileOpen, profileTab, setProfileTab, activePolicy, setActivePolicy } = useUIContext();
     const { showToast, setShowToast, cartItems, setCartItems, cartCount, checkoutItems, setCheckoutItems, isCheckoutOpen, setIsCheckoutOpen, checkoutName, setCheckoutName, checkoutPhone, setCheckoutPhone, checkoutPhoneFocused, setCheckoutPhoneFocused, checkoutDistrict, setCheckoutDistrict, checkoutAddress, setCheckoutAddress, checkoutNote, setCheckoutNote, paymentMethod, setPaymentMethod, availableRewardPoints, setAvailableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, checkoutDistrictSearch, setCheckoutDistrictSearch, isCheckoutDistrictOpen, setIsCheckoutDistrictOpen, appliedCoupon, setAppliedCoupon, deliveryArea, setDeliveryArea, addToCartInternal, addToCart, updateQuantity, setQuantityDirect, removeItem, getProductPrice, getDeliveryCharge, calculateTotal } = useCartContext();
-    const { activeCampaign, setActiveCampaign, campaigns, setCampaigns, selectedColor, setSelectedColor, categories, setCategories, products, setProducts, searchQuery, setSearchQuery, searchInput, setSearchInput, selectedCategory, setSelectedCategory, isTrendingFilterActive, setIsTrendingFilterActive, selectedBrand, setSelectedBrand, minPrice, setMinPrice, maxPrice, setMaxPrice, sortBy, setSortBy, trendingIndices, setTrendingIndices, activeTrendingSlot, setActiveTrendingSlot, selectedProduct, setSelectedProduct, isProductDetailsOpen, setIsProductDetailsOpen, flashSaleProducts, relatedProducts, filteredProducts, featuredProducts, newArrivals, brands } = useProductContext();
+    const { activeCampaign, setActiveCampaign, campaigns, setCampaigns, selectedColor, setSelectedColor, categories, setCategories, products, setProducts, searchQuery, setSearchQuery, searchInput, setSearchInput, selectedCategory, setSelectedCategory, isTrendingFilterActive, setIsTrendingFilterActive, selectedBrand, setSelectedBrand, minPrice, setMinPrice, maxPrice, setMaxPrice, sortBy, setSortBy, trendingIndices, setTrendingIndices, activeTrendingSlot, setActiveTrendingSlot, selectedProduct, setSelectedProduct, isProductDetailsOpen, setIsProductDetailsOpen, flashSaleProducts, relatedProducts, filteredProducts, featuredProducts, newArrivals, brands, selectedSubcategory, setSelectedSubcategory } = useProductContext();
     const [inlineOrderDistrict, setInlineOrderDistrict] = useState("");
 
     const [inlineOrderThana, setInlineOrderThana] = useState("");
@@ -2909,7 +2909,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             ...d.data(),
             id: d.id,
             displayId: (d.data() as any).orderId || d.id,
-            date: orderDate
+            date: orderDate,
+            shortId: (d.data() as any).shortId || String((d.data() as any).orderId || d.id).slice(-6).toUpperCase()
           };
         });
         
@@ -2926,17 +2927,6 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         }
         isInitialOrderLoadRef.current = false;
         setOrderHistory(orders);
-        if (isAdmin && orders.length > 0) {
-           setTimeout(() => {
-              orders.forEach(o => {
-                 if (!o.shortId) {
-                    updateDoc(doc(db, "orders", o.id), {
-                       shortId: String(o.orderId || o.id).slice(-6).toUpperCase()
-                    }).catch(()=>{});
-                 }
-              });
-           }, 2000);
-        }
       },
       (err) => {
         if (err.message?.includes("Quota exceeded") || err.message === "QUOTA_EXCEEDED") {
@@ -3570,10 +3560,16 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           : 0,
         image: editingProduct.image,
         category: editingProduct.category,
+        subcategory: editingProduct.subcategory || "",
         description: editingProduct.description || "",
         tags: editingProduct.tags || "",
         videoUrl: editingProduct.videoUrl || "",
         brand: editingProduct.brand || "",
+        modelName: editingProduct.modelName || "",
+        warranty: editingProduct.warranty || "",
+        inTheBox: editingProduct.inTheBox || "",
+        features: editingProduct.features || "",
+        specifications: editingProduct.specifications || [],
         images: editingProduct.images || [],
         variants: editingProduct.variants || [],
         wholesaleTiers: editingProduct.wholesaleTiers || [],
@@ -3641,7 +3637,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     // Prevent multiple simultaneous calls for the same product
     if (likeInProgressRef.current.has(productId)) return;
     likeInProgressRef.current.add(productId);
-    // Always read latest value via ref  avoids stale closure bugs
+    // Always read latest value via ref to avoid stale closure bugs
     const isAlreadyLiked = likedProductsRef.current.includes(productId);
     const likeDiff = isAlreadyLiked ? -1 : 1;
     // Optimistic UI update immediately
@@ -3791,9 +3787,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         });
       }
       setEditingCategory(null);
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
     } catch (err) {
       console.error("Save category failed", err);
+      alert("সার্ভারে ডাটা সেভ করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
     }
   };
   const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
@@ -4628,7 +4624,7 @@ Rules:
             };
             await saveChatMessage(chatId, newMessage, "ভয়েস মেসেজ (Voice Message)");
             const aiMessage = {
-              text: "আপনার সঅ্যাডমিন Sা । মরা Sপেইজ? পেইজআপনার পেজগ্রাহকরব।",
+              text: "আপনার ভয়েস মেসেজ পাওয়া গেছে। আমরা শীঘ্রই এটি শুনে আপনার সাথে যোগাযোগ করব।",
               senderId: "ai_assistant",
               senderName: "i SHOP BD AI",
               isAdmin: true,
@@ -4673,7 +4669,7 @@ Rules:
         };
         await saveChatMessage(chatId, newMessage, "Image Message");
         const aiMessage = {
-          text: "আপনার ভয়েস মেসেজ পাওয়া গেছে। আমরা শীঘ্রই এটি শুনে আপনার সাথে যোগাযোগ করব।",
+          text: "আপনার ছবি পাওয়া গেছে। আমাদের টিম শীঘ্রই এটি রিভিউ করে আপনার সাথে যোগাযোগ করবে।",
           senderId: "ai_assistant",
           senderName: "i SHOP BD AI",
           isAdmin: true,
@@ -5129,6 +5125,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       const finalAddress = `${address}, ${landingThana}, ${landingDistrict}`;
       const orderData = {
         orderId,
+        shortId: String(orderId).slice(-6).toUpperCase(),
         customerName: name,
         customerPhone: phone,
         address: finalAddress,
@@ -5318,7 +5315,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       productDetails = order.items.map((item: any) => {
         const name = item.product?.smsName || item.product?.name || 'Product';
         const qty = item.quantity || 1;
-        return `  ${name} (${qty} ি)`;
+        return `   ${name} (${qty} টি)`;
       }).join('\n');
     }
     const message = `${startPart}\nপণ্য:\n${productDetails}\nঅর্ডার নং: #${orderId}\nমোট বিল: ৳${order.total}\n${endPart}`;
@@ -6418,31 +6415,6 @@ const handleSaveQuickEdit = async () => {
     );
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden relative">
       <Toaster position="top-right" reverseOrder={false} />
@@ -6524,7 +6496,7 @@ const handleSaveQuickEdit = async () => {
         <motion.div 
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
-          className="bg-red-600 text-white text-center py-2.5 px-4 text-[10px] md:text-xs font-black z-[1000] flex flex-col items-center justify-center gap-1 shadow-2xl relative"
+          className="bg-red-600 text-white text-center py-2.5 px-4 text-[10px] md:text-xs font-black z-[1000] flex flex-col items-center justify-center gap-1 relative"
         >
           <div className="flex items-center gap-2">
             <AlertCircle size={14} className="animate-pulse" />
@@ -6730,8 +6702,14 @@ const handleSaveQuickEdit = async () => {
           <div className="border-t border-gray-100 md:hidden bg-cream overflow-hidden">
             <div className="flex overflow-x-auto no-scrollbar py-3 px-4 gap-6 scroll-smooth">
               <button
-                onClick={() => setSelectedCategory("all")}
-                className={`whitespace-nowrap text-base font-bold transition-all relative ${
+                onClick={() => {
+                  setSelectedCategory("all");
+                  setSelectedSubcategory("all");
+                  setCurrentPage(1);
+                  setIsProductDetailsOpen(false);
+                  setSelectedProduct(null);
+                }}
+                className={`whitespace-nowrap text-base font-medium transition-all relative ${
                   selectedCategory === "all"
                     ? "text-primary"
                     : "text-gray-500 hover:text-secondary"
@@ -6742,8 +6720,14 @@ const handleSaveQuickEdit = async () => {
               {categories.map((cat) => (
                 <button
                   key={cat.id}
-                  onClick={() => setSelectedCategory(cat.name)}
-                  className={`whitespace-nowrap text-sm font-bold transition-all px-3 py-1 rounded-full ${selectedCategory === cat.name ? "bg-primary text-white shadow-sm" : "text-gray-600 bg-gray-100 hover:bg-gray-200"}`}
+                  onClick={() => {
+                    setSelectedCategory(cat.name);
+                    setSelectedSubcategory("all");
+                    setCurrentPage(1);
+                    setIsProductDetailsOpen(false);
+                    setSelectedProduct(null);
+                  }}
+                  className={`whitespace-nowrap text-sm font-medium transition-all px-3 py-1 rounded-full ${selectedCategory === cat.name ? "bg-primary text-white shadow-sm" : "text-gray-600 bg-gray-100 hover:bg-gray-200"}`}
                 >
                   {tc(cat.name)}
                 </button>
@@ -6751,33 +6735,152 @@ const handleSaveQuickEdit = async () => {
             </div>
           </div>
         )}
+        {/* Mobile Subcategory List */}
+        {!activeCampaign && !campaignParam && selectedCategory !== "all" && (() => {
+          const selCatObj = categories.find(c => c.name === selectedCategory);
+          const subcats = selCatObj?.subcategories || [];
+          if (subcats.length === 0) return null;
+          return (
+            <div className="border-t border-gray-100/50 md:hidden bg-gray-50/50 overflow-hidden">
+              <div className="flex overflow-x-auto no-scrollbar py-2 px-4 gap-2 scroll-smooth">
+                <button
+                  onClick={() => {
+                    setSelectedSubcategory("all");
+                    setCurrentPage(1);
+                    setIsProductDetailsOpen(false);
+                    setSelectedProduct(null);
+                  }}
+                  className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
+                    selectedSubcategory === "all"
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-gray-500 bg-white border border-gray-100 hover:bg-gray-50"
+                  }`}
+                >
+                  All
+                </button>
+                {subcats.map((sub, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setSelectedSubcategory(sub);
+                      setCurrentPage(1);
+                      setIsProductDetailsOpen(false);
+                      setSelectedProduct(null);
+                    }}
+                    className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
+                      selectedSubcategory === sub
+                        ? "bg-primary text-white shadow-sm"
+                        : "text-gray-500 bg-white border border-gray-100 hover:bg-gray-50"
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </header>
       {/* 2. Category Menu - Hide on Mobile since it's integrated in header now */}
       {!activeCampaign && !campaignParam && (
-        <nav className="bg-cream/50 border-b overflow-x-auto no-scrollbar hidden md:block">
-          <div className="container mx-auto px-4 flex space-x-8 whitespace-nowrap py-3">
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={`text-sm md:text-base font-bold transition-all px-4 py-1.5 rounded-full flex items-center gap-1 ${selectedCategory === "all" ? "bg-primary text-white shadow-md" : "text-gray-600 hover:bg-gray-200 hover:text-primary"}`}
-            >
-              {t("সবগুলো", "All")}
-            </button>
-            {categories.map((cat) => (
+        <nav className="bg-gray-50/10 border-y border-gray-200/80 hidden md:block">
+          <div className="container mx-auto px-4">
+            <div className="flex divide-x divide-gray-200/80 border-x border-gray-200/80 w-full">
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.name)}
-                className={`text-sm md:text-base font-bold transition-all px-4 py-1.5 rounded-full flex items-center gap-1 ${selectedCategory === cat.name ? "bg-primary text-white shadow-md" : "text-gray-600 hover:bg-gray-200 hover:text-primary"}`}
+                onClick={() => {
+                  setSelectedCategory("all");
+                  setSelectedSubcategory("all");
+                  setCurrentPage(1);
+                  setIsProductDetailsOpen(false);
+                  setSelectedProduct(null);
+                }}
+                className={`flex-1 px-6 py-4 text-sm font-bold transition-all flex items-center justify-center gap-1 ${
+                  selectedCategory === "all"
+                    ? "bg-white text-primary"
+                    : "text-gray-600 hover:bg-white/80 hover:text-primary"
+                }`}
               >
-                {tc(cat.name)}
+                {t("সবগুলো", "All")}
               </button>
-            ))}
+              {categories.map((cat) => {
+                const subcats = cat.subcategories || [];
+                return (
+                  <div key={cat.id} className="flex-1 relative group flex">
+                    <button
+                      onClick={() => {
+                        setSelectedCategory(cat.name);
+                        setSelectedSubcategory("all");
+                        setCurrentPage(1);
+                        setIsProductDetailsOpen(false);
+                        setSelectedProduct(null);
+                      }}
+                      className={`w-full px-6 py-4 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                        selectedCategory === cat.name
+                          ? "bg-white text-primary"
+                          : "text-gray-600 hover:bg-white/80 hover:text-primary"
+                      }`}
+                    >
+                      {tc(cat.name)}
+                      {subcats.length > 0 && (
+                        <ChevronDown size={14} className="transition-transform group-hover:rotate-180 duration-300" />
+                      )}
+                    </button>
+                    
+                    {subcats.length > 0 && (
+                      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-56 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300 ease-out z-[999]">
+                        <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-gray-100 shadow-xl p-2.5 flex flex-col gap-1 ring-1 ring-black/5">
+                          <button
+                            onClick={() => {
+                              setSelectedCategory(cat.name);
+                              setSelectedSubcategory("all");
+                              setCurrentPage(1);
+                              setIsProductDetailsOpen(false);
+                              setSelectedProduct(null);
+                            }}
+                            className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
+                              selectedCategory === cat.name && selectedSubcategory === "all"
+                                ? "bg-primary/5 text-primary"
+                                : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            All {tc(cat.name)}
+                          </button>
+                          <div className="h-[1px] bg-gray-100 my-1" />
+                          {subcats.map((sub, sIdx) => (
+                            <button
+                              key={sIdx}
+                              onClick={() => {
+                                setSelectedCategory(cat.name);
+                                setSelectedSubcategory(sub);
+                                setCurrentPage(1);
+                                setIsProductDetailsOpen(false);
+                                setSelectedProduct(null);
+                              }}
+                              className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
+                                selectedCategory === cat.name && selectedSubcategory === sub
+                                  ? "bg-primary/5 text-primary"
+                                  : "text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              {sub}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </nav>
       )}
       {/* 3. Hero Banner Slider */}
       {!isProductDetailsOpen && !activeCampaign && !campaignParam && activeBanners.length > 0 && (
         <section className="container mx-auto px-4 mt-4 relative group">
-          <div className="relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
+            {/* Left Slider Column (3/4 width) */}
+            <div className="md:col-span-3 relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl border border-gray-100 bg-white min-h-[220px] md:min-h-[380px]">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentBanner}
@@ -6785,7 +6888,7 @@ const handleSaveQuickEdit = async () => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.5 }}
-                  className={`relative w-full ${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
+                  className={`relative w-full h-full min-h-[220px] md:min-h-[380px] ${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
                   onClick={() => {
                     const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
                     const banner = heroBanners[currentBanner % (heroBanners.length || 1)];
@@ -6797,11 +6900,11 @@ const handleSaveQuickEdit = async () => {
                 >
                   <img 
                     src={activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.image}
-                    className="w-full h-full object-cover block"
+                    className="w-full h-full object-cover block absolute inset-0"
                     loading="eager"
                     alt={`i SHOP BD ব্যানার ${currentBanner + 1}`}
                   />
-                  <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white">
+                  <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
                     <div className="max-w-md">
                       {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title) && (
                         <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -6829,16 +6932,68 @@ const handleSaveQuickEdit = async () => {
                 <>
                   <button
                     onClick={() => setCurrentBanner(prev => (prev - 1 + activeBanners.filter(b => (b.type || 'hero') === 'hero').length) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100">
+                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
                     <ChevronLeft size={24} />
                   </button>
                   <button
                     onClick={() => setCurrentBanner(prev => (prev + 1) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100">
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
                     <ChevronRight size={24} />
                   </button>
                 </>
               )}
+            </div>
+
+            {/* Right Side Static Banners Column (1/4 width) */}
+            <div className="col-span-1 flex flex-col sm:flex-row md:flex-col gap-4">
+              {/* Top Banner */}
+              <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b1 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
+                {(() => {
+                  const bTop = activeBanners.find(b => b.type === 'right_top');
+                  return (
+                    <div 
+                      className={`w-full h-full relative ${bTop?.linkedProductId ? 'cursor-pointer' : ''}`}
+                      onClick={() => {
+                        if (bTop?.linkedProductId) {
+                          const product = products.find(p => p.id === bTop.linkedProductId);
+                          if (product) openProductDetails(product);
+                        }
+                      }}
+                    >
+                      <img 
+                        src={bTop?.image || '/default_right_top.png'} 
+                        className="w-full h-full object-cover group-hover/b1:scale-105 transition-transform duration-500 absolute inset-0"
+                        alt="Promo Banner Top"
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Bottom Banner (Flash Sale link) */}
+              <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b2 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
+                {(() => {
+                  const bBottom = activeBanners.find(b => b.type === 'right_bottom');
+                  return (
+                    <div 
+                      className="w-full h-full relative cursor-pointer"
+                      onClick={() => {
+                        const el = document.getElementById('flash-sale-section');
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      }}
+                    >
+                      <img 
+                        src={bBottom?.image || '/default_right_bottom.png'} 
+                        className="w-full h-full object-cover group-hover/b2:scale-105 transition-transform duration-500 absolute inset-0"
+                        alt="Flash Sale Banner"
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </section>
       )}
@@ -6900,7 +7055,7 @@ const handleSaveQuickEdit = async () => {
           </motion.div>
         </div>
       )}
-      <main className={`container mx-auto px-4 py-8 flex-1 flex flex-col min-h-[800px] ${isProductDetailsOpen ? 'pt-0' : ''}`}>
+      <main className={isProductDetailsOpen ? "w-full flex-1 flex flex-col min-h-[800px]" : `container mx-auto px-4 py-8 flex-1 flex flex-col min-h-[800px]`}>
         {isCampaignLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
             <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
@@ -6911,7 +7066,7 @@ const handleSaveQuickEdit = async () => {
         {/* Secondary Banner Slider - Added here before trending */}
         {!isProductDetailsOpen && !activeCampaign && activeBanners.filter(b => b.type === 'secondary').length > 0 && (
           <section className="mb-12 container mx-auto px-4">
-             <div className="relative overflow-hidden shadow-xl group">
+             <div className="relative overflow-hidden group rounded-xl">
                 <AnimatePresence mode="wait">
                    <motion.div
                       key={Math.floor(Date.now() / 5000) % activeBanners.filter(b => b.type === 'secondary').length}

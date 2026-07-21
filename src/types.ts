@@ -62,6 +62,7 @@ export interface Product {
   features?: string;
   inTheBox?: string;
   specifications?: { key: string; value: string }[];
+  subcategory?: string;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -70,6 +71,7 @@ export interface Category {
   id: string;
   name: string;
   icon?: string;
+  subcategories?: string[];
 }
 
 export interface AdminUser {

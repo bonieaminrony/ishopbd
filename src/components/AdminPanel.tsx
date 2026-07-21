@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { db } from '../lib/firebase';
-import { collection, doc, getDocs, updateDoc, deleteDoc, query, limit } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc, deleteDoc, query, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
 
 export interface AdminPanelProps {
   isAdminOpen: any;
@@ -361,6 +361,7 @@ export default function AdminPanel(props: AdminPanelProps) {
   } = props;
 
   const [settingsTab, setSettingsTab] = React.useState("general");
+  const [newSubcategoryInputs, setNewSubcategoryInputs] = React.useState<Record<string, string>>({});
 
   return (
     <>
@@ -2387,7 +2388,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                               value={editingProduct?.category || ""}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), category: val }));
+                                setEditingProduct((prev) => ({ 
+                                  ...(prev || {}), 
+                                  category: val,
+                                  subcategory: ""
+                                }));
                                 if (productFormErrors.category)
                                   setProductFormErrors((prev) => ({
                                     ...prev,
@@ -2404,6 +2409,35 @@ export default function AdminPanel(props: AdminPanelProps) {
                               ))}
                             </select>
                           </div>
+                          
+                          {/* Subcategory Select dropdown */}
+                          {(() => {
+                            const selCatObj = categories.find(c => c.name === editingProduct?.category);
+                            const subcats = selCatObj?.subcategories || [];
+                            if (subcats.length === 0) return null;
+                            return (
+                              <div id="field-subcategory" className="mt-3">
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
+                                  Subcategories
+                                </label>
+                                <select
+                                  value={editingProduct?.subcategory || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditingProduct((prev) => ({ ...(prev || {}), subcategory: val }));
+                                  }}
+                                  className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                                >
+                                  <option value="">Select Subcategory</option>
+                                  {subcats.map((sub, idx) => (
+                                    <option key={idx} value={sub}>
+                                      {sub}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })()}
                           <div className="flex items-center gap-2 py-2">
                             <input
                               type="checkbox"
@@ -2715,48 +2749,118 @@ export default function AdminPanel(props: AdminPanelProps) {
                           {editingCategory?.id ? "Update" : "Add"}
                         </button>
                       </form>
-                      <div className="space-y-3">
-                        {categories.map((cat) => (
-                          <div
-                            key={cat.id}
-                            className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group"
-                          >
-                            <p className="font-bold text-secondary">
-                              {cat.name}
-                            </p>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => copyCategoryLink(cat.name)}
-                                className="px-3 py-1 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-1"
-                                title="Action"
-                              >
-                                <Share2 size={12} />  
-                              </button>
-                              <button
-                                onClick={() => setEditingCategory(cat)}
-                                className="text-xs font-bold text-gray-400 hover:text-primary transition-colors"
-                              >
-                                এডিট
-                              </button>
-                              <button
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  console.log("Log", cat.id);
-                                  await deleteCategory(cat.id, cat.name);
-                                }}
-                                disabled={deletingCatId === String(cat.id)}
-                                className={`text-xs font-bold transition-all px-3 py-1.5 rounded-lg ${
-                                  deletingCatId === String(cat.id)
-                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                    : "text-red-500 hover:bg-red-50 active:scale-95 border border-transparent hover:border-red-100"
-                                }`}
-                              >
-                                {deletingCatId === String(cat.id) ? "Deleting..." : "Delete"}
-                              </button>
+                      <div className="space-y-4">
+                        {categories.map((cat) => {
+                          const subcats = cat.subcategories || [];
+                          return (
+                            <div
+                              key={cat.id}
+                              className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex flex-col gap-4"
+                            >
+                              <div className="flex items-center justify-between">
+                                <p className="font-bold text-secondary text-base">
+                                  {cat.name}
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => copyCategoryLink(cat.name)}
+                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-1"
+                                    title="Action"
+                                  >
+                                    <Share2 size={12} />  
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCategory(cat)}
+                                    className="text-xs font-bold text-gray-400 hover:text-primary transition-colors px-2 py-1 hover:bg-gray-100 rounded-lg"
+                                  >
+                                    এডিট
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      await deleteCategory(cat.id, cat.name);
+                                    }}
+                                    disabled={deletingCatId === String(cat.id)}
+                                    className={`text-xs font-bold transition-all px-3 py-1.5 rounded-lg ${
+                                      deletingCatId === String(cat.id)
+                                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                        : "text-red-500 hover:bg-red-50 active:scale-95 border border-transparent hover:border-red-100"
+                                    }`}
+                                  >
+                                    {deletingCatId === String(cat.id) ? "Deleting..." : "Delete"}
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Subcategories Management */}
+                              <div className="bg-white p-4 rounded-2xl border border-gray-100/80">
+                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Subcategories</div>
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                  {subcats.length === 0 ? (
+                                    <span className="text-xs text-gray-400 italic">No subcategories defined</span>
+                                  ) : (
+                                    subcats.map((sub, sIdx) => (
+                                      <span key={sIdx} className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                                        {sub}
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            await updateDoc(doc(db, "categories", cat.id), {
+                                              subcategories: arrayRemove(sub)
+                                            });
+                                          }}
+                                          className="text-gray-400 hover:text-red-500 transition-colors"
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={newSubcategoryInputs[cat.id] || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: val }));
+                                    }}
+                                    placeholder="Add subcategory name..."
+                                    className="flex-1 bg-gray-50/50 border border-gray-200 transition-colors focus:border-primary/50 text-xs font-bold px-3 py-2 rounded-xl outline-none"
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const subName = (newSubcategoryInputs[cat.id] || "").trim();
+                                        if (subName) {
+                                          await updateDoc(doc(db, "categories", cat.id), {
+                                            subcategories: arrayUnion(subName)
+                                          });
+                                          setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                        }
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const subName = (newSubcategoryInputs[cat.id] || "").trim();
+                                      if (subName) {
+                                        await updateDoc(doc(db, "categories", cat.id), {
+                                          subcategories: arrayUnion(subName)
+                                        });
+                                        setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                      }
+                                    }}
+                                    className="bg-primary hover:brightness-105 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm shadow-primary/10 active:scale-95"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -4476,6 +4580,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                </label>
                               <div className="grid grid-cols-2 gap-2">
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     if (editingBanner) setEditingBanner({...editingBanner, type: "hero"});
                                     else setNewBanner({...newBanner, type: "hero"});
@@ -4486,9 +4591,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       : "border-gray-100 bg-gray-50 text-gray-400"
                                   }`}
                                 >
-                                  হিরো ব্যানার (উপরে)
+                                  হিরো ব্যানার (স্লাইডার)
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     if (editingBanner) setEditingBanner({...editingBanner, type: "secondary"});
                                     else setNewBanner({...newBanner, type: "secondary"});
@@ -4499,7 +4605,35 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       : "border-gray-100 bg-gray-50 text-gray-400"
                                   }`}
                                 >
-                                  সেকেন্ডারি ব্যানার (নিচে)
+                                  ক্যাম্পেইন ব্যানার (নিচে)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (editingBanner) setEditingBanner({...editingBanner, type: "right_top"});
+                                    else setNewBanner({...newBanner, type: "right_top"});
+                                  }}
+                                  className={`py-2 px-3 rounded-xl text-[10px] font-bold uppercase transition-all border-2 ${
+                                    (editingBanner?.type || newBanner.type) === "right_top"
+                                      ? "border-primary bg-red-50 text-primary"
+                                      : "border-gray-100 bg-gray-50 text-gray-400"
+                                  }`}
+                                >
+                                  ডান-উপরের ব্যানার
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (editingBanner) setEditingBanner({...editingBanner, type: "right_bottom"});
+                                    else setNewBanner({...newBanner, type: "right_bottom"});
+                                  }}
+                                  className={`py-2 px-3 rounded-xl text-[10px] font-bold uppercase transition-all border-2 ${
+                                    (editingBanner?.type || newBanner.type) === "right_bottom"
+                                      ? "border-primary bg-red-50 text-primary"
+                                      : "border-gray-100 bg-gray-50 text-gray-400"
+                                  }`}
+                                >
+                                  ডান-নিচের ব্যানার (ফ্ল্যাশ সেল)
                                 </button>
                               </div>
                             </div>

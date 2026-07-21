@@ -266,8 +266,10 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
 
       const saleDateObj = new Date(`${offlineDate}T12:00:00Z`);
 
+      const orderId = "OFFLINE-" + Date.now().toString().slice(-6);
       const orderData = {
-        orderId: "OFFLINE-" + Date.now().toString().slice(-6),
+        orderId,
+        shortId: orderId.slice(-6).toUpperCase(),
         customerName: "অফলাইন সেলস",
         customerPhone: "N/A",
         address: "অফলাইন সেলস",

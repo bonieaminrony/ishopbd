@@ -44,6 +44,8 @@ type ProductContextType = {
   featuredProducts: any;
   newArrivals: any;
   brands: any;
+  selectedSubcategory: any;
+  setSelectedSubcategory: any;
 };
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -77,6 +79,11 @@ const [searchQuery, setSearchQuery] = useState("");
 const [searchInput, setSearchInput] = useState("");
 
 const [selectedCategory, setSelectedCategory] = useState("all");
+const [selectedSubcategory, setSelectedSubcategory] = useState("all");
+
+useEffect(() => {
+  setSelectedSubcategory("all");
+}, [selectedCategory]);
 
 const [isTrendingFilterActive, setIsTrendingFilterActive] = useState(false);
 
@@ -153,6 +160,8 @@ const filteredProducts = useMemo(() => {
           (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory =
           selectedCategory === "all" || category === selectedCategory;
+        const matchesSubcategory =
+          selectedSubcategory === "all" || (p as any).subcategory === selectedSubcategory;
         const matchesBrand =
           selectedBrand === "all" || brand === selectedBrand;
         const matchesColor =
@@ -161,7 +170,7 @@ const filteredProducts = useMemo(() => {
         
         const price = p.price || 0;
         const matchesPrice = (minPrice === "" || price >= minPrice) && (maxPrice === "" || price <= maxPrice);
-        return matchesSearch && matchesCategory && matchesBrand && matchesColor && matchesTrending && matchesPrice;
+        return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor && matchesTrending && matchesPrice;
       });
     } else {
       result = products.filter((p) => {
@@ -177,6 +186,8 @@ const filteredProducts = useMemo(() => {
           (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory =
           selectedCategory === "all" || category === selectedCategory;
+        const matchesSubcategory =
+          selectedSubcategory === "all" || (p as any).subcategory === selectedSubcategory;
         const matchesBrand =
           selectedBrand === "all" || brand === selectedBrand;
         const matchesColor =
@@ -184,7 +195,7 @@ const filteredProducts = useMemo(() => {
         const matchesTrending = !isTrendingFilterActive || p.isTrending;
         const price = p.price || 0;
         const matchesPrice = (minPrice === "" || price >= minPrice) && (maxPrice === "" || price <= maxPrice);
-        return matchesSearch && matchesCategory && matchesBrand && matchesColor && matchesTrending && matchesPrice;
+        return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor && matchesTrending && matchesPrice;
       });
     }
     // Sorting logic
@@ -204,7 +215,7 @@ const filteredProducts = useMemo(() => {
       const dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) : 0;
       return dateB - dateA;
     });
-  }, [products, searchQuery, selectedCategory, selectedBrand, selectedColor, activeCampaign, isTrendingFilterActive, minPrice, maxPrice, sortBy]);
+  }, [products, searchQuery, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, activeCampaign, isTrendingFilterActive, minPrice, maxPrice, sortBy]);
 
 const featuredProducts = useMemo(() => {
     return products.filter(p => !p.deleted && p.isTrending && p.isPublished !== false).slice(0, 10);
@@ -270,6 +281,8 @@ const brands = useMemo(() => {
     featuredProducts,
     newArrivals,
     brands,
+    selectedSubcategory,
+    setSelectedSubcategory,
   };
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>;
