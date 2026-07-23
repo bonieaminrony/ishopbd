@@ -122,7 +122,7 @@ async function startServer() {
   app.use("/api/send-bulk-sms", express.json({ limit: '256kb' }));
   app.use("/api/confirm-order", express.json({ limit: '64kb' }));
   app.use("/api/courier", express.json({ limit: '512kb' }));
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
   // ---- CORS Policy ----
@@ -149,9 +149,16 @@ async function startServer() {
   });
 
   // ---- Security Headers ----
-  app.use((_req, res, next) => {
+  app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
+    
+    // Facebook In-App browsers and crawler compatibility
+    const ua = req.headers["user-agent"] || "";
+    const isFacebook = /facebook|FBAN|FBIOS|FB_IAB|FB4A|facebookexternalhit/i.test(ua);
+    if (!isFacebook) {
+      res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    }
+
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     // HSTS for secure connections in production
@@ -1032,6 +1039,34 @@ async function startServer() {
         normalizedMessages.shift();
       }
 
+      // Load products from Firestore to inject into Gemini context
+      let productsList: any[] = [];
+      try {
+        const db = getFirestore();
+        const productsSnap = await db.collection("products").get();
+        productsList = productsSnap.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            name: data.name || "Unknown Product",
+            price: data.price || 0,
+            stock: data.stock !== undefined ? data.stock : 0,
+            isComingSoon: !!data.isComingSoon
+          };
+        });
+      } catch (err) {
+        console.error("Failed to load products for AI context:", err);
+      }
+
+      const productsContext = productsList
+        .map(p => `- ${p.name}: Price ৳${p.price}, Stock: ${p.stock}${p.isComingSoon ? " (Pre-order)" : ""}`)
+        .join("\n");
+
+      const systemInstruction = `You are an AI assistant for 'i SHOP BD', the best premium online shop in Bangladesh. Always start your response with 'আসসালামুয়ালাইকুম স্যার' and address the user as 'স্যার' throughout the conversation. Answer questions about rechargeable fans, smart watches, headphones, and accessories, and suggest products based on their budget and interest. Answer in Bengali with a friendly tone. Use proper BDT pricing (৳).
+Here is the current real-time products catalog of i SHOP BD:
+${productsContext}
+
+If a product is out of stock (Stock is 0 or less), let them know. If they want to order a product, ask them to find the product on the screen, add it to the cart or click 'Buy Now' to complete the order.`;
+
       const genAI = new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
       });
@@ -1039,7 +1074,7 @@ async function startServer() {
         model: modelName === "gemini-1.5-flash" ? "gemini-3-flash-preview" : modelName,
         contents: normalizedMessages,
         config: {
-          systemInstruction: "You are an AI assistant for 'i SHOP BD', the best premium online shop in Bangladesh. Always start your response with 'আসসালামুয়ালাইকুম স্যার' and address the user as 'স্যার' throughout the conversation. Answer questions about rechargeable fans, smart watches, headphones, and accessories. Use a friendly tone and answer in Bengali. If asked about orders, remind them to check their profile or contact admin. If asked about prices, use the data provided in the app or ask them to browse the products.",
+          systemInstruction: systemInstruction,
         }
       });
 

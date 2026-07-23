@@ -13,6 +13,14 @@ type CartContextType = {
   setIsCheckoutOpen: any;
   checkoutName: any;
   setCheckoutName: any;
+  checkoutFirstName: any;
+  setCheckoutFirstName: any;
+  checkoutLastName: any;
+  setCheckoutLastName: any;
+  checkoutThana: any;
+  setCheckoutThana: any;
+  checkoutEmail: any;
+  setCheckoutEmail: any;
   checkoutPhone: any;
   setCheckoutPhone: any;
   checkoutPhoneFocused: any;
@@ -91,6 +99,10 @@ const [checkoutItems, setCheckoutItems] = useState<
 const [checkoutPhone, setCheckoutPhone] = useState("");
 
 const [checkoutName, setCheckoutName] = useState("");
+const [checkoutFirstName, setCheckoutFirstName] = useState("");
+const [checkoutLastName, setCheckoutLastName] = useState("");
+const [checkoutThana, setCheckoutThana] = useState("");
+const [checkoutEmail, setCheckoutEmail] = useState("");
 
 const [checkoutDistrict, setCheckoutDistrict] = useState("");
 
@@ -169,7 +181,19 @@ const updateQuantity = (productId: string, delta: number, color?: string, size?:
           ? { ...item, quantity: Math.max(1, item.quantity + delta) }
           : item,
       );
-    setCartItems(updateFn);
+
+    const isCartCheckout = cartItems.length > 0 && 
+                           checkoutItems.length === cartItems.length && 
+                           checkoutItems.every((item, idx) => 
+                             item.product.id === cartItems[idx].product.id &&
+                             item.quantity === cartItems[idx].quantity &&
+                             item.color === cartItems[idx].color &&
+                             item.size === cartItems[idx].size
+                           );
+
+    if (isCartCheckout) {
+      setCartItems(updateFn);
+    }
     setCheckoutItems(updateFn);
   };
 
@@ -182,7 +206,19 @@ const setQuantityDirect = (productId: string, qty: number, color?: string, size?
           ? { ...item, quantity: Math.max(1, qty) }
           : item,
       );
-    setCartItems(updateFn);
+
+    const isCartCheckout = cartItems.length > 0 && 
+                           checkoutItems.length === cartItems.length && 
+                           checkoutItems.every((item, idx) => 
+                             item.product.id === cartItems[idx].product.id &&
+                             item.quantity === cartItems[idx].quantity &&
+                             item.color === cartItems[idx].color &&
+                             item.size === cartItems[idx].size
+                           );
+
+    if (isCartCheckout) {
+      setCartItems(updateFn);
+    }
     setCheckoutItems(updateFn);
   };
 
@@ -196,15 +232,19 @@ const removeItem = (productId: string, color?: string, size?: string) => {
             (item.size === size || (!item.size && !size))
           ),
       );
-    setCartItems((prev) => {
-      const itemToRemove = prev.find(
-        (item) =>
-          item.product.id === productId &&
-          (item.color === color || (!item.color && !color)) &&
-          (item.size === size || (!item.size && !size)),
-      );
-      return removeFn(prev);
-    });
+
+    const isCartCheckout = cartItems.length > 0 && 
+                           checkoutItems.length === cartItems.length && 
+                           checkoutItems.every((item, idx) => 
+                             item.product.id === cartItems[idx].product.id &&
+                             item.quantity === cartItems[idx].quantity &&
+                             item.color === cartItems[idx].color &&
+                             item.size === cartItems[idx].size
+                           );
+
+    if (isCartCheckout) {
+      setCartItems(removeFn);
+    }
     setCheckoutItems((prev) => {
       const updated = removeFn(prev);
       if (updated.length === 0) setIsCheckoutOpen(false);
@@ -295,6 +335,14 @@ useEffect(() => {
     setIsCheckoutOpen,
     checkoutName,
     setCheckoutName,
+    checkoutFirstName,
+    setCheckoutFirstName,
+    checkoutLastName,
+    setCheckoutLastName,
+    checkoutThana,
+    setCheckoutThana,
+    checkoutEmail,
+    setCheckoutEmail,
     checkoutPhone,
     setCheckoutPhone,
     checkoutPhoneFocused,

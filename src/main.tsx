@@ -9,6 +9,20 @@ import { ProductProvider } from './context/ProductContext.tsx';
 import ErrorBoundary from './ErrorBoundary.tsx';
 import './index.css';
 
+// Prevent QuotaExceededError from crashing the app due to local storage limits or private browsing
+try {
+  const originalSetItem = window.localStorage.setItem;
+  window.localStorage.setItem = function (key, value) {
+    try {
+      originalSetItem.call(window.localStorage, key, value);
+    } catch (e) {
+      console.warn("localStorage.setItem failed silently (quota/private browsing limit):", e);
+    }
+  };
+} catch (e) {
+  console.warn("Could not patch localStorage.setItem:", e);
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <HelmetProvider>

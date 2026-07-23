@@ -204,7 +204,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                 })}
               </script>
             </Helmet>
-      <div className="w-full bg-white border-b border-gray-200/80 py-6 md:py-10">
+      <div className="w-full bg-white border-b border-gray-200/80 py-4 md:py-6">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -213,7 +213,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
             className="relative bg-transparent w-full flex flex-col md:flex-row overflow-hidden"
           >
               {/* Product Image Gallery */}
-              <div className="w-full md:w-1/2 bg-transparent flex flex-col items-center justify-start p-4 md:p-6 md:pt-10 border-b md:border-b-0 md:border-r border-gray-200 mt-4 md:mt-0">
+              <div className="w-full md:w-1/2 bg-transparent flex flex-col items-center justify-start p-4 md:p-6 md:pt-4 border-b md:border-b-0 md:border-r border-gray-200 mt-4 md:mt-0">
                   <div className="mb-4 w-full block md:hidden">
                     <span className="hidden">
                       {selectedProduct.category}
@@ -354,7 +354,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                 )}
               </div>
               {/* Product Info */}
-              <div className="w-full md:w-1/2 p-6 md:p-10 flex flex-col">
+              <div className="w-full md:w-1/2 p-6 md:px-10 md:pb-10 md:pt-4 flex flex-col">
                 
                 <div className="mb-4">
                   {/* Top Action Bar */}
@@ -703,7 +703,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" id="product-description-tabs">
              <div className="lg:col-span-3">
                   {/* Tabs Header */}
-                  <div className="flex flex-wrap gap-2 mb-0 border-b border-gray-200">
+                  <div className="flex flex-wrap gap-2 mb-0">
                     <button 
                       onClick={() => setActiveTab('specification')}
                       className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'specification' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
@@ -725,7 +725,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   </div>
 
                   {/* Tabs Content */}
-                  <div className="bg-white rounded-b-2xl rounded-tr-2xl p-6 shadow-sm border border-gray-100 min-h-[400px]">
+                  <div className="bg-white rounded-b-2xl rounded-tr-2xl p-6 border border-gray-100 min-h-[400px]">
                     
                     {/* SPECIFICATION TAB */}
                     {activeTab === 'specification' && (
@@ -1063,7 +1063,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                
                {/* Right Sidebar - Similar Products */}
                <div className="lg:col-span-1">
-                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sticky top-24 lg:mt-[45px]">
+                 <div className="bg-white rounded-2xl border border-gray-100 p-5 sticky top-24 lg:mt-[45px]">
                    <h3 className="text-lg font-black text-[#2e3192] text-center mb-6 border-b border-gray-100 pb-3">Similar Product</h3>
                    <div className="flex flex-col gap-5">
                      {relatedProducts.slice(0, 5).map((product) => (

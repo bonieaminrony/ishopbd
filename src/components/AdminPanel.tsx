@@ -2645,15 +2645,20 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   <div className="flex justify-end gap-2 items-center">
-                                    <label className="relative inline-flex items-center cursor-pointer mr-2" title={p.isPublished !== false ? "Published (Live)" : "Unpublished (Hidden)"}>
-                                      <input
-                                        type="checkbox"
-                                        checked={p.isPublished !== false}
-                                        onChange={() => togglePublishStatus(p)}
-                                        className="sr-only peer"
-                                      />
-                                      <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
-                                    </label>
+                                     <button
+                                       type="button"
+                                       onClick={() => togglePublishStatus(p)}
+                                       title={p.isPublished !== false ? "Published (Live)" : "Unpublished (Hidden)"}
+                                       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mr-2 ${
+                                         p.isPublished !== false ? "bg-green-500" : "bg-gray-300"
+                                       }`}
+                                     >
+                                       <span
+                                         className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                           p.isPublished !== false ? "translate-x-4" : "translate-x-0"
+                                         }`}
+                                       />
+                                     </button>
                                     
                                     <div className="relative font-sans" ref={activeProductDropdown === p.id ? productDropdownRef : null}>
                                       <button
@@ -4173,6 +4178,42 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 value={siteConfig?.facebookUrl || ""}
                                 onChange={(e) => setSiteConfig(prev => prev ? {...prev, facebookUrl: e.target.value} : null)}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                              />
+                           </div>
+                           <div>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
+                                কম্পিউটার অ্যাপ ডাউনলোড লিঙ্ক
+                              </label>
+                              <input
+                                type="text"
+                                value={siteConfig?.computerAppUrl || ""}
+                                onChange={(e) => setSiteConfig(prev => prev ? {...prev, computerAppUrl: e.target.value} : null)}
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                                placeholder="যেমন: /apps/ishopbd-setup.exe"
+                              />
+                           </div>
+                           <div>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
+                                অ্যান্ড্রয়েড অ্যাপ ডাউনলোড লিঙ্ক (APK/Play Store)
+                              </label>
+                              <input
+                                type="text"
+                                value={siteConfig?.androidAppUrl || ""}
+                                onChange={(e) => setSiteConfig(prev => prev ? {...prev, androidAppUrl: e.target.value} : null)}
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                                placeholder="যেমন: /apps/ishopbd.apk"
+                              />
+                           </div>
+                           <div>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
+                                আইফোন অ্যাপ ডাউনলোড লিঙ্ক (App Store)
+                              </label>
+                              <input
+                                type="text"
+                                value={siteConfig?.iphoneAppUrl || ""}
+                                onChange={(e) => setSiteConfig(prev => prev ? {...prev, iphoneAppUrl: e.target.value} : null)}
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                                placeholder="যেমন: https://apps.apple.com/us/app/ishopbd/id..."
                               />
                            </div>
                          </div>

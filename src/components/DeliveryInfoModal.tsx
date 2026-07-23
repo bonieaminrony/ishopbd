@@ -57,10 +57,6 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center bg-white/70 p-4 rounded-xl border border-white">
-                        <span className="text-sm font-bold text-gray-700">০.৫ কেজি পর্যন্ত</span>
-                        <span className="font-black text-secondary text-xl">৳৬০</span>
-                      </div>
-                      <div className="flex justify-between items-center bg-white/70 p-4 rounded-xl border border-white">
                         <span className="text-sm font-bold text-gray-700">১ কেজি পর্যন্ত</span>
                         <span className="font-black text-secondary text-xl">৳৮০</span>
                       </div>
@@ -92,7 +88,7 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
                         </p>
                       </div>
                       <button onClick={() => setIsDeliveryInfoOpen(false)} className="w-full mt-8 py-5 rounded-2xl bg-secondary text-white font-black text-sm hover:brightness-110 shadow-lg shadow-secondary/10 transition-all uppercase tracking-widest active:scale-95">
-                        এ িক আছে
+                        ঠিক আছে
                       </button>
                     </div>
                   </motion.div>

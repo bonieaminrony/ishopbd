@@ -1,6 +1,82 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function() {
+        // Test localStorage accessibility
+        var localStorageOk = true;
+        try {
+          var testKey = "__test_store__";
+          window.localStorage.setItem(testKey, "1");
+          window.localStorage.removeItem(testKey);
+        } catch (e) {
+          localStorageOk = false;
+        }
+
+        var makeFallbackStore = function() {
+          var store = {};
+          return {
+            getItem: function(key) {
+              return key in store ? store[key] : null;
+            },
+            setItem: function(key, value) {
+              store[key] = String(value);
+            },
+            removeItem: function(key) {
+              delete store[key];
+            },
+            clear: function() {
+              for (var key in store) {
+                delete store[key];
+              }
+            },
+            key: function(index) {
+              var keys = Object.keys(store);
+              return keys[index] || null;
+            },
+            get length() {
+              return Object.keys(store).length;
+            }
+          };
+        };
+
+        if (!localStorageOk) {
+          console.warn("localStorage is blocked/unavailable. Falling back to in-memory store.");
+          try {
+            Object.defineProperty(window, 'localStorage', {
+              value: makeFallbackStore(),
+              writable: true,
+              configurable: true
+            });
+          } catch(err) {
+            console.error("Failed to polyfill localStorage:", err);
+          }
+        }
+
+        // Test sessionStorage accessibility
+        var sessionStorageOk = true;
+        try {
+          var testKey = "__test_session__";
+          window.sessionStorage.setItem(testKey, "1");
+          window.sessionStorage.removeItem(testKey);
+        } catch (e) {
+          sessionStorageOk = false;
+        }
+
+        if (!sessionStorageOk) {
+          console.warn("sessionStorage is blocked/unavailable. Falling back to in-memory store.");
+          try {
+            Object.defineProperty(window, 'sessionStorage', {
+              value: makeFallbackStore(),
+              writable: true,
+              configurable: true
+            });
+          } catch(err) {
+            console.error("Failed to polyfill sessionStorage:", err);
+          }
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -103,8 +103,7 @@ export default function ShopList(props: ShopListProps) {
 
   return (
     <>
-          <>
-            {activeCampaign && (
+      {activeCampaign && (
               <div className="relative bg-black overflow-hidden mb-12 shadow-2xl">
                 {activeCampaign.image && (
                   <img
@@ -393,20 +392,20 @@ export default function ShopList(props: ShopListProps) {
           {filteredProducts.length > productsPerPage && (
             <div className="mt-12 flex justify-center items-center gap-2 flex-wrap">
               <motion.button
-                whileHover={currentPage !== 1 ? { scale: 1.02 } : {}}
+                whileHover={currentPage !== 1 ? { scale: 1.02, x: -2 } : {}}
                 whileTap={currentPage !== 1 ? { scale: 0.98 } : {}}
                 onClick={() => {
                   setCurrentPage(prev => Math.max(1, prev - 1));
                   document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 disabled={currentPage === 1}
-                className="px-4 py-2 rounded-xl border border-gray-200 bg-white hover:border-primary disabled:opacity-40 disabled:pointer-events-none transition-all duration-300 flex items-center gap-2 font-medium text-sm text-gray-500 hover:text-primary shadow-sm hover:shadow-md cursor-pointer"
+                className="px-3 py-2 rounded-xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 flex items-center gap-1.5 font-semibold text-sm text-gray-500 hover:text-primary hover:bg-gray-100 cursor-pointer"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={18} />
                 <span>{t("আগের", "Prev")}</span>
               </motion.button>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {Array.from({ length: Math.ceil(filteredProducts.length / productsPerPage) }).map((_, i) => {
                   const pageNum = i + 1;
                   if (
@@ -424,10 +423,10 @@ export default function ShopList(props: ShopListProps) {
                           setCurrentPage(pageNum);
                           document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                         }}
-                        className={`w-10 h-10 rounded-xl transition-all duration-300 flex items-center justify-center cursor-pointer ${
+                        className={`w-10 h-10 rounded-xl transition-all duration-300 flex items-center justify-center cursor-pointer text-sm ${
                           isActive 
-                            ? "bg-primary text-white shadow-lg shadow-primary/30 border border-primary font-semibold scale-105" 
-                            : "bg-white border border-gray-200 text-gray-500 font-medium hover:text-primary hover:border-primary hover:shadow-sm"
+                            ? "text-primary font-black scale-110" 
+                            : "text-gray-500 hover:text-primary hover:bg-gray-100 font-semibold"
                         }`}
                       >
                         {pageNum}
@@ -437,30 +436,28 @@ export default function ShopList(props: ShopListProps) {
                     (pageNum === currentPage - 2 && pageNum > 1) || 
                     (pageNum === currentPage + 2 && pageNum < Math.ceil(filteredProducts.length / productsPerPage))
                   ) {
-                    return <span key={pageNum} className="text-gray-400 px-1 font-medium">...</span>;
+                    return <span key={pageNum} className="text-gray-400 px-1 font-semibold">...</span>;
                   }
                   return null;
                 })}
               </div>
               
               <motion.button
-                whileHover={currentPage !== Math.ceil(filteredProducts.length / productsPerPage) ? { scale: 1.02 } : {}}
+                whileHover={currentPage !== Math.ceil(filteredProducts.length / productsPerPage) ? { scale: 1.02, x: 2 } : {}}
                 whileTap={currentPage !== Math.ceil(filteredProducts.length / productsPerPage) ? { scale: 0.98 } : {}}
                 onClick={() => {
                   setCurrentPage(prev => Math.min(Math.ceil(filteredProducts.length / productsPerPage), prev + 1));
                   document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 disabled={currentPage === Math.ceil(filteredProducts.length / productsPerPage)}
-                className="px-4 py-2 rounded-xl border border-gray-200 bg-white hover:border-primary disabled:opacity-40 disabled:pointer-events-none transition-all duration-300 flex items-center gap-2 font-medium text-sm text-gray-500 hover:text-primary shadow-sm hover:shadow-md cursor-pointer"
+                className="px-3 py-2 rounded-xl disabled:opacity-30 disabled:pointer-events-none transition-all duration-300 flex items-center gap-1.5 font-semibold text-sm text-gray-500 hover:text-primary hover:bg-gray-100 cursor-pointer"
               >
                 <span>{t("পরবর্তী", "Next")}</span>
-                <ChevronRight size={16} />
+                <ChevronRight size={18} />
               </motion.button>
             </div>
           )}
         </div>
-      </>
-    )
     </>
   );
 }
