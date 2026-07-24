@@ -588,10 +588,27 @@ export default function ProductDetails(props: ProductDetailsProps) {
                         alert("Please select the correct quantity for sizes/colors.");
                         return;
                       }
+                      addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty);
+                    }} 
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm md:text-base h-[46px] rounded-xl transition-all flex items-center justify-center gap-1.5 border border-gray-200"
+                  >
+                    <ShoppingCart size={16} />
+                    Add to Cart
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => { 
+                      if (!validateSelections()) return; 
+                      const isWholesale = selectedProduct.wholesaleTiers?.some(t => tempSelectedQty >= t.minQty);
+                      if (isWholesale && sumValues(wholesaleSizeQty) !== tempSelectedQty) {
+                        alert("Please select the correct quantity for sizes/colors.");
+                        return;
+                      }
                       handleBuyNow(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty, isWholesale ? wholesaleSizeQty : undefined); 
                       setIsProductDetailsOpen(false); 
                     }} 
-                    className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold text-base h-[46px] rounded-xl transition-all flex items-center justify-center shadow-lg shadow-primary/20 hover:-translate-y-0.5 active:translate-y-0"
+                    className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold text-sm md:text-base h-[46px] rounded-xl transition-all flex items-center justify-center shadow-lg shadow-primary/20 hover:-translate-y-0.5 active:translate-y-0"
                   >
                     Buy Now
                   </button>

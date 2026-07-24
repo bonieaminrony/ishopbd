@@ -115,6 +115,9 @@ async function startServer() {
   // ---- Compression Middleware ----
   app.use(compression());
 
+  // Serve uploads folder statically
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'), { maxAge: '30d' }));
+
   // Reduced body size limit to prevent DoS. Image uploads handled separately with higher limit.
   app.use("/api/chat", express.json({ limit: '32kb' }));
   app.use("/api/send-push", express.json({ limit: '16kb' }));
@@ -218,6 +221,61 @@ async function startServer() {
 
     recordAdminFail(ip);
     return res.status(401).json({ success: false, error: 'পাসওয়ার্ড ভুল হয়েছে।' });
+  });
+
+  // ---- Image Upload Endpoint ----
+  app.post("/api/upload", async (req, res) => {
+    try {
+      const { image, filename } = req.body;
+      if (!image || typeof image !== 'string' || !image.startsWith('data:image/')) {
+        return res.status(400).json({ error: "Invalid image format" });
+      }
+
+      // Extract content type and base64 string
+      const match = image.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+      if (!match) {
+        return res.status(400).json({ error: "Invalid base64 image data" });
+      }
+
+      const contentType = match[1];
+      const base64Data = match[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // Validate allowed mime types (jpeg, png, webp, gif, svg)
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+      if (!allowedMimeTypes.includes(contentType)) {
+        return res.status(400).json({ error: "Only image files are allowed (JPEG, PNG, WEBP, GIF, SVG)" });
+      }
+
+      // Determine extension
+      let ext = 'jpg';
+      if (contentType === 'image/png') ext = 'png';
+      else if (contentType === 'image/webp') ext = 'webp';
+      else if (contentType === 'image/gif') ext = 'gif';
+      else if (contentType === 'image/svg+xml') ext = 'svg';
+
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // Generate unique name
+      const sanitizedName = (filename || 'image')
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .substring(0, 50);
+      const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${sanitizedName}.${ext}`;
+      const filePath = path.join(uploadsDir, uniqueFilename);
+
+      // Save to disk
+      fs.writeFileSync(filePath, buffer);
+
+      console.log(`Image uploaded successfully: /uploads/${uniqueFilename}`);
+      return res.json({ url: `/uploads/${uniqueFilename}` });
+    } catch (err: any) {
+      console.error("Image upload error:", err);
+      return res.status(500).json({ error: "Failed to upload image" });
+    }
   });
 
   app.post("/api/send-sms", async (req, res) => {

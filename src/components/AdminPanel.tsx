@@ -2582,7 +2582,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     </div>
                     {/* Products Table */}
                     <div className="lg:col-span-7">
-                      <div className="bg-white rounded-3xl border border-gray-100 overflow-x-auto no-scrollbar shadow-sm">
+                      <div className="bg-white rounded-3xl border border-gray-100 overflow-x-auto no-scrollbar shadow-sm min-h-[350px] pb-24 lg:overflow-visible">
                         <table className="w-full text-left min-w-[600px]">
                           <thead>
                             <tr className="bg-gray-50 text-[10px] text-gray-400 uppercase font-bold border-b border-gray-100">
@@ -2671,27 +2671,6 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       {activeProductDropdown === p.id && (
                                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden text-sm">
                                           <button
-                                            onClick={() => { copyLandingPageLink(p.id); setActiveProductDropdown(null); }}
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                                          >
-                                            <Share2 size={16} className="text-gray-400" />
-                                            <span>Copy Link</span>
-                                          </button>
-                                          <button
-                                            onClick={() => { handleDuplicateProduct(p); setActiveProductDropdown(null); }}
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                                          >
-                                            <Copy size={16} className="text-gray-400" />
-                                            <span>Duplicate</span>
-                                          </button>
-                                          <button
-                                            onClick={() => { openLandingEditor(p); setActiveProductDropdown(null); }}
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                                          >
-                                            <LayoutTemplate size={16} className="text-gray-400" />
-                                            <span>Landing Page</span>
-                                          </button>
-                                          <button
                                             onClick={() => {
                                               setEditingProduct({
                                                 ...p,
@@ -2699,10 +2678,31 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               });
                                               setActiveProductDropdown(null);
                                             }}
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
+                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
                                           >
                                             <Edit3 size={16} className="text-primary" />
                                             <span>Edit Details</span>
+                                          </button>
+                                          <button
+                                            onClick={() => { copyLandingPageLink(p.id); setActiveProductDropdown(null); }}
+                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
+                                          >
+                                            <Share2 size={16} className="text-gray-400" />
+                                            <span>Copy Link</span>
+                                          </button>
+                                          <button
+                                            onClick={() => { handleDuplicateProduct(p); setActiveProductDropdown(null); }}
+                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
+                                          >
+                                            <Copy size={16} className="text-gray-400" />
+                                            <span>Duplicate</span>
+                                          </button>
+                                          <button
+                                            onClick={() => { openLandingEditor(p); setActiveProductDropdown(null); }}
+                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
+                                          >
+                                            <LayoutTemplate size={16} className="text-gray-400" />
+                                            <span>Landing Page</span>
                                           </button>
                                           <button
                                             onClick={(e) => {

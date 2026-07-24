@@ -406,6 +406,7 @@ const ProductCard = React.memo(({
   handleLikeProduct: (productId: string) => void;
   isLiked: boolean;
 }) => {
+  const { addToCart } = useCartContext();
   const isOutOfStock =
     !product.isComingSoon &&
     (product.variants && product.variants.length > 0
@@ -472,7 +473,7 @@ const ProductCard = React.memo(({
           onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
           className="block"
         >
-          <h4 className="text-base md:text-lg font-bold text-gray-800 line-clamp-2 mb-1.5 px-0.5 min-h-[44px] group-hover:text-primary transition-colors cursor-pointer leading-tight">
+          <h4 className="text-base md:text-lg font-medium text-gray-800 line-clamp-2 mb-1.5 px-0.5 min-h-[44px] group-hover:text-primary transition-colors cursor-pointer leading-tight">
             {product.name}
           </h4>
         </a>
@@ -2093,7 +2094,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       }
     }, 2000);
     return () => clearTimeout(timeoutId);
-  }, [inlineOrderPhone, inlineOrderName, selectedProduct, tempSelectedQty]);
+  }, [checkoutPhone, checkoutName, cartItems]);
   const [wholesaleSizeQty, setWholesaleSizeQty] = useState<Record<string, number>>({});
   const [isDeliveryInfoOpen, setIsDeliveryInfoOpen] = useState(false);
   const [modalDisplayImage, setModalDisplayImage] = useState<string | null>(
@@ -2313,20 +2314,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     
     return myAdminDoc?.role === "admin" || myAdminDoc?.role === "owner" || myAdminDoc?.role === "moderator";
   }, [user, isMasterAdmin, myAdminDoc]);
-  const prevUnreadSupport = useRef(0);
-  useEffect(() => {
-    if (!isAdmin) return;
-    const unreadCount = supportChats.filter(c => c.unreadByAdmin).length;
-    if (unreadCount > prevUnreadSupport.current && prevUnreadSupport.current !== 0) {
-      toast.success("সাপোর্টে নতুন মেসেজ এসেএসেছে!", { icon: "💬", duration: 5000 });
-      // Play a sound
-      try {
-        const audio = new Audio('/notification.mp3');
-        audio.play().catch(e => console.warn('Audio play failed', e));
-      } catch(e) {}
-    }
-    prevUnreadSupport.current = unreadCount;
-  }, [supportChats, isAdmin]);
+
   const [isAdminVerified, setIsAdminVerified] = useState(false);
   const [is2FAPending, setIs2FAPending] = useState(false);
   const [adminOTPInput, setAdminOTPInput] = useState("");
@@ -2644,15 +2632,15 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       const cachedProducts = localStorage.getItem("cached_products");
       const lastFetch = localStorage.getItem("products_last_fetch");
       const now = Date.now();
+      const urlParams = new URLSearchParams(window.location.search);
+      const productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing');
       
       if (cachedProducts) {
         try {
           const parsed = JSON.parse(cachedProducts);
           setProducts(parsed);
-          const urlParams = new URLSearchParams(window.location.search);
-          const productId = urlParams.get('product');
           if (productId) {
-             const prod = parsed.find((p: any) => p.id === productId);
+             const prod = parsed.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
              if (prod) setSelectedProduct(prod);
           }
           setIsLoading(false);
@@ -2667,13 +2655,14 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           try {
             localStorage.setItem("cached_products", JSON.stringify(prodData));
             localStorage.setItem("products_last_fetch", now.toString());
+            if (siteConfig?.productsUpdatedAt) {
+              localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+            }
           } catch (e) {
             console.warn("localStorage write failed:", e);
           }
-          const urlParams = new URLSearchParams(window.location.search);
-          const productId = urlParams.get('product');
           if (productId) {
-             const prod = prodData.find((p: any) => p.id === productId);
+             const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
              if (prod) setSelectedProduct(prod);
           }
           setIsLoading(false);
@@ -2755,9 +2744,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         setProducts(prodData);
         localStorage.setItem("cached_products", JSON.stringify(prodData));
         const urlParams = new URLSearchParams(window.location.search);
-        const productId = urlParams.get('product');
+        const productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing');
         if (productId) {
-           const prod = prodData.find((p: any) => p.id === productId);
+           const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
            if (prod) setSelectedProduct(prod);
         }
         setIsLoading(false);
@@ -2782,6 +2771,29 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       setReviewUnsub(null);
     }
   }, [isProductDetailsOpen]);
+  // Synchronize products cache when database updates occur
+  useEffect(() => {
+    if (!siteConfig || !siteConfig.productsUpdatedAt) return;
+    const localUpdatedAt = localStorage.getItem("products_updated_at");
+    if (!localUpdatedAt || localUpdatedAt !== siteConfig.productsUpdatedAt) {
+      console.log("Products cache is outdated, refetching products...");
+      getDocs(collection(db, "products")).then(snapshot => {
+        const prodData = snapshot.docs
+          .map((d) => ({ ...d.data(), id: d.id }) as Product)
+          .filter((p) => !p.deleted);
+        setProducts(prodData);
+        try {
+          localStorage.setItem("cached_products", JSON.stringify(prodData));
+          localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+          localStorage.setItem("products_last_fetch", Date.now().toString());
+        } catch (e) {
+          console.warn("localStorage write failed:", e);
+        }
+      }).catch(err => {
+        console.error("Failed to refetch products:", err);
+      });
+    }
+  }, [siteConfig?.productsUpdatedAt]);
   // Listen for browser back/forward buttons (popstate)
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -2798,7 +2810,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
 
       // Update product details state
       if (productId) {
-        const prod = products.find((p) => p.id === productId);
+        const prod = products.find((p) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
         if (prod) {
           setSelectedProduct(prod);
           setIsProductDetailsOpen(true);
@@ -2821,7 +2833,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       const isCheckout = urlParams.get("checkout") === "true";
       
       if (productId) {
-        const prod = products.find((p) => p.id === productId);
+        const prod = products.find((p) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
         if (prod) {
           setSelectedProduct(prod);
           setIsProductDetailsOpen(true);
@@ -2979,6 +2991,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       }
     }
   }, [supportChats, selectedChat]);
+  const isInitialSupportLoad = useRef(true);
   useEffect(() => {
     if (isAdminVerified && !isQuotaExceeded) {
       const q = query(
@@ -2989,7 +3002,29 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       const unsub = onSnapshot(
         q,
         (snapshot) => {
-          setSupportChats(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+          const chatsData = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setSupportChats(chatsData);
+          
+          if (!isInitialSupportLoad.current && snapshot.docChanges().length > 0) {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added" || change.type === "modified") {
+                const chatDoc = change.doc.data() as any;
+                if (chatDoc.unreadByAdmin) {
+                  const messages = chatDoc.messages || [];
+                  const lastMessage = messages[messages.length - 1];
+                  if (lastMessage && !lastMessage.isAdmin) {
+                    playNotifSound();
+                    toast.success(`সাপোর্টে নতুন মেসেজ: "${chatDoc.lastMessage || '...'}"`, {
+                      icon: "💬",
+                      duration: 6000,
+                      position: "top-right"
+                    });
+                  }
+                }
+              }
+            });
+          }
+          isInitialSupportLoad.current = false;
         },
         (err) => {
           const isQuota = err.code === "resource-exhausted" || err.message === "QUOTA_EXCEEDED";
@@ -3647,6 +3682,16 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     return () => clearInterval(timer);
   }, [newArrivals.length]);
   // Featured Products slider logic removed as per user request (manual scroll)
+  const touchProductsTimestamp = async () => {
+    try {
+      await updateDoc(doc(db, "config", "siteConfig"), {
+        productsUpdatedAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn("Failed to update productsUpdatedAt:", e);
+    }
+  };
+
   const saveProduct = async (e: FormEvent) => {
     e.preventDefault();
     // Validation
@@ -3737,6 +3782,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       }
       if (editingProduct.id) {
         await updateDoc(doc(db, "products", editingProduct.id), productData);
+        await touchProductsTimestamp();
         
         // Optimistic Update for Quota issues
         const updatedProducts = products.map(p => 
@@ -3749,6 +3795,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         alert("প্রোডাক্ট আপডেট সফল হয়েছে!");
       } else {
         const docRef = await addDoc(collection(db, "products"), productData);
+        await touchProductsTimestamp();
         
         // Optimistic Update for Quota issues
         const newProducts = [{ ...productData, id: docRef.id } as Product, ...products];
@@ -3868,6 +3915,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       console.log("Log", productId);
       const productRef = doc(db, "products", productId);
       await deleteDoc(productRef);
+      await touchProductsTimestamp();
       console.log("Log", productId);
       
       // Optimistic delete for cache/quota issues
@@ -3898,6 +3946,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         isPublished: newStatus,
         updatedAt: serverTimestamp()
       });
+      await touchProductsTimestamp();
       const updatedProducts = products.map(p => 
         p.id === product.id ? { ...p, isPublished: newStatus } : p
       );
@@ -4076,10 +4125,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       console.warn("Push error:", e);
     }
   };
-  const playNotifSound = () => {
+  function playNotifSound() {
     const audio = new Audio(NOTIF_SOUND_URL);
     audio.play().catch(e => console.log("Sound play error:", e));
-  };
+  }
   useEffect(() => {
     if (!user || isQuotaExceeded) return;
     const isMaster = masterEmails.includes(user.email || "");
@@ -4938,17 +4987,20 @@ Rules:
       Object.entries(wholesaleSizes).forEach(([s, q]) => {
         if (q > 0) {
           itemsToAdd.push({ product, quantity: q, color: selectedColor, size: s });
+          addToCartInternal(product, selectedColor, s, q); // Auto add to cart!
         }
       });
     } else {
        const selectedSize = size || (firstVariant ? firstVariant.size : undefined);
        itemsToAdd.push({ product, quantity, color: selectedColor, size: selectedSize });
+       addToCartInternal(product, selectedColor, selectedSize, quantity); // Auto add to cart!
     }
     
     setCheckoutItems(itemsToAdd);
+    setIsProductDetailsOpen(false); // Close details modal when checking out
     setIsCheckoutOpen(true);
     detectLocation();
-  }, [detectLocation]);
+  }, [detectLocation, setIsProductDetailsOpen, addToCartInternal]);
   const openCartCheckout = () => {
     if (cartItems.length === 0) {
       alert("শপিং কার্ট খালি রয়েছে।");
@@ -5155,7 +5207,11 @@ Rules:
     setUserInteractedWithGallery(false);
     setIsDescriptionExpanded(false);
     setIsProductDetailsOpen(true);
-  }, []);
+    setIsCheckoutOpen(false); // Close checkout to show product details!
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 50);
+  }, [setIsCheckoutOpen]);
   const handleApplyCoupon = () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) {
@@ -7004,7 +7060,7 @@ const handleSaveQuickEdit = async () => {
                   setIsProductDetailsOpen(false);
                   setSelectedProduct(null);
                 }}
-                className={`flex-1 px-6 py-4 text-sm font-bold transition-all flex items-center justify-center gap-1 ${
+                className={`flex-1 px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1 ${
                   selectedCategory === "all"
                     ? "bg-white text-primary"
                     : "text-gray-600 hover:bg-white/80 hover:text-primary"
@@ -7024,7 +7080,7 @@ const handleSaveQuickEdit = async () => {
                         setIsProductDetailsOpen(false);
                         setSelectedProduct(null);
                       }}
-                      className={`w-full px-6 py-4 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      className={`w-full px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
                         selectedCategory === cat.name
                           ? "bg-white text-primary"
                           : "text-gray-600 hover:bg-white/80 hover:text-primary"
@@ -7311,8 +7367,8 @@ const handleSaveQuickEdit = async () => {
           </section>
         )}
         {/* Category Sections (Replaces Trending Selection) */}
-        {!isProductDetailsOpen && !activeCampaign && categories.map((cat) => {
-          const catProducts = products.filter(p => p.category === cat.name);
+        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && categories.map((cat) => {
+          const catProducts = products.filter(p => p.category === cat.name && !p.deleted && p.isPublished !== false);
           if (catProducts.length === 0) return null;
           
           return (
@@ -7357,7 +7413,7 @@ const handleSaveQuickEdit = async () => {
           );
         })}
         {/* 3.1 Active Campaigns Section */}
-        {!isProductDetailsOpen && !activeCampaign && campaigns.filter(c => c.isActive).length > 0 && (
+        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && campaigns.filter(c => c.isActive).length > 0 && (
           <section className="mb-12 container mx-auto px-4">
             <div className="flex items-center gap-3 mb-4">
               <span className="w-1 h-6 rounded-full bg-primary"></span>
@@ -7395,7 +7451,7 @@ const handleSaveQuickEdit = async () => {
           </section>
         )}
         {/* Delivery Policy Notice */}
-        {!activeCampaign && (
+        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
           <div className="mb-6 container mx-auto px-4">
             <div className="bg-red-100/50 rounded-2xl p-6 border-2 border-dashed border-primary/30">
               <div className="flex flex-col md:flex-row items-center gap-6">
@@ -7419,7 +7475,7 @@ const handleSaveQuickEdit = async () => {
           </div>
         )}
         {/* Trust Badge / Feature Bar */}
-        {!activeCampaign && (
+        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
           <div className="mb-10 container mx-auto px-4">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {/* Delivery Charge */}

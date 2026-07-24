@@ -166,7 +166,7 @@ export default function ShopList(props: ShopListProps) {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Zap className="text-primary" size={24} />
-                    <h3 className="text-xl md:text-2xl font-black text-secondary">
+                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
                       {t("নতুন পণ্য", "New Arrivals")}
                     </h3>
                   </div>
@@ -205,7 +205,7 @@ export default function ShopList(props: ShopListProps) {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Star className="text-amber-500 fill-amber-500" size={24} />
-                    <h3 className="text-xl md:text-2xl font-black text-secondary">
+                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
                       {t("সেরা পণ্য", "Featured Products")}
                     </h3>
                   </div>

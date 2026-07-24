@@ -1,7 +1,8 @@
 import React from "react";
-import { Heart, ArrowRight } from "lucide-react";
+import { Heart, ArrowRight, ShoppingCart } from "lucide-react";
 import { motion } from "motion/react";
 import { Product } from "../../types";
+import { useCartContext } from "../../context/CartContext";
 
 interface ProductCardProps {
   product: Product;
@@ -18,6 +19,7 @@ const ProductCard = React.memo(({
   handleBuyNow,
   handleLikeProduct,
 }: ProductCardProps) => {
+  const { addToCart } = useCartContext();
   const isOutOfStock =
     !product.isComingSoon &&
     (product.variants && product.variants.length > 0
@@ -72,7 +74,7 @@ const ProductCard = React.memo(({
         )}
         <h4
           onClick={() => openProductDetails(product)}
-          className="text-base sm:text-lg lg:text-xl font-bold text-secondary line-clamp-2 mb-1 px-0.5 min-h-[48px] sm:min-h-[56px] lg:min-h-[64px] group-hover:text-primary transition-colors cursor-pointer leading-snug"
+          className="text-base sm:text-lg lg:text-xl font-medium text-secondary line-clamp-2 mb-1 px-0.5 min-h-[48px] sm:min-h-[56px] lg:min-h-[64px] group-hover:text-primary transition-colors cursor-pointer leading-snug"
         >
           {product.name}
         </h4>
