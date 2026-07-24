@@ -590,7 +590,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       }
                       addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty);
                     }} 
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm md:text-base h-[46px] rounded-xl transition-all flex items-center justify-center gap-1.5 border border-gray-200"
+                    className="w-[130px] md:w-[150px] shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm h-[46px] rounded-xl transition-all flex items-center justify-center gap-1.5 border border-gray-200"
                   >
                     <ShoppingCart size={16} />
                     Add to Cart
@@ -610,7 +610,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                     }} 
                     className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold text-sm md:text-base h-[46px] rounded-xl transition-all flex items-center justify-center shadow-lg shadow-primary/20 hover:-translate-y-0.5 active:translate-y-0"
                   >
-                    Buy Now
+                    {t("অর্ডার দিন", "Order Now")}
                   </button>
                 </div>
             </div>
