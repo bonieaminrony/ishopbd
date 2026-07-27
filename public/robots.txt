@@ -1,3 +1,13 @@
 User-agent: *
 Allow: /
+
+# Block admin/internal paths from indexing
+Disallow: /api/
+Disallow: /scratch/
+
+# Allow Googlebot to crawl images
+User-agent: Googlebot-Image
+Allow: /
+
+# Sitemap location
 Sitemap: https://ishopbd.com/sitemap.xml

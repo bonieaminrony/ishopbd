@@ -2352,57 +2352,168 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       isMounted = false;
     };
   }, [isAdminVerified]);
-  // SEO: Dynamic URL and Meta Tags
+  // SEO: Dynamic URL, Meta Tags, Open Graph, Schema.org
   useEffect(() => {
-    if (isCheckoutOpen) {
-      document.title = "I SHOP BD / Checkout";
-    } else if (selectedProduct && isProductDetailsOpen) {
-      document.title = "I SHOP BD / " + selectedProduct.name;
-    } else {
-      document.title = "I SHOP BD";
-    }
+    const SITE_NAME = "i SHOP BD";
+    const SITE_URL = "https://ishopbd.com";
+    const SITE_DESC = "বাংলাদেশের সেরা অনলাইন শপিং | গ্যাজেট, ইলেকট্রনিক্স, হোম এক্সেসরিজ সবচেয়ে কম দামে দ্রুত হোম ডেলিভারি।";
+    const DEFAULT_OG_IMAGE = `${SITE_URL}/logo.png`;
 
-    if (selectedProduct && isProductDetailsOpen) {
-      let metaDesc = document.querySelector('meta[name="description"]');
-      if (!metaDesc) {
-        metaDesc = document.createElement('meta');
-        metaDesc.setAttribute('name', 'description');
-        document.head.appendChild(metaDesc);
+    const setMeta = (selector: string, attr: string, value: string) => {
+      let el = document.querySelector(selector) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        const parts = selector.match(/\[(\w+)="([^"]+)"\]/);
+        if (parts) el.setAttribute(parts[1], parts[2]);
+        document.head.appendChild(el);
       }
-      metaDesc.setAttribute('content', (selectedProduct.description || '').substring(0, 160).replace(/<[^>]*>?/gm, ''));
-      
-      let script = document.getElementById('seo-json-ld');
+      el.setAttribute(attr, value);
+    };
+
+    const setLink = (rel: string, href: string) => {
+      let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
+      if (!el) { el = document.createElement('link'); el.setAttribute('rel', rel); document.head.appendChild(el); }
+      el.setAttribute('href', href);
+    };
+
+    const setJsonLd = (id: string, data: object | null) => {
+      let script = document.getElementById(id);
+      if (data === null) { if (script) script.remove(); return; }
       if (!script) {
         script = document.createElement('script');
         script.setAttribute('type', 'application/ld+json');
-        script.setAttribute('id', 'seo-json-ld');
+        script.setAttribute('id', id);
         document.head.appendChild(script);
       }
-      const jsonLd = {
+      script.textContent = JSON.stringify(data);
+    };
+
+    const stripHtml = (html: string) => (html || '').replace(/<[^>]*>?/gm, '').trim();
+
+    if (isCheckoutOpen) {
+      // === CHECKOUT PAGE ===
+      document.title = `Checkout | ${SITE_NAME}`;
+      setMeta('meta[name="description"]', 'content', `Complete your order at ${SITE_NAME}. Fast delivery across Bangladesh.`);
+      setMeta('meta[property="og:title"]', 'content', `Checkout | ${SITE_NAME}`);
+      setMeta('meta[property="og:description"]', 'content', `Complete your order at ${SITE_NAME}.`);
+      setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
+      setLink('canonical', SITE_URL);
+      setJsonLd('seo-json-ld', null);
+      setJsonLd('seo-breadcrumb-ld', null);
+
+    } else if (selectedProduct && isProductDetailsOpen) {
+      // === PRODUCT DETAIL PAGE ===
+      const productName = selectedProduct.name || '';
+      const productDesc = stripHtml(selectedProduct.description || '');
+      const productPrice = selectedProduct.price || 0;
+      const productImage = selectedProduct.image || DEFAULT_OG_IMAGE;
+      const productUrl = `${SITE_URL}/?p=${selectedProduct.id}&slug=${encodeURIComponent((productName).toLowerCase().replace(/ /g, '-').replace(/[^\w-]/g, ''))}`;
+      const inStock = (selectedProduct.stock || 0) > 0;
+
+      // Title with Bangladesh keywords for Google ranking
+      document.title = `${productName} Price in Bangladesh | ${SITE_NAME}`;
+
+      // Meta description
+      const autoDesc = productDesc
+        ? `${productDesc.substring(0, 120)} | Price: ৳${productPrice} in Bangladesh. Buy online at ${SITE_NAME} with fast home delivery.`
+        : `Buy ${productName} at best price in Bangladesh ৳${productPrice}. Fast home delivery. Shop now at ${SITE_NAME}.`;
+      setMeta('meta[name="description"]', 'content', autoDesc.substring(0, 160));
+
+      // Keywords
+      setMeta('meta[name="keywords"]', 'content', 
+        `${productName}, ${productName} price in Bangladesh, ${productName} price in BD, ${productName} buy online Bangladesh, ${productName} দাম বাংলাদেশ, i SHOP BD, ishopbd`
+      );
+
+      // Open Graph
+      setMeta('meta[property="og:type"]', 'content', 'product');
+      setMeta('meta[property="og:title"]', 'content', `${productName} Price in Bangladesh | ${SITE_NAME}`);
+      setMeta('meta[property="og:description"]', 'content', autoDesc.substring(0, 200));
+      setMeta('meta[property="og:image"]', 'content', productImage);
+      setMeta('meta[property="og:url"]', 'content', productUrl);
+      setMeta('meta[property="product:price:amount"]', 'content', String(productPrice));
+      setMeta('meta[property="product:price:currency"]', 'content', 'BDT');
+
+      // Twitter Card
+      setMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
+      setMeta('meta[name="twitter:title"]', 'content', `${productName} Price in Bangladesh | ${SITE_NAME}`);
+      setMeta('meta[name="twitter:description"]', 'content', autoDesc.substring(0, 200));
+      setMeta('meta[name="twitter:image"]', 'content', productImage);
+
+      // Canonical
+      setLink('canonical', productUrl);
+
+      // Schema.org Product JSON-LD
+      setJsonLd('seo-json-ld', {
         "@context": "https://schema.org/",
         "@type": "Product",
-        "name": selectedProduct.name,
-        "image": selectedProduct.images || [],
-        "description": (selectedProduct.description || '').replace(/<[^>]*>?/gm, ''),
+        "name": productName,
+        "image": [productImage, ...(selectedProduct.images || [])].filter(Boolean),
+        "description": productDesc || `${productName} available at best price in Bangladesh.`,
         "sku": selectedProduct.id,
+        "brand": { "@type": "Brand", "name": selectedProduct.brand || SITE_NAME },
         "offers": {
           "@type": "Offer",
-          "url": window.location.href,
+          "url": productUrl,
           "priceCurrency": "BDT",
-          "price": selectedProduct.price,
-          "availability": (selectedProduct.stock || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-          "itemCondition": "https://schema.org/NewCondition"
+          "price": productPrice,
+          "priceValidUntil": new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+          "availability": inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          "itemCondition": "https://schema.org/NewCondition",
+          "seller": { "@type": "Organization", "name": SITE_NAME }
         }
-      };
-      script.textContent = JSON.stringify(jsonLd);
+      });
+
+      // BreadcrumbList Schema
+      setJsonLd('seo-breadcrumb-ld', {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
+          ...(selectedProduct.category ? [{ "@type": "ListItem", "position": 2, "name": selectedProduct.category, "item": `${SITE_URL}/?category=${encodeURIComponent(selectedProduct.category)}` }] : []),
+          { "@type": "ListItem", "position": selectedProduct.category ? 3 : 2, "name": productName, "item": productUrl }
+        ]
+      });
+
+    } else if (selectedCategory) {
+      // === CATEGORY PAGE ===
+      document.title = `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
+      setMeta('meta[name="description"]', 'content', `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`);
+      setMeta('meta[name="keywords"]', 'content', `${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy ${selectedCategory} online Bangladesh, i SHOP BD`);
+      setMeta('meta[property="og:type"]', 'content', 'website');
+      setMeta('meta[property="og:title"]', 'content', `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`);
+      setMeta('meta[property="og:description"]', 'content', `Shop the best ${selectedCategory} at lowest prices in Bangladesh.`);
+      setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
+      setMeta('meta[property="og:url"]', 'content', `${SITE_URL}/?category=${encodeURIComponent(selectedCategory)}`);
+      setLink('canonical', `${SITE_URL}/?category=${encodeURIComponent(selectedCategory)}`);
+      setJsonLd('seo-json-ld', null);
+      setJsonLd('seo-breadcrumb-ld', {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
+          { "@type": "ListItem", "position": 2, "name": selectedCategory, "item": `${SITE_URL}/?category=${encodeURIComponent(selectedCategory)}` }
+        ]
+      });
+
     } else {
-      let metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) metaDesc.setAttribute('content', "Best online shopping experience in Bangladesh with I SHOP BD.");
-      
-      let script = document.getElementById('seo-json-ld');
-      if (script) script.remove();
+      // === HOMEPAGE ===
+      document.title = `${SITE_NAME} | Best Online Shopping in Bangladesh`;
+      setMeta('meta[name="description"]', 'content', SITE_DESC);
+      setMeta('meta[name="keywords"]', 'content', 'i SHOP BD, আই শপ বিডি, ishopbd, online shopping Bangladesh, best price Bangladesh, gadgets Bangladesh, electronics BD, home delivery Bangladesh, rechargeable fan price BD, air cooler price Bangladesh');
+      setMeta('meta[property="og:type"]', 'content', 'website');
+      setMeta('meta[property="og:title"]', 'content', `${SITE_NAME} | Best Online Shopping in Bangladesh`);
+      setMeta('meta[property="og:description"]', 'content', SITE_DESC);
+      setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
+      setMeta('meta[property="og:url"]', 'content', SITE_URL);
+      setMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
+      setMeta('meta[name="twitter:title"]', 'content', `${SITE_NAME} | Best Online Shopping in Bangladesh`);
+      setMeta('meta[name="twitter:description"]', 'content', SITE_DESC);
+      setMeta('meta[name="twitter:image"]', 'content', DEFAULT_OG_IMAGE);
+      setLink('canonical', SITE_URL);
+      setJsonLd('seo-json-ld', null);
+      setJsonLd('seo-breadcrumb-ld', null);
     }
-  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen]);
+  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen, selectedCategory]);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log("Auth Status Changed:", currentUser?.email);
