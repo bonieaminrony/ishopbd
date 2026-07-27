@@ -2474,7 +2474,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         ]
       });
 
-    } else if (selectedCategory) {
+    } else if (selectedCategory && selectedCategory.toLowerCase() !== 'all') {
       // === CATEGORY PAGE ===
       document.title = `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
       setMeta('meta[name="description"]', 'content', `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`);
@@ -5987,7 +5987,7 @@ const handleSaveQuickEdit = async () => {
            return;
         }
       }
-      const text = `অর্ডার ID: #${order.id}\nনাম: ${order.customerName}\nফোন: ${order.customerPhone}\nঠিকানা: ${order.address}\nটোটাল: ৳${order.total}\nক্যাশ কালেকশন: ৳${finalCodAmount}`;
+      const text = `{t("অর্ডার ID", "Order ID")}: #${order.id}\nনাম: ${order.customerName}\nফোন: ${order.customerPhone}\nঠিকানা: ${order.address}\nটোটাল: ৳${order.total}\nক্যাশ কালেকশন: ৳${finalCodAmount}`;
       try {
         if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
           await navigator.clipboard.writeText(text).catch(() => {});
@@ -8352,7 +8352,7 @@ const handleSaveQuickEdit = async () => {
                   <div className="flex items-center gap-3 mb-2">
                     <Wallet className="text-primary" size={20} />
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                      ওয়ালেট ব্যালেন্স
+                      {t("ওয়ালেট ব্যালেন্স", "Wallet Balance")}
                     </span>
                   </div>
                   <p className="text-3xl font-black text-white">
@@ -8362,7 +8362,7 @@ const handleSaveQuickEdit = async () => {
                     onClick={() => setIsDepositModalOpen(true)}
                     className="w-full mt-4 bg-primary text-white py-2 rounded-xl text-xs font-black hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
-                                <Plus size={16} /> নতুন হোলসেল রেট যোগ করুন
+                                <Plus size={16} /> {t("নতুন হোলসেল রেট যোগ করুন", "Add wholesale rates")}
                   </button>
                 </div>
                 <div className="flex-1 space-y-2">
@@ -8374,49 +8374,49 @@ const handleSaveQuickEdit = async () => {
                       }}
                       className="w-full text-left p-3 rounded-xl bg-secondary text-white font-black text-sm flex items-center gap-3 shadow-lg shadow-secondary/20 hover:scale-[1.02] transition-all"
                     >
-                      <ShieldCheck size={18} /> অ্যাডমিন প্যানেল
+                      <ShieldCheck size={18} /> {t("অ্যাডমিন প্যানেল", "Admin Panel")}
                     </button>
                   )}
                   <button 
                     onClick={() => setProfileTab("info")}
                     className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "info" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
                   >
-                    <User size={18} /> প্রোফাইল তথ্য
+                    <User size={18} /> {t("প্রোফাইল তথ্য", "Profile Info")}
                   </button>
                   <button 
                     onClick={() => setProfileTab("orders")}
                     className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "orders" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
                   >
-                    <History size={18} /> অর্ডার হিস্ট্রি
+                    <History size={18} /> {t("অর্ডার হিস্ট্রি", "Order History")}
                   </button>
                   <button 
                     onClick={() => setProfileTab("transactions")}
                     className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "transactions" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
                   >
-                    <Wallet size={18} /> লেনদেনের ইতিহাস
+                    <Wallet size={18} /> {t("লেনদেনের ইতিহাস", "Transaction History")}
                   </button>
                   <button 
                     onClick={() => setProfileTab("refunds")}
                     className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "refunds" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
                   >
-                    <RefreshCcw size={18} /> রিফান্ড রিকোয়েস্ট
+                    <RefreshCcw size={18} /> {t("রিফান্ড রিকোয়েস্ট", "Refund Request")}
                   </button>
                 </div>
                 <button
                   onClick={handleLogout}
                   className="mt-8 flex items-center gap-3 text-red-400 hover:text-red-500 font-bold text-sm transition-colors"
                 >
-                  <LogOut size={18} /> লগআউট করুন
+                  <LogOut size={18} /> {t("লগআউট করুন", "Log Out")}
                 </button>
               </div>
               {/* Right Content: Details & Transactions */}
               <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
                 <div className="flex items-center justify-between mb-8">
                   <h4 className="text-xl font-black text-secondary flex items-center gap-2">
-                    {profileTab === "transactions" && <><Wallet className="text-primary" size={24} /> লেনদেনের ইতিহাস</>}
-                    {profileTab === "orders" && <><History className="text-primary" size={24} /> আপনার অর্ডারসমূহ</>}
-                    {profileTab === "info" && <><User className="text-primary" size={24} /> প্রোফাইল তথ্য</>}
-                    {profileTab === "refunds" && <><RefreshCcw className="text-primary" size={24} /> রিফান্ড রিকোয়েস্টসমূহ</>}
+                    {profileTab === "transactions" && <><Wallet className="text-primary" size={24} /> {t("লেনদেনের ইতিহাস", "Transaction History")}</>}
+                    {profileTab === "orders" && <><History className="text-primary" size={24} /> {t("আপনার অর্ডারসমূহ", "Your Orders")}</>}
+                    {profileTab === "info" && <><User className="text-primary" size={24} /> {t("প্রোফাইল তথ্য", "Profile Info")}</>}
+                    {profileTab === "refunds" && <><RefreshCcw className="text-primary" size={24} /> {t("রিফান্ড রিকোয়েস্টসমূহ", "Refund Requests")}</>}
                   </h4>
                   <button
                     onClick={() => setIsProfileOpen(false)}
@@ -8430,7 +8430,8 @@ const handleSaveQuickEdit = async () => {
                     {transactions.length === 0 ? (
                       <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
                         <Wallet size={48} className="mx-auto mb-4 text-gray-200" />
-                        <p className="text-sm text-gray-400">এখনো কোনো লেনদেন হয়নি</p>                      </div>
+                        <p className="text-sm text-gray-400">{t("এখনো কোনো লেনদেন হয়নি", "No transactions yet")}</p>
+                      </div>
                     ) : (
                       transactions.map((tx: any) => (
                         <div key={tx.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-gray-100 hover:shadow-md transition-all">
@@ -8442,7 +8443,7 @@ const handleSaveQuickEdit = async () => {
                             </div>
                             <div>
                               <p className="font-bold text-sm text-secondary">{tx.description} {tx.method && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1 uppercase">{tx.method}</span>}</p>
-                              <p className="text-[10px] text-gray-400">{new Date(tx.createdAt).toLocaleString("bn-BD")}</p>
+                              <p className="text-[10px] text-gray-400">{new Date(tx.createdAt).toLocaleString(language === "bn" ? "bn-BD" : "en-US")}</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -8460,7 +8461,7 @@ const handleSaveQuickEdit = async () => {
                     {orderHistory.length === 0 ? (
                       <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
                         <History size={48} className="mx-auto mb-4 text-gray-200" />
-                        <p className="text-sm text-gray-400">আপনার কোনো অর্ডার নেই</p>
+                        <p className="text-sm text-gray-400">{t("আপনার কোনো অর্ডার নেই", "You have no orders")}</p>
                       </div>
                     ) : (
                       orderHistory.map((order: any) => (
@@ -8489,11 +8490,11 @@ const handleSaveQuickEdit = async () => {
                               else if (finalStatus === 'cancelled') bgColor = 'bg-red-100 text-red-700';
                               else if (finalStatus === 'shipped') bgColor = 'bg-blue-100 text-blue-700';
                               let label = finalStatus;
-                              if (finalStatus === 'pending') label = 'প্রসেসিং এ আছে';
-                              else if (finalStatus === 'processing') label = 'অর্ডারটি কনফার্ম করা হয়েছে';
-                              else if (finalStatus === 'shipped') label = 'শিপমেন্ট করা হয়েছে';
-                              else if (finalStatus === 'delivered') label = 'ডেলিভার্ড';
-                              else if (finalStatus === 'cancelled') label = 'বাতিল করা হয়েছে';
+                              if (finalStatus === 'pending') label = t('প্রসেসিং এ আছে', 'Pending');
+                              else if (finalStatus === 'processing') label = t('অর্ডারটি কনফার্ম করা হয়েছে', 'Confirmed');
+                              else if (finalStatus === 'shipped') label = t('শিপমেন্ট করা হয়েছে', 'Shipped');
+                              else if (finalStatus === 'delivered') label = t('ডেলিভার্ড', 'Delivered');
+                              else if (finalStatus === 'cancelled') label = t('বাতিল করা হয়েছে', 'Cancelled');
                               return (
                                 <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider ${bgColor}`}>
                                   {label}
@@ -8511,21 +8512,21 @@ const handleSaveQuickEdit = async () => {
                                  <div className="flex gap-2 mt-1">
                                    {item.color && item.color !== "N/A" && (
                                      <span className="text-[12px] font-black text-primary">
-                                       কালার: {item.color}
+                                       {t("কালার", "Color")}: {item.color}
                                      </span>
                                    )}
                                    {item.size && item.size !== "N/A" && (
                                      <span className="text-[12px] font-black text-blue-600">
-                                              সাইজ: {item.size}
+                                              {t("সাইজ", "Size")}: {item.size}
                                      </span>
                                    )}
                                  </div>
-                               </div>
+                                </div>
                              ))}
                           </div>
                           <div className="pt-4 border-t border-gray-50 flex justify-between items-center">
                             <div>
-                              <p className="text-[10px] text-gray-400 font-bold">মোট পেমেন্ট</p>
+                              <p className="text-[10px] text-gray-400 font-bold">{t("মোট পেমেন্ট", "Total Payment")}</p>
                               <p className="text-lg font-black text-primary">৳{order.total}</p>
                             </div>
                             <div className="flex flex-col items-end gap-2">
@@ -8537,15 +8538,15 @@ const handleSaveQuickEdit = async () => {
                                   }}
                                   className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-colors"
                                 >
-                                  রিফান্ড রিকোয়েস্ট
+                                  {t("রিফান্ড রিকোয়েস্ট", "Refund Request")}
                                 </button>
                               )}
                               {order.status === "shipped" && (
                                 <div className="text-right">
                                   <div className="flex items-center gap-1 justify-end text-[10px] font-black text-primary mb-1">
-                                    <Truck size={12} /> {order.courierName || "কুরিয়ার সার্ভিস"}
+                                    <Truck size={12} /> {order.courierName || t("কুরিয়ার সার্ভিস", "Courier Service")}
                                   </div>
-                                  <p className="text-[10px] font-bold text-gray-500">ID: {order.trackingId || "প্রসেসিং"}</p>
+                                  <p className="text-[10px] font-bold text-gray-500">ID: {order.trackingId || t("প্রসেসিং", "Processing")}</p>
                                 </div>
                               )}
                             </div>
@@ -8560,7 +8561,7 @@ const handleSaveQuickEdit = async () => {
                       {refundRequests.filter(r => r.userId === user.uid).length === 0 ? (
                         <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
                           <RefreshCcw size={48} className="mx-auto mb-4 text-gray-200" />
-                          <p className="text-sm text-gray-400">আপনার কোনো রিফান্ড রিকোয়েস্ট নেই</p>
+                          <p className="text-sm text-gray-400">{t("আপনার কোনো রিফান্ড রিকোয়েস্ট নেই", "You have no refund requests")}</p>
                         </div>
                       ) : (
                         refundRequests.filter(r => r.userId === user.uid).map((refund: any) => (
@@ -8568,25 +8569,25 @@ const handleSaveQuickEdit = async () => {
                               <div className="flex justify-between items-start">
                                  <div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">অর্ডার ID: #{String(refund.orderId).slice(-6).toUpperCase()}</p>
-                                    <p className="text-xs font-bold text-gray-500">{new Date(refund.createdAt).toLocaleString("bn-BD")}</p>
+                                    <p className="text-xs font-bold text-gray-500">{new Date(refund.createdAt).toLocaleString(language === "bn" ? "bn-BD" : "en-US")}</p>
                                  </div>
                                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                                     refund.status === "approved" ? "bg-green-100 text-green-700" :
                                     refund.status === "rejected" ? "bg-red-100 text-red-700" :
                                     "bg-amber-100 text-amber-700"
                                  }`}>
-                                    {refund.status === "approved" ? "অ্যাপ্রুভড" :
-                                     refund.status === "rejected" ? "রিজেক্টেড" :
-                                     "পেন্ডিং"}
+                                    {refund.status === "approved" ? t("অ্যাপ্রুভড", "Approved") :
+                                     refund.status === "rejected" ? t("রিজেক্টেড", "Rejected") :
+                                     t("পেন্ডিং", "Pending")}
                                  </span>
                               </div>
                               <div className="bg-gray-50 p-4 rounded-xl">
-                                 <p className="text-[10px] font-black text-gray-400 uppercase mb-2">রিফান্ড রিজন</p>
+                                 <p className="text-[10px] font-black text-gray-400 uppercase mb-2">{t("রিফান্ড রিজন", "Refund Reason")}</p>
                                  <p className="text-xs font-bold text-secondary">{refund.reason}</p>
                               </div>
                               <div className="flex justify-between items-center">
                                  <p className="text-lg font-black text-primary">৳{refund.amount}</p>
-                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">টোটাল রিফান্ড</p>
+                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t("টোটাল রিফান্ড", "Total Refund")}</p>
                               </div>
                            </div>
                         ))
@@ -8598,14 +8599,14 @@ const handleSaveQuickEdit = async () => {
                       <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl border-4 border-white">
                         <User size={40} className="text-primary" />
                       </div>
-                      <p className="font-black text-secondary text-lg mb-1">{user.displayName || "কাস্টমার"}</p>
+                      <p className="font-black text-secondary text-lg mb-1">{user.displayName || t("কাস্টমার", "Customer")}</p>
                       <p className="text-xs text-gray-400 mb-8">
                         {user.email?.endsWith("@mobile.user") 
                           ? user.email.replace("@mobile.user", "")
                           : user.email}
                       </p>
                       <div className="bg-white p-6 rounded-2xl border border-gray-100 text-left shadow-sm">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">ব্যালেন্স</label>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{t("ব্যালেন্স", "Balance")}</label>
                         <p className="text-2xl font-black text-primary">৳{userProfile?.balance || 0}</p>
                       </div>
                    </div>
@@ -8617,12 +8618,13 @@ const handleSaveQuickEdit = async () => {
                   </div>
                   <div>
                     <h5 className="font-bold text-blue-900 text-sm mb-1">
-                      রিফান্ড পলিসি
+                      {t("রিফান্ড পলিসি", "Refund Policy")}
                     </h5>
-                    <p className="text-sm text-blue-800 leading-relaxed">
-                     পেমেন্ট করার পর ট্রানজেকশন আইডিটি নিচে অটোমেটিক
-                      রিফান্ড করা হবে। এই টাকা ব্যবহার করে আপনি পরবর্তী যেকোনো
-                      সেট হয়ে যাবে।
+<p className="text-sm text-blue-800 leading-relaxed">
+                      {t(
+                        "পেমেন্ট করার পর ট্রানজেকশন আইডিটি নিচে অটোমেটিক রিফান্ড করা হবে। এই টাকা ব্যবহার করে আপনি পরবর্তী যেকোনো সেট হয়ে যাবে।",
+                        "After making payment, the transaction ID will be verified automatically. You can use this balance for any future orders."
+                      )}
                     </p>
                   </div>
                 </div>

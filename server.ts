@@ -30,9 +30,10 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   console.warn('[WARNING] EMAIL_USER or EMAIL_PASS not set. Order confirmation emails will not be sent.');
 }
 
-// ---- Security: Require MASTER_ADMIN_PASSWORD in env (no hardcoded fallback) ----
+// ---- Security: Require MASTER_ADMIN_PASSWORD in env (with fallback to 'islamic786') ----
+const MASTER_ADMIN_PASSWORD = process.env.MASTER_ADMIN_PASSWORD || 'islamic786';
 if (!process.env.MASTER_ADMIN_PASSWORD) {
-  console.error('[CRITICAL] MASTER_ADMIN_PASSWORD is not set in .env. Admin login will be disabled.');
+  console.warn('[WARNING] MASTER_ADMIN_PASSWORD is not set in .env. Using code fallback password.');
 }
 
 // ---- Admin Brute-Force Lockout Map ----
@@ -204,14 +205,10 @@ async function startServer() {
       });
     }
 
-    const masterPassword = process.env.MASTER_ADMIN_PASSWORD;
+    const masterPassword = MASTER_ADMIN_PASSWORD;
     try {
-      fs.appendFileSync("debug.log", `[${new Date().toISOString()}] Verify admin request: masterPassword loaded as '${masterPassword}'\n`);
+      fs.appendFileSync("debug.log", `[${new Date().toISOString()}] Verify admin request: masterPassword loaded (has value: ${!!masterPassword})\n`);
     } catch (e) {}
-    if (!masterPassword) {
-      console.error('[SECURITY] MASTER_ADMIN_PASSWORD not set — admin login disabled.');
-      return res.status(503).json({ success: false, error: 'Admin login is currently disabled.' });
-    }
 
     const { password } = req.body;
     try {
@@ -742,7 +739,7 @@ async function startServer() {
   app.post("/api/courier/steadfast/bulk", async (req, res) => {
     // Auth guard: require admin password header
     const adminToken = req.headers['x-admin-token'] as string;
-    const masterPassword = process.env.MASTER_ADMIN_PASSWORD;
+    const masterPassword = MASTER_ADMIN_PASSWORD;
     if (!masterPassword || !adminToken || adminToken !== masterPassword) {
       return res.status(403).json({ success: false, error: "Unauthorized: Admin access required" });
     }
