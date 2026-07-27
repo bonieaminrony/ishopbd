@@ -191,7 +191,7 @@ const updateQuantity = (productId: string, delta: number, color?: string, size?:
                              item.size === cartItems[idx].size
                            );
 
-    if (isCartCheckout) {
+    if (isCartCheckout || !isCheckoutOpen) {
       setCartItems(updateFn);
     }
     setCheckoutItems(updateFn);
@@ -216,7 +216,7 @@ const setQuantityDirect = (productId: string, qty: number, color?: string, size?
                              item.size === cartItems[idx].size
                            );
 
-    if (isCartCheckout) {
+    if (isCartCheckout || !isCheckoutOpen) {
       setCartItems(updateFn);
     }
     setCheckoutItems(updateFn);
@@ -242,7 +242,7 @@ const removeItem = (productId: string, color?: string, size?: string) => {
                              item.size === cartItems[idx].size
                            );
 
-    if (isCartCheckout) {
+    if (isCartCheckout || !isCheckoutOpen) {
       setCartItems(removeFn);
     }
     setCheckoutItems((prev) => {

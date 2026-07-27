@@ -1,4 +1,5 @@
 import React from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info, MessageSquare } from 'lucide-react';
@@ -84,6 +85,8 @@ export interface ProductDetailsProps {
   openProductDetails: any;
   handleBuyNow: any;
   isProductDetailsOpen: any;
+  products: any[];
+  searchQuery?: string;
 }
 
 export default function ProductDetails(props: ProductDetailsProps) {
@@ -168,18 +171,74 @@ export default function ProductDetails(props: ProductDetailsProps) {
     openProductDetails,
     handleBuyNow,
     isProductDetailsOpen,
+    products,
+    searchQuery,
   } = props;
 
   const [activeTab, setActiveTab] = React.useState('specification');
+  const [aiRecommendations, setAiRecommendations] = React.useState<any[]>([]);
+  const [isAiLoading, setIsAiLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!selectedProduct) return;
+
+    let viewedIds: string[] = [];
+    try {
+      const stored = localStorage.getItem("ishopbd_viewed_products");
+      if (stored) {
+        viewedIds = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    
+    const updatedViewed = [
+      selectedProduct.id,
+      ...viewedIds.filter(id => id !== selectedProduct.id)
+    ].slice(0, 10);
+    
+    try {
+      localStorage.setItem("ishopbd_viewed_products", JSON.stringify(updatedViewed));
+    } catch (e) {
+      console.error(e);
+    }
+
+    const fetchAiRecommendations = async () => {
+      setIsAiLoading(true);
+      try {
+        const res = await axios.post("/api/ai-recommendations", {
+          currentProductId: selectedProduct.id,
+          viewedProductIds: updatedViewed,
+          searchQuery: searchQuery || ""
+        }, { timeout: 8000 });
+
+        if (res.data && Array.isArray(res.data.productIds) && res.data.productIds.length > 0) {
+          const recommendedProds = res.data.productIds
+            .map((id: string) => products.find(p => p.id === id))
+            .filter(Boolean);
+          setAiRecommendations(recommendedProds);
+          setIsAiLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("AI recommendations failed, falling back to standard recommendations:", err);
+      }
+      
+      setAiRecommendations(relatedProducts.slice(0, 5));
+      setIsAiLoading(false);
+    };
+
+    fetchAiRecommendations();
+  }, [selectedProduct?.id, products, relatedProducts, searchQuery]);
 
 
   return (
     <>
           <div className="w-full min-h-screen">
             <Helmet>
-              <title>{selectedProduct.name} - i SHOP BD</title>
+              <title>{selectedProduct.name} - I SHOP BD</title>
               <meta name="description" content={(selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from i SHOP BD.`).substring(0, 160)} />
-              <meta property="og:title" content={`${selectedProduct.name} - i SHOP BD`} />
+              <meta property="og:title" content={`${selectedProduct.name} - I SHOP BD`} />
               <meta property="og:description" content={(selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from i SHOP BD.`).substring(0, 160)} />
               <meta property="og:image" content={selectedProduct.image} />
               <meta property="og:url" content={`https://ishopbd.com/?product=${selectedProduct.id}`} />
@@ -312,7 +371,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   />
                   {selectedProduct.isFreeDelivery && (
                     <div className="absolute top-4 left-4 bg-emerald-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-xl z-10 flex items-center gap-1 border border-emerald-500/20">
-                      <Truck size={12} /> ফ্রি হোম ডেলিভারি
+                      <Truck size={12} /> Free Home Delivery
                     </div>
                   )}
                 </div>
@@ -1066,45 +1125,64 @@ export default function ProductDetails(props: ProductDetailsProps) {
                                  )}
                                </div>
                              ))
-                           ) : (
-                             <div className="text-center py-12 text-gray-400 font-medium">
-                               <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
-                               এখনো কোনো রিভিউ দেওয়া হয়নি।<br/>প্রথম রিভিউটি আপনিই দিন!
-                             </div>
-                           )}
+                            ) : (
+                              <div className="text-center py-12 text-gray-400 font-medium">
+                                <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
+                                No reviews yet.<br/>Be the first to review!
+                              </div>
+                            )}
                         </div>
                       </div>
                     )}
                   </div>
                </div>
                
-               {/* Right Sidebar - Similar Products */}
+               {/* Right Sidebar - AI Recommendations / Similar Products */}
                <div className="lg:col-span-1">
                  <div className="bg-white rounded-2xl border border-gray-100 p-5 sticky top-24 lg:mt-[45px]">
-                   <h3 className="text-lg font-black text-[#2e3192] text-center mb-6 border-b border-gray-100 pb-3">Similar Product</h3>
+                   <h3 className="text-lg font-bold text-[#2e3192] text-center mb-6 border-b border-gray-100 pb-3 flex items-center justify-center gap-2">
+                     Related Products
+                   </h3>
                    <div className="flex flex-col gap-5">
-                     {relatedProducts.slice(0, 5).map((product) => (
-                       <div key={product.id} className="flex gap-3 group cursor-pointer bg-white hover:bg-gray-50 transition-colors rounded-xl p-2 -mx-2" onClick={() => openProductDetails(product)}>
-                         <div className="w-20 h-20 shrink-0 bg-white rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center p-1">
-                           <img src={product.image} alt={product.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-300" />
-                         </div>
-                         <div className="flex flex-col justify-center">
-                           <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-primary transition-colors mb-1">{product.name}</h4>
-                           <div className="flex items-center gap-2">
-                             <span className="text-sm font-black text-[#ef4a23]">৳{product.price}</span>
-                             {product.discount > 0 && (
-                               <span className="text-xs text-gray-400 line-through">৳{Math.round(product.price / (1 - product.discount / 100))}</span>
-                             )}
+                     {isAiLoading ? (
+                       [1, 2, 3].map((i) => (
+                         <div key={i} className="flex gap-3 animate-pulse">
+                           <div className="w-20 h-20 bg-gray-100 rounded-lg shrink-0"></div>
+                           <div className="flex-1 flex flex-col justify-center gap-2">
+                             <div className="h-3 bg-gray-100 rounded w-full"></div>
+                             <div className="h-3 bg-gray-100 rounded w-2/3"></div>
                            </div>
                          </div>
-                       </div>
-                     ))}
-                     {relatedProducts.length === 0 && (
-                       <p className="text-sm text-gray-500 text-center italic">No similar products found.</p>
+                       ))
+                     ) : (
+                       aiRecommendations.map((product) => (
+                         <div key={product.id} className="flex gap-3 group cursor-pointer bg-white hover:bg-gray-50 transition-all duration-300 rounded-xl p-2 -mx-2 hover:scale-[1.02]" onClick={() => openProductDetails(product)}>
+                           <div className="w-20 h-20 shrink-0 bg-white rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center p-1 relative">
+                             <img src={product.image} alt={product.name} className="w-full h-full object-contain group-hover:scale-115 transition-transform duration-300" />
+                             {product.discount > 0 && (
+                               <span className="absolute top-0.5 left-0.5 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">
+                                 -{product.discount}%
+                               </span>
+                             )}
+                           </div>
+                           <div className="flex flex-col justify-center">
+                             <h4 className="text-xs font-bold text-gray-800 line-clamp-2 leading-snug group-hover:text-primary transition-colors mb-1 font-sans">{product.name}</h4>
+                             <div className="flex items-center gap-2 font-sans">
+                               <span className="text-sm font-black text-[#ef4a23]">৳{product.price}</span>
+                               {product.discount > 0 && (
+                                 <span className="text-[10px] text-gray-400 line-through">৳{Math.round(product.price / (1 - product.discount / 100))}</span>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                       ))
+                     )}
+                     {!isAiLoading && aiRecommendations.length === 0 && (
+                       <p className="text-xs text-gray-400 text-center italic">No recommended products found.</p>
                      )}
                    </div>
-                  </div>
-                </div>
+                 </div>
+               </div>
               </div>
             </div>
           </div>

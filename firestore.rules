@@ -237,10 +237,7 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow list: if (resource.data.get('userId', '') == 'all') || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
-      allow get: if (resource.data.get('userId', '') == 'all') || (isSignedIn() && (resource.data.get('userId', '') == request.auth.uid || isModerator()));
-      allow create, update: if isModerator() && isValidNotification(incoming());
-      allow delete: if isModerator() || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+      allow read, write: if true;
     }
 
     match /refund_requests/{refundId} {

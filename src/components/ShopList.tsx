@@ -152,7 +152,7 @@ export default function ShopList(props: ShopListProps) {
                   size={16}
                   className="group-hover:-translate-y-0.5 transition-transform"
                 />
-              হোম পেজে ফিরে যান
+              Back to Home
               </motion.button>
             </div>
           </div>

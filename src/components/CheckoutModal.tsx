@@ -54,6 +54,7 @@ export interface CheckoutModalProps {
   handleApplyCoupon?: any;
   appliedCoupon?: string | null;
   setAppliedCoupon?: any;
+  siteConfig?: any;
 }
 
 export default function CheckoutModal(props: CheckoutModalProps) {
@@ -109,77 +110,212 @@ export default function CheckoutModal(props: CheckoutModalProps) {
     handleApplyCoupon,
     appliedCoupon,
     setAppliedCoupon,
+    siteConfig,
   } = props;
 
   if (!isCheckoutOpen) return null;
 
   const [activePromoTab, setActivePromoTab] = React.useState<"coupon" | "voucher">("coupon");
+  const [isDistDropdownOpen, setIsDistDropdownOpen] = React.useState(false);
+  const [distSearchQuery, setDistSearchQuery] = React.useState("");
+  const [isThanaDropdownOpen, setIsThanaDropdownOpen] = React.useState(false);
+  const [thanaSearchQuery, setThanaSearchQuery] = React.useState("");
+
+  const distRef = React.useRef<HTMLDivElement>(null);
+  const thanaRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: any) {
+      if (distRef.current && !distRef.current.contains(event.target as Node)) {
+        setIsDistDropdownOpen(false);
+      }
+      if (thanaRef.current && !thanaRef.current.contains(event.target as Node)) {
+        setIsThanaDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredDistricts = React.useMemo(() => {
+    const list = ALL_DISTRICTS || [];
+    if (!distSearchQuery) return list;
+    return list.filter((dist: string) =>
+      dist.toLowerCase().includes(distSearchQuery.toLowerCase())
+    );
+  }, [ALL_DISTRICTS, distSearchQuery]);
+
+  const filteredThanas = React.useMemo(() => {
+    const list = (districtThanaMap && checkoutDistrict ? (districtThanaMap[checkoutDistrict] || []) : []);
+    if (!thanaSearchQuery) return list;
+    return list.filter((thana: string) =>
+      thana.toLowerCase().includes(thanaSearchQuery.toLowerCase())
+    );
+  }, [districtThanaMap, checkoutDistrict, thanaSearchQuery]);
 
   // Render payment method selector card helper
   const renderPaymentSelector = () => {
     if (!setPaymentMethod) return null;
+    const isBkashEnabled = siteConfig?.isBkashEnabled !== false;
+    const isNagadEnabled = siteConfig?.isNagadEnabled !== false;
+    const isRocketEnabled = siteConfig?.isRocketEnabled !== false;
+
     return (
-      <div className="space-y-3">
-        <label className="block text-xs font-semibold text-gray-500">পেমেন্ট পদ্ধতি সিলেক্ট করুন (Payment Method) *</label>
+      <div className="space-y-4 border-t border-gray-100 pt-4 font-sans">
+        <label className="block text-xs font-bold text-secondary">Select Payment Method *</label>
+        
+        {/* Payment Options Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          
           {/* Cash on Delivery Card */}
           <div
             onClick={() => setPaymentMethod("cod")}
-            className={`relative flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+            className={`relative flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all hover:bg-gray-50/50 ${
               paymentMethod === "cod"
-                ? "border-primary bg-primary/5 text-primary"
-                : "border-gray-200 hover:bg-gray-50 text-secondary"
+                ? "border-primary bg-primary/5 text-primary shadow-sm shadow-primary/5"
+                : "border-gray-200 text-secondary bg-white"
             }`}
           >
-            <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-gray-150 text-secondary">💵</span>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💵</span>
               <div>
-                <p className="text-xs font-bold leading-none">ক্যাশ অন ডেলিভারি</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-1">পণ্য পেয়ে মূল্য পরিশোধ করুন</p>
+                <p className="text-xs font-black leading-none">Cash on Delivery (COD)</p>
+                <p className="text-[10px] text-gray-400 font-bold mt-1.5">Pay cash when you receive the product</p>
               </div>
             </div>
             {paymentMethod === "cod" && (
-              <CheckCircle2 size={16} className="text-primary absolute top-2 right-2 fill-white" />
+              <CheckCircle2 size={16} className="text-primary absolute top-2.5 right-2.5 fill-white" />
             )}
           </div>
 
           {/* Mobile Banking Card */}
           <div
-            onClick={() => setPaymentMethod("bkash")} // bkash represents mobile banking flow
-            className={`relative flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+            onClick={() => setPaymentMethod("bkash")}
+            className={`relative flex items-center justify-between p-4 rounded-2xl border cursor-pointer transition-all hover:bg-gray-50/50 ${
               paymentMethod !== "cod"
-                ? "border-primary bg-primary/5 text-primary"
-                : "border-gray-200 hover:bg-gray-50 text-secondary"
+                ? "border-primary bg-primary/5 text-primary shadow-sm shadow-primary/5"
+                : "border-gray-200 text-secondary bg-white"
             }`}
           >
-            <div className="flex items-center gap-2.5">
-              <span className="p-1.5 rounded-lg bg-gray-150 text-secondary">📱</span>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📱</span>
               <div>
-                <p className="text-xs font-bold leading-none">মোবাইল ব্যাংকিং</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-1">বিকাশ / নগদ / রকেট</p>
+                <p className="text-xs font-black leading-none">Mobile Banking (bKash / Nagad)</p>
+                <p className="text-[10px] text-gray-400 font-bold mt-1.5">Send money to confirm your order</p>
               </div>
             </div>
             {paymentMethod !== "cod" && (
-              <CheckCircle2 size={16} className="text-primary absolute top-2 right-2 fill-white" />
+              <CheckCircle2 size={16} className="text-primary absolute top-2.5 right-2.5 fill-white" />
             )}
           </div>
-
         </div>
 
-        {/* Conditional Instructions for Mobile Banking */}
+        {/* Custom Rich Mobile Banking Details Window */}
         {paymentMethod !== "cod" && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-3 bg-red-50/60 border border-primary/10 rounded-xl text-[11px] text-primary/90 leading-relaxed font-medium space-y-2"
+            className="bg-gray-50 rounded-2xl border border-gray-200/50 p-4 space-y-4"
           >
-            <p>📢 আমাদের পার্সোনাল নাম্বারে (যেমন: বিকাশ/নগদ/রকেট) পেমেন্ট সম্পন্ন করে দ্রুত ডেলিভারি পেতে পারেন।</p>
-            <div className="flex flex-wrap gap-2 text-[10px]">
-              <span className="bg-[#e2136e] text-white px-2 py-0.5 rounded font-black">bkash (01700-000000)</span>
-              <span className="bg-[#f04f23] text-white px-2 py-0.5 rounded font-black">Nagad (01700-000000)</span>
+            <div className="flex items-center gap-2 text-primary font-bold text-xs">
+              <span>📢</span>
+              <span>Send Money to any of the personal numbers below:</span>
             </div>
-            <p className="text-gray-400 text-[9px] font-normal">অর্ডার সাবমিট করার পর আমাদের কাস্টমার প্রতিনিধি আপনার সাথে যোগাযোগ করে পেমেন্ট কনফার্ম করবেন।</p>
+
+            {/* Merchant Numbers List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              {isBkashEnabled && siteConfig?.bkashNumber && (
+                <div className="bg-white p-3 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#e2136e]"></span>
+                    <div>
+                      <p className="font-black text-[#e2136e] uppercase text-[10px] tracking-wider">bKash</p>
+                      <p className="font-black text-secondary mt-0.5">{siteConfig.bkashNumber}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(siteConfig.bkashNumber);
+                      alert("bKash number copied to clipboard!");
+                    }}
+                    className="text-[10px] font-black text-primary bg-primary/5 hover:bg-primary/10 px-2.5 py-1.5 rounded-lg transition-all"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+
+              {isNagadEnabled && siteConfig?.nagadNumber && (
+                <div className="bg-white p-3 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#f04f23]"></span>
+                    <div>
+                      <p className="font-black text-[#f04f23] uppercase text-[10px] tracking-wider">Nagad</p>
+                      <p className="font-black text-secondary mt-0.5">{siteConfig.nagadNumber}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(siteConfig.nagadNumber);
+                      alert("Nagad number copied to clipboard!");
+                    }}
+                    className="text-[10px] font-black text-primary bg-primary/5 hover:bg-primary/10 px-2.5 py-1.5 rounded-lg transition-all"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+
+              {isRocketEnabled && siteConfig?.rocketNumber && (
+                <div className="bg-white p-3 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#8c3494]"></span>
+                    <div>
+                      <p className="font-black text-[#8c3494] uppercase text-[10px] tracking-wider">Rocket</p>
+                      <p className="font-black text-secondary mt-0.5">{siteConfig.rocketNumber}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(siteConfig.rocketNumber);
+                      alert("Rocket number copied to clipboard!");
+                    }}
+                    className="text-[10px] font-black text-primary bg-primary/5 hover:bg-primary/10 px-2.5 py-1.5 rounded-lg transition-all"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Inputs for Verification Details */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Sender Phone (From which number did you pay?)</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 017XXXXXXXX"
+                  name="sender_phone"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">Transaction ID (TxnID)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 8N78XDFY"
+                  name="transaction_id"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-semibold uppercase"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-400 leading-normal font-medium font-sans">
+              * Fill in these details after sending money for fast verification. Otherwise, our team will call to verify.
+            </p>
           </motion.div>
         )}
       </div>
@@ -197,20 +333,20 @@ export default function CheckoutModal(props: CheckoutModalProps) {
             <div className="flex items-center w-full">
               <div className="flex flex-col items-center relative text-gray-400">
                 <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-xs shadow-sm shadow-green-200">✓</div>
-                <span className="text-[10px] font-bold mt-1 absolute -bottom-5 whitespace-nowrap">শপিং ব্যাগ</span>
+                <span className="text-[10px] font-bold mt-1 absolute -bottom-5 whitespace-nowrap">Shopping Bag</span>
               </div>
               <div className="flex-1 h-0.5 bg-green-500 mx-2 -mt-4"></div>
             </div>
             <div className="flex items-center w-full">
               <div className="flex flex-col items-center relative text-primary">
-                <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shadow-sm shadow-red-200">২</div>
-                <span className="text-[10px] font-bold mt-1 absolute -bottom-5 whitespace-nowrap">চেকআউট</span>
+                <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shadow-sm shadow-red-200">2</div>
+                <span className="text-[10px] font-bold mt-1 absolute -bottom-5 whitespace-nowrap">Checkout</span>
               </div>
               <div className="flex-1 h-0.5 bg-gray-200 mx-2 -mt-4"></div>
             </div>
             <div className="flex flex-col items-center relative text-gray-300">
-              <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center font-bold text-xs">৩</div>
-              <span className="text-[10px] font-bold mt-1 absolute -bottom-5 whitespace-nowrap">অর্ডার সম্পন্ন</span>
+              <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center font-bold text-xs">3</div>
+              <span className="text-[10px] font-bold mt-1 absolute -bottom-5 whitespace-nowrap">Order Completed</span>
             </div>
           </div>
 
@@ -219,13 +355,13 @@ export default function CheckoutModal(props: CheckoutModalProps) {
               <span className="bg-primary/10 text-primary p-2 rounded-lg">
                 <ShoppingBag size={18} className="text-primary" />
               </span>
-              <h1 className="text-lg md:text-xl font-bold text-secondary tracking-tight">চেকআউট (Checkout)</h1>
+              <h1 className="text-lg md:text-xl font-bold text-secondary tracking-tight">Checkout (Checkout)</h1>
             </div>
             <button
               onClick={() => setIsCheckoutOpen(false)}
               className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-primary transition-colors bg-white px-3 py-2 rounded-lg border border-gray-200 self-start sm:self-auto"
             >
-              <ArrowLeft size={14} /> কেনাকাটা চালিয়ে যান
+              <ArrowLeft size={14} /> Continue Shopping
             </button>
           </div>
         </div>
@@ -236,15 +372,15 @@ export default function CheckoutModal(props: CheckoutModalProps) {
               <Award size={32} />
             </div>
             <h3 className="text-lg font-bold text-secondary mb-1">
-              অর্ডার সফল হয়েছে!
+              Order Successful!
             </h3>
             <p className="text-xs text-gray-500 mb-4 font-medium">
-              আপনার সাথে শীঘ্রই যোগাযোগ করা হবে।
+              We will contact you shortly.
             </p>
             {paymentMethod !== "cod" && (
               <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 text-[11px] text-blue-700 leading-relaxed font-medium">
-                আপনি বিকাশ/নগদ পেমেন্ট সিলেক্ট করেছেন। আমাদের টিম আপনার
-                পেমেন্ট ভেরিফাই করে দ্রুত অর্ডারটি কনফার্ম করবে।
+                You have selected bKash/Nagad payment. Our team will
+                verify your payment and confirm the order shortly.
               </div>
             )}
           </div>
@@ -261,7 +397,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
                 </span>
                 <p className="text-xs font-bold text-secondary">
-                  ⚡ <span className="text-primary">এক্সপ্রেস চেকআউট:</span> মাত্র ৩০ সেকেন্ডে আপনার অর্ডারটি সম্পন্ন করুন!
+                  ⚡ <span className="text-primary">Express Checkout:</span> Complete your order in just 30 seconds!
                 </p>
               </div>
 
@@ -317,55 +453,98 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     />
                   </div>
 
-                  {/* District & Upazila/Thana (Select dropdowns) */}
+                  {/* District & Upazila/Thana (Searchable custom combo-boxes) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative w-full">
+                    <div ref={distRef} className="relative w-full">
                       <label className="block text-xs font-bold text-secondary mb-1.5">District</label>
                       <div className="relative">
-                        <select
+                        <input
+                          type="text"
                           required
-                          value={checkoutDistrict}
-                          onChange={(e) => {
-                            setCheckoutDistrict(e.target.value);
-                            setCheckoutThana(""); // Reset Thana when District changes
+                          readOnly={!isDistDropdownOpen}
+                          placeholder="Select District"
+                          value={isDistDropdownOpen ? distSearchQuery : (checkoutDistrict || "")}
+                          onChange={(e) => setDistSearchQuery(e.target.value)}
+                          onFocus={() => {
+                            setIsDistDropdownOpen(true);
+                            setDistSearchQuery("");
                           }}
-                          className="w-full bg-white border border-gray-200 rounded-lg pl-3.5 pr-10 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all appearance-none cursor-pointer text-gray-700 font-sans"
-                        >
-                          <option value="" disabled>Select District</option>
-                          {ALL_DISTRICTS.map((dist: string, idx: number) => (
-                            <option key={idx} value={dist}>
-                              {dist === "Dhaka" ? "Dhaka - City" : dist}
-                            </option>
-                          ))}
-                        </select>
+                          className="w-full bg-white border border-gray-200 rounded-lg pl-3.5 pr-10 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all cursor-pointer text-gray-700 font-sans"
+                        />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                           <ChevronDown size={14} />
                         </span>
                       </div>
+                      
+                      {isDistDropdownOpen && (
+                        <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-48 overflow-y-auto font-sans">
+                          {filteredDistricts.length > 0 ? (
+                            filteredDistricts.map((dist: string, idx: number) => (
+                              <div
+                                key={idx}
+                                onMouseDown={() => {
+                                  setCheckoutDistrict(dist);
+                                  setCheckoutThana("");
+                                  setIsDistDropdownOpen(false);
+                                  setDistSearchQuery("");
+                                }}
+                                className="px-3.5 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs border-b border-gray-50 last:border-none text-left font-semibold text-secondary"
+                              >
+                                {dist === "Dhaka" ? "Dhaka - City" : dist}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3.5 py-2 text-xs text-gray-400 italic">No District Found</div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="relative w-full">
+
+                    <div ref={thanaRef} className="relative w-full">
                       <label className="block text-xs font-bold text-secondary mb-1.5">Upazila/Thana</label>
                       <div className="relative">
-                        <select
+                        <input
+                          type="text"
                           required
-                          value={checkoutThana}
-                          onChange={(e) => setCheckoutThana(e.target.value)}
                           disabled={!checkoutDistrict}
-                          className="w-full bg-white border border-gray-200 rounded-lg pl-3.5 pr-10 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all appearance-none cursor-pointer text-gray-700 disabled:bg-gray-50 disabled:text-gray-400 font-sans"
-                        >
-                          <option value="" disabled>
-                            {checkoutDistrict ? "Select Upazila/Thana" : "Select District First"}
-                          </option>
-                          {(districtThanaMap && checkoutDistrict ? (districtThanaMap[checkoutDistrict] || []) : []).map((thana: string, idx: number) => (
-                            <option key={idx} value={thana}>
-                              {thana}
-                            </option>
-                          ))}
-                        </select>
+                          readOnly={!isThanaDropdownOpen}
+                          placeholder={checkoutDistrict ? "Select Upazila/Thana" : "Select District First"}
+                          value={isThanaDropdownOpen ? thanaSearchQuery : (checkoutThana || "")}
+                          onChange={(e) => setThanaSearchQuery(e.target.value)}
+                          onFocus={() => {
+                            if (checkoutDistrict) {
+                              setIsThanaDropdownOpen(true);
+                              setThanaSearchQuery("");
+                            }
+                          }}
+                          className="w-full bg-white border border-gray-200 rounded-lg pl-3.5 pr-10 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all cursor-pointer text-gray-700 disabled:bg-gray-50 disabled:text-gray-400 font-sans"
+                        />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                           <ChevronDown size={14} />
                         </span>
                       </div>
+                      
+                      {isThanaDropdownOpen && checkoutDistrict && (
+                        <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-48 overflow-y-auto font-sans">
+                          {filteredThanas.length > 0 ? (
+                            filteredThanas.map((thana: string, idx: number) => (
+                              <div
+                                key={idx}
+                                onMouseDown={() => {
+                                  setCheckoutThana(thana);
+                                  setIsThanaDropdownOpen(false);
+                                  setThanaSearchQuery("");
+                                }}
+                                className="px-3.5 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs border-b border-gray-50 last:border-none text-left font-semibold text-secondary"
+                              >
+                                {thana}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3.5 py-2 text-xs text-gray-400 italic">No Upazila/Thana Found</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -452,10 +631,10 @@ export default function CheckoutModal(props: CheckoutModalProps) {
               <div className="bg-white p-5 md:p-6 rounded-2xl border border-gray-100">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-sm md:text-base font-bold text-secondary flex items-center gap-2">
-                    <ShoppingBag size={16} className="text-secondary" /> আপনার অর্ডার করা পণ্যসমূহ
+                    <ShoppingBag size={16} className="text-secondary" /> Your Ordered Products
                   </h2>
                   <span className="text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-bold animate-pulse">
-                    একসাথে একাধিক পণ্য কিনুন!
+                    Buy multiple products together!
                   </span>
                 </div>
                 
@@ -489,12 +668,12 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                             {item.color && (
                               <p className="text-[10px] font-medium text-gray-500">
-                                কালার: <span className="text-primary font-bold">{item.color}</span>
+                                Color: <span className="text-primary font-bold">{item.color}</span>
                               </p>
                             )}
                             {item.size && (
                               <p className="text-[10px] font-medium text-gray-500">
-                                সাইজ: <span className="text-blue-600 font-bold">{item.size}</span>
+                                Size: <span className="text-blue-600 font-bold">{item.size}</span>
                               </p>
                             )}
                           </div>
@@ -550,7 +729,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     </p>
                     <p className="text-[9px] text-blue-600 mt-0.5">
                       {t(
-                        "আপনার অর্ডার করা সবগুলো পণ্য একসাথে ১টি প্যাকেটেই ঠিকানায় পৌঁছে দেয়া হবে।",
+                        "All your ordered products will be delivered together in a single package.",
                         "All the products you ordered will be delivered to the address together in 1 packet."
                       )}
                     </p>
@@ -608,7 +787,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   <div className="bg-primary/10 p-2.5 rounded-xl border border-primary/20 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1">
                       <span className="bg-primary text-white text-[7px] px-1 py-0.5 rounded-full font-black">GIFT</span>
-                      <span className="text-[10px] font-bold text-primary">৳{availableRewardPoints} ডিসকাউন্ট</span>
+                      <span className="text-[10px] font-bold text-primary">৳{availableRewardPoints} Discount</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0">
                       <input type="checkbox" className="sr-only peer" checked={isApplyingRewardPoints} onChange={() => setIsApplyingRewardPoints(!isApplyingRewardPoints)} />
@@ -619,11 +798,11 @@ export default function CheckoutModal(props: CheckoutModalProps) {
 
                 <div className="space-y-2.5">
                   <div className="flex justify-between text-xs md:text-sm font-medium text-gray-500">
-                    <span>সাব-টোটাল (Subtotal)</span>
+                    <span>Subtotal</span>
                     <span className="font-semibold text-secondary">৳{checkoutItems.reduce((acc, curr) => acc + getProductPrice(curr.product, curr.quantity) * curr.quantity, 0)}</span>
                   </div>
                   <div className="flex justify-between text-xs md:text-sm font-medium text-gray-500">
-                    <span>ডেলিভারি চার্জ (Delivery)</span>
+                    <span>Delivery Charge</span>
                     <span className="font-semibold text-secondary">
                       {appliedCoupon ? (
                          "৳0 (Free)"
@@ -634,13 +813,13 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   </div>
                   {isApplyingRewardPoints && (
                     <div className="flex justify-between text-xs md:text-sm font-medium text-primary">
-                      <span>রিওয়ার্ড ডিসকাউন্ট</span>
+                      <span>Reward Discount</span>
                       <span>-৳{Math.floor(availableRewardPoints / 10)}</span>
                     </div>
                   )}
                   {appliedCoupon && (
                     <div className="flex justify-between text-xs md:text-sm font-medium text-green-600">
-                      <span>কুপন ডিসকাউন্ট</span>
+                      <span>Coupon Discount</span>
                       <span>-৳{(checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "double-district") ? 50 : checkoutDistrict ? 110 : 0}</span>
                     </div>
                   )}
@@ -663,7 +842,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     ) : (
                       <>
-                        অর্ডার সম্পন্ন করুন <ArrowRight size={16} className="animate-pulse" />
+                        Complete Order <ArrowRight size={16} className="animate-pulse" />
                       </>
                     )}
                   </button>
@@ -673,15 +852,15 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                 <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[9px] text-gray-400 font-bold">
                   <div className="flex items-center gap-1">
                     <ShieldCheck size={11} className="text-green-500" />
-                    <span>১০০% অথেন্টিক</span>
+                    <span>100% Authentic</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <CheckCircle2 size={11} className="text-blue-500" />
-                    <span>নিরাপদ চেকআউট</span>
+                    <span>Secure Checkout</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Truck size={11} className="text-primary" />
-                    <span>দ্রুত ডেলিভারি</span>
+                    <span>Fast Delivery</span>
                   </div>
                 </div>
 

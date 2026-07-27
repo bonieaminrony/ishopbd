@@ -711,7 +711,7 @@ function App() {
           }
 
           if (!foundOrder) {
-            setTrackingError("কোনো অর্ডার পাওয়া যায়নি। পুরনো অর্ডারের জন্য অনুগ্রহ করে ফোন নাম্বার ব্যবহার করুন।");
+            setTrackingError("No orders found. Please use your phone number for old orders.");
             setIsTrackingLoading(false);
             return;
           }
@@ -729,7 +729,7 @@ function App() {
                  setTrackingResult({ ...order, steadfastStatus: "Steadfast এ খোঁজ পাওয়া যায়নি" });
               }
             } catch (e) {
-              setTrackingResult({ ...order, steadfastStatus: "স্ট্যাটাস ফেচ করতে সমস্যা হয়েছে" });
+              setTrackingResult({ ...order, steadfastStatus: "Failed to fetch status" });
             }
           } else if (order.couriers && order.couriers.trackingId && order.couriers.service === "Pathao") {
             try {
@@ -741,7 +741,7 @@ function App() {
                  setTrackingResult({ ...order, pathaoStatus: "Pathao এ খোঁজ পাওয়া যায়নি" });
               }
             } catch (e) {
-              setTrackingResult({ ...order, pathaoStatus: "স্ট্যাটাস ফেচ করতে সমস্যা হয়েছে" });
+              setTrackingResult({ ...order, pathaoStatus: "Failed to fetch status" });
             }
           } else {
             setTrackingResult(order);
@@ -772,11 +772,11 @@ function App() {
           }
           setIsAdminVerified(true);
           setIs2FAPending(false);
-          setAdminOTPError("আপনার এডমিন প্রোফাইলে ফোন নম্বর সেট করা নেই। দয়া করে এডমিন প্যানেলে ফোন নম্বর যোগ করুন।");
+          setAdminOTPError("Your admin profile does not have a phone number. Please add one in the admin panel.");
           setAdminOTPInput("");
           setGeneratedOTP("");
         } else {
-          setAdminOTPError("ভেরিফিকেশন কোডটি সঠিক নয়।");
+          setAdminOTPError("Verification code is incorrect.");
         }
       };
 
@@ -784,7 +784,7 @@ function App() {
         e.preventDefault();
         if (isOrderProcessing || isOrderProcessingRef.current) return;
         if (isQuotaExceeded) {
-          toast.error("কোটা শেষ হয়ে গেছে, আপাতত কোনো কিছু সেভ করা যাচ্ছে না।");
+          toast.error("Quota exceeded, cannot save data at the moment.");
           return;
         }
 
@@ -796,31 +796,31 @@ function App() {
         const email = checkoutEmail.trim();
 
         if (!firstName) {
-          toast.error("First Name দেওয়া আবশ্যক!");
+          toast.error("First Name is required!");
           return;
         }
         if (!lastName) {
-          toast.error("Last Name দেওয়া আবশ্যক!");
+          toast.error("Last Name is required!");
           return;
         }
         if (!address) {
-          toast.error("Address দেওয়া আবশ্যক!");
+          toast.error("Address is required!");
           return;
         }
         if (!thana) {
-          toast.error("Upazila/Thana দেওয়া আবশ্যক!");
+          toast.error("Upazila/Thana is required!");
           return;
         }
         if (!checkoutDistrict) {
-          toast.error("District সিলেক্ট করা আবশ্যক!");
+          toast.error("District is required!");
           return;
         }
         if (!customerPhone || customerPhone.length < 11) {
-          toast.error("সঠিক ফোন নাম্বার দিন (Mobile কমপক্ষে ১১ ডিজিট)!");
+          toast.error("Please enter a valid mobile number (at least 11 digits)!");
           return;
         }
         if (!email) {
-          toast.error("Email দেওয়া আবশ্যক!");
+          toast.error("Email is required!");
           return;
         }
 
@@ -1980,16 +1980,16 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           setIs2FAPending(false);
           setAdminPasswordError(false);
           setAdminPasswordInput("");
-          toast.success("মাস্টার এক্সেস নিশ্চিত করা হয়েছে।");
+          toast.success("Master access verified successfully.");
           return;
         } else {
           setAdminPasswordError(true);
-          toast.error("মাস্টার পাসওয়ার্ডটি সঠিক নয়। অফার করে সঠিক পাসওয়ার্ড দিন।");
+          toast.error("Master password is incorrect. Please enter the correct password.");
           return;
         }
       } catch {
         setAdminPasswordError(true);
-        toast.error("সার্ভার থেকে যাচাই করা সম্ভব হয়নি। পুনরায় চেষ্টা করুন।");
+        toast.error("Could not verify with server. Please try again.");
         return;
       }
     }
@@ -2006,7 +2006,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       if (found.require2FA && found.phone) {
         setIs2FAPending(true);
         setAdminPasswordError(false);
-        toast("আপনার ফোনে ভেরিফিকেশন কোড পাঠানো হচ্ছে...");
+        toast("Sending verification code to your phone...");
         handleSendAdminOTP(); // Trigger OTP automatically if possible
         return;
       }
@@ -2015,10 +2015,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       setIsAdminVerified(true);
       setAdminPasswordError(false);
       setAdminPasswordInput("");
-      toast.success("সাফল্যের সাথে ভেরিফাই করা হয়েছে।");
+      toast.success("Verification successful.");
     } else {
       setAdminPasswordError(true);
-      toast.error("ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।");
+      toast.error("Incorrect password! Try again.");
     }
   };
   const toggleBlacklist = (phone: string) => {
@@ -2276,7 +2276,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     const found = adminList.find((a) => (a.email === userEmail) || (a.id === userEmail) || (a.email === cleanEmail) || (a.id === cleanEmail));
     
     if (!found || !found.phone) {
-      setAdminOTPError("আপনার এডমিন প্রোফাইলে ফোন নম্বর সেট করা নেই। দয়া করে এডমিন প্যানেলে ফোন নম্বর যোগ করুন।");
+      setAdminOTPError("Your admin profile does not have a phone number. Please add one in the admin panel.");
       return;
     }
     setIsSendingOTP(true);
@@ -2295,13 +2295,13 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       const result = await response.json();
       if (result.success) {
         setAdminOTPSent(true);
-        setAdminOTPError("আপনার এডমিন প্রোফাইলে ফোন নম্বর সেট করা নেই। দয়া করে এডমিন প্যানেলে ফোন নম্বর যোগ করুন।");
+        setAdminOTPError("Your admin profile does not have a phone number. Please add one in the admin panel.");
       } else {
-        setAdminOTPError("ভেরিফিকেশন কোডটি সঠিক নয়।");
+        setAdminOTPError("Verification code is incorrect.");
       }
     } catch (err) {
       console.error("OTP send error:", err);
-      setAdminOTPError("আপনার এডমিন প্রোফাইলে ফোন নম্বর সেট করা নেই। দয়া করে এডমিন প্যানেলে ফোন নম্বর যোগ করুন।");
+      setAdminOTPError("Your admin profile does not have a phone number. Please add one in the admin panel.");
     } finally {
       setIsSendingOTP(false);
     }
@@ -2354,8 +2354,15 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   }, [isAdminVerified]);
   // SEO: Dynamic URL and Meta Tags
   useEffect(() => {
-    if (selectedProduct) {
-      document.title = selectedProduct.name + " | i-shop BD";
+    if (isCheckoutOpen) {
+      document.title = "I SHOP BD / Checkout";
+    } else if (selectedProduct && isProductDetailsOpen) {
+      document.title = "I SHOP BD / " + selectedProduct.name;
+    } else {
+      document.title = "I SHOP BD";
+    }
+
+    if (selectedProduct && isProductDetailsOpen) {
       let metaDesc = document.querySelector('meta[name="description"]');
       if (!metaDesc) {
         metaDesc = document.createElement('meta');
@@ -2389,15 +2396,13 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       };
       script.textContent = JSON.stringify(jsonLd);
     } else {
-      document.title = "i-shop BD - Online Shopping in Bangladesh";
-      
       let metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) metaDesc.setAttribute('content', "Best online shopping experience in Bangladesh with i-shop BD.");
+      if (metaDesc) metaDesc.setAttribute('content', "Best online shopping experience in Bangladesh with I SHOP BD.");
       
       let script = document.getElementById('seo-json-ld');
       if (script) script.remove();
     }
-  }, [selectedProduct]);
+  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen]);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log("Auth Status Changed:", currentUser?.email);
@@ -3264,7 +3269,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     }
     try {
       if (isQuotaExceeded) {
-        toast.error("কোটা শেষ হয়ে গেছে, আপাতত কোনো কিছু সেভ করা যাচ্ছে না।");
+        toast.error("Quota exceeded, cannot save data at the moment.");
         return;
       }
       if (editingBanner?.id) {
@@ -3322,7 +3327,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     if (!config) return;
     try {
       if (isQuotaExceeded) {
-        toast.error("কোটা শেষ হয়ে গেছে, আপাতত কোনো কিছু সেভ করা যাচ্ছে না।");
+        toast.error("Quota exceeded, cannot save data at the moment.");
         return;
       }
       await setDoc(doc(db, "config", "site"), {
@@ -3792,7 +3797,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         localStorage.setItem("cached_products", JSON.stringify(updatedProducts));
         setEditingProduct(null);
         if (e.target) (e.target as HTMLFormElement).reset();
-        alert("প্রোডাক্ট আপডেট সফল হয়েছে!");
+        alert("Product update successful!");
       } else {
         const docRef = await addDoc(collection(db, "products"), productData);
         await touchProductsTimestamp();
@@ -3803,16 +3808,16 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         localStorage.setItem("cached_products", JSON.stringify(newProducts));
         setEditingProduct(null);
         if (e.target) (e.target as HTMLFormElement).reset();
-        alert("প্রোডাক্ট যুক্ত হয়েছে!");
+        alert("Product added successfully!");
       }
     } catch (err: any) {
       console.error("Save product failed", err);
       const isQuota = err.message?.includes("Quota exceeded") || err.message?.includes("quota") || err.message === "QUOTA_EXCEEDED";
       if (isQuota) setIsQuotaExceeded(true);
       if (err.code === "permission-denied") {
-        alert("আপনার এই ডাটা পরিবর্তন করার পারমিশন নেই। দয়া করে পেজটি রিলোড করে আবার চেক করুন।");
+        alert("You do not have permission to modify this data. Please reload the page.");
       } else if (isQuota) {
-        alert("সার্ভারের অর্ডার/ডাটা কোটা শেষ হয়ে গেছে।");
+        alert("Server order/data quota exceeded.");
       } else {
         alert("ডাটা সেভ করতে সমস্যা হয়েছে: " + (err.message || "Unknown error"));
       }
@@ -3952,12 +3957,12 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       );
       setProducts(updatedProducts);
       localStorage.setItem("cached_products", JSON.stringify(updatedProducts));
-      toast.success(newStatus ? "পণ্যটি ওয়েবসাইটে দেখাবে (পাবলিশড)" : "পণ্যটি হাইড করা হয়েছে (আনপাবলিশড)");
+      toast.success(newStatus ? "Product is now visible on website (Published)" : "Product has been hidden (Unpublished)");
     } catch (err: any) {
       const isQuota = err.message?.includes("Quota exceeded") || err.message === "QUOTA_EXCEEDED";
       if (isQuota) setIsQuotaExceeded(true);
       console.error("Toggle publish status error:", err);
-      toast.error("স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।");
+      toast.error("Failed to update status.");
     }
   };
   const saveCategory = async (e: FormEvent) => {
@@ -3977,7 +3982,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       setEditingCategory(null);
     } catch (err) {
       console.error("Save category failed", err);
-      alert("সার্ভারে ডাটা সেভ করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      alert("Failed to save data on server. Please check your internet connection or log in again.");
     }
   };
   const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
@@ -4062,11 +4067,11 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           // Don't fail the whole operation if just the log fails
         }
         setUserList(prev => prev.map(usr => (usr.id === userId || usr.uid === userId) ? {...usr, balance: newBalance} : usr));
-        toast.success("ব্যালেন্স আপডেট সফল হয়েছে।");
+        toast.success("Balance update successful.");
         setEditingUserBalance(null);
       } catch (err) {
         console.error("Balance update error:", err);
-        toast.error("ব্যালেন্স আপডেট করতে সমস্যা হয়েছে।");
+        toast.error("Failed to update balance.");
         try {
           handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
         } catch (e) {
@@ -4076,7 +4081,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         setIsSyncingData(false);
       }
     } else {
-      toast.error("সঠিক সংখ্যা লিখুন।");
+      toast.error("Please enter a valid number.");
     }
   };
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -4184,7 +4189,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         const dismissedStr = localStorage.getItem('dismissedNotifs') || '[]';
         let dismissed: string[] = [];
         try { dismissed = JSON.parse(dismissedStr); } catch(e){}
-        const filteredNotifs = notifs.filter(n => !dismissed.includes(n.id));
+        const filteredNotifs = notifs.filter(n => !dismissed.includes(n.id) && n.title !== 'dgfdb' && n.title !== 'hhh' && n.message !== 'bcvbc' && n.message !== 'hhh');
         setNotifications(filteredNotifs);
         isInitialNotifLoad.current = false;
         
@@ -4215,7 +4220,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     }
     setNotifications(prev => prev.filter(n => n.id !== id));
     setUnseenNotifCount(prev => Math.max(0, prev - 1));
-    toast.success("নোটিফিকেশন মুছে ফেলা হয়েছে");
+    toast.success("Notification deleted successfully.");
   };
   const handleClearAllNotifications = () => {
     const dismissedStr = localStorage.getItem('dismissedNotifs') || '[]';
@@ -4226,7 +4231,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     localStorage.setItem('dismissedNotifs', JSON.stringify(updatedDismissed));
     setNotifications([]);
     setUnseenNotifCount(0);
-    toast.success("সব নোটিফিকেশন মুছে ফেলা হয়েছে");
+    toast.success("All notifications deleted successfully.");
   };
   const handleSendBulkNotification = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -4242,10 +4247,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         type: "broadcast"
       });
       setBulkNotifForm({ title: "", message: "", link: "" });
-      alert("নোটিফিকেশন সফলভাবে পাঠানো হয়েছে!");
+      alert("Notification sent successfully!");
     } catch (err) {
       console.error("Bulk notification error:", err);
-      alert("নোটিফিকেশন পাঠাতে সমস্যা হয়েছে।");
+      alert("Failed to send notification.");
     } finally {
       setIsSendingBulkNotif(false);
     }
@@ -4267,7 +4272,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         sender: user?.email,
         type: "direct"
       });
-      alert("মেসেজ সফলভাবে পাঠানো হয়েছে!");
+      alert("Message sent successfully!");
     } catch (err) {
       console.error("Direct notification error:", err);
       alert("ব্যানার যুক্ত হয়েছে!");
@@ -4298,7 +4303,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       });
       const result = await response.json();
       if (result.success) {
-        alert("SMS সফলভাবে পাঠানো হয়েছে!");
+        alert("SMS sent successfully!");
         setIndividualSmsOrder(null);
         setIndividualSmsMessage("");
       } else {
@@ -4369,7 +4374,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       }
     } catch (err: any) {
       console.error("Bulk SMS error:", err);
-      toast.error("SMS পাঠাতে সমস্যা হয়েছে: " + (err.message || "অজানা ত্রুটি"));
+      toast.error("Failed to send SMS: " + (err.message || "অজানা ত্রুটি"));
       setBulkSmsProgress(null);
     } finally {
       setIsSendingBulkSms(false);
@@ -4490,7 +4495,7 @@ else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফো
           
           // Update local state if needed
           setUserProfile((prev: any) => prev ? { ...prev, photoURL: base64data } : { photoURL: base64data });
-          alert("প্রোফাইল ছবি আপডেট হয়েছে!");
+          alert("Profile picture updated successfully!");
         } catch (dbErr) {
           handleFirestoreError(dbErr, OperationType.UPDATE, `users/${user.uid}`);
           alert("ডাটাবেজে ছবি সেভ করতে সমস্যা হয়েছে।");
@@ -4555,7 +4560,7 @@ else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফো
       alert(`${amount} টাকা আপনার ওয়ালেটে সফলভাবে যোগ করা হয়েছে!`);
     } catch (err) {
       console.error("Deposit failed", err);
-      alert("টাকা জমা দিতে সমস্যা হয়েছে।");
+      alert("Failed to deposit money.");
     } finally {
       setIsPaymentSimulating(false);
     }
@@ -4597,7 +4602,7 @@ else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফো
     e.preventDefault();
     if (!chatMessage.trim()) return;
     if (isQuotaExceeded) {
-      toast.error("কোটা শেষ হয়ে গেছে, আপাতত কোনো কিছু সেভ করা যাচ্ছে না।");
+      toast.error("Quota exceeded, cannot save data at the moment.");
       return;
     }
     const userText = chatMessage;
@@ -5082,7 +5087,7 @@ Rules:
       await signInWithPopup(auth, facebookProvider);
     } catch (err) {
       console.error("Facebook login failed", err);
-      alert("ফেসবুক লগইন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+      alert("Failed to log in with Facebook. Please try again.");
     }
   };
   const submitReview = async (productId: string) => {
@@ -5159,7 +5164,7 @@ Rules:
     } catch (err) {
       console.error("Failed to submit review", err);
       // If it's a JSON string from handleFirestoreError, we've already logged it but let's notify user
-      alert("রিভিউ জমা দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+      alert("Failed to submit review. Please try again.");
     } finally {
       setIsSubmittingReview(false);
     }
@@ -5215,7 +5220,7 @@ Rules:
   const handleApplyCoupon = () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) {
-      toast.error("কুপন কোড লিখুন!");
+      toast.error("Please enter a coupon code!");
       return;
     }
     // Default to ISHOPBD5 if config not loaded
@@ -5224,11 +5229,11 @@ Rules:
       setAppliedCoupon(VALID_CODE);
       setCouponError("");
       setCouponCode(""); 
-      toast.success("সাফল্যের সাথে ভেরিফাই করা হয়েছে।");
+      toast.success("Verification successful.");
     } else {
-      setCouponError("ভুল কুপন কোড!");
+      setCouponError("Invalid coupon code!");
       setAppliedCoupon(null);
-      toast.error("ভুল কুপন কোড!");
+      toast.error("Invalid coupon code!");
     }
   };
   const handleWhatsAppOrder = () => {
@@ -5246,7 +5251,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     const subtotal = checkoutItems.reduce((acc, curr) => acc + getProductPrice(curr.product, curr.quantity) * curr.quantity, 0);
     const delivery = getDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon);
     const total = subtotal + (appliedCoupon ? 0 : delivery);
-    message += `সাব-টোটাল: ৳${subtotal}\n`;
+    message += `Subtotal: ৳${subtotal}\n`;
     message += `ডেলিভারি চার্জ: ৳${delivery}${appliedCoupon ? ' (ফ্রি)' : ''}\n`;
     message += `সর্বমোট: ৳${total}\n\n`;
     message += `
@@ -5258,7 +5263,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     e.preventDefault();
     if (!landingProduct) return;
     if (isQuotaExceeded) {
-      toast.error("কোটা শেষ হয়ে গেছে, আপাতত অর্ডার নেওয়া যাচ্ছে না।");
+      toast.error("Quota exceeded, orders are temporarily disabled.");
       return;
     }
     
@@ -5267,23 +5272,23 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     const address = landingAddress.trim();
     
     if (!name) {
-      toast.error("দয়া করে আপনার নাম লিখুন।");
+      toast.error("Please enter your name.");
       return;
     }
     if (!phone || phone.length < 11) {
-      toast.error("দয়া করে সঠিক ১১ ডিজিটের মোবাইল নাম্বার লিখুন।");
+      toast.error("Please enter a valid 11-digit mobile number.");
       return;
     }
     if (!landingDistrict) {
-      toast.error("দয়া করে আপনার জেলা সিলেক্ট করুন।");
+      toast.error("Please select your district.");
       return;
     }
     if (!landingThana) {
-      toast.error("দয়া করে আপনার থানা সিলেক্ট করুন।");
+      toast.error("Please select your upazila/thana.");
       return;
     }
     if (!address) {
-      toast.error("দয়া করে আপনার সম্পূর্ণ ঠিকানা লিখুন।");
+      toast.error("Please enter your complete address.");
       return;
     }
     setIsLandingSubmitting(true);
@@ -5364,10 +5369,10 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       setLandingDistrictSearch("");
       setLandingThanaSearch("");
       
-      toast.success("আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে!");
+      toast.success("Your order has been completed successfully!");
     } catch (err: any) {
       console.error("Landing page checkout failed", err);
-      toast.error("অর্ডারটি সম্পন্ন করতে সমস্যা হয়েছে: " + (err.message || String(err)));
+      toast.error("Problem completing order: " + (err.message || String(err)));
     } finally {
       setIsLandingSubmitting(false);
     }
@@ -5423,7 +5428,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       Array.from(new Set(selectedProduct.variants.map(v => v.name || ""))).filter(c => c !== "").length > 0) ||
       (selectedProduct.colors && selectedProduct.colors.length > 0);
     if (hasColors && !tempSelectedColor) {
-      toast.error("দয়া করে কালার নির্বাচন করুন।");
+      toast.error("Please select a color.");
       setColorValError(true);
       const colorElement = document.getElementById("color-selection-area");
       if (colorElement) {
@@ -5438,7 +5443,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     
     const hasSizes = filteredByColor.some(v => v.size && v.size.trim() !== "");
     if (hasSizes && !tempSelectedSize) {
-      toast.error("দয়া করে সাইজ নির্বাচন করুন।");
+      toast.error("Please select a size.");
       setSizeValError(true);
       const sizeElement = document.getElementById("size-selection-area");
       if (sizeElement) {
@@ -5450,7 +5455,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
   };
   const deleteOrder = async (id: any) => {
     if (!id) return;
-    const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি ডিলিট করতে চান?");
+    const conf = window.confirm("Are you sure you want to delete this order?");
     if (!conf) return;
     try {
       await deleteDoc(doc(db, "orders", String(id)));
@@ -5473,7 +5478,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
   };
   const sendConfirmationSMS = async (order: any) => {
     if (!order.customerPhone) {
-      toast.error("কুপন কোড লিখুন!");
+      toast.error("Please enter a coupon code!");
       return;
     }
     if (siteConfig?.isSmsConfirmEnabled === false) {
@@ -5514,7 +5519,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       if (data.success) {
         toast.success(`SMS সফলভাবে পাঠানো হয়েছে! (${order.customerPhone})`, { id: toastId });
       } else {
-        toast.error("সঠিক সংখ্যা লিখুন।");
+        toast.error("Please enter a valid number.");
         console.warn("SMS sending failed:", data);
       }
     } catch (error) {
@@ -5525,7 +5530,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
   const handleRequestRefund = async () => {
     if (!selectedOrderForRefund || !refundReason.trim()) return;
     if (isQuotaExceeded) {
-      toast.error("কোটা শেষ হয়ে গেছে, আপাতত কোনো কিছু সেভ করা যাচ্ছে না।");
+      toast.error("Quota exceeded, cannot save data at the moment.");
       return;
     }
     setIsSubmittingRefund(true);
@@ -5863,7 +5868,7 @@ const handleSaveQuickEdit = async () => {
            if (order.userId) {
              sendPushToUser(order.userId, "অর্ডার আপডেট", "আপনার অর্ডারের বর্তমান স্ট্যাটাস: processing (কুরিয়ারে পাঠানো হয়েছে)", "/profile");
            }
-           toast.success("সফলভাবে Steadfast এ পাঠানো হয়েছে!");
+           toast.success("Successfully sent to Steadfast!");
            setIsCourierModalOpen(false);
            return;
         } else {
@@ -7142,7 +7147,7 @@ const handleSaveQuickEdit = async () => {
         </nav>
       )}
       {/* 3. Hero Banner Slider */}
-      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && activeBanners.length > 0 && (
+      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && activeBanners.length > 0 && (
         <section className="container mx-auto px-4 mt-4 relative group">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
             {/* Left Slider Column (3/4 width) */}
@@ -8727,12 +8732,12 @@ const handleSaveQuickEdit = async () => {
                   {is2FAPending ? <Key size={40} /> : <ShieldCheck size={40} />}
                 </div>
                 <h3 className="text-2xl font-black text-secondary mb-2">
-                  {is2FAPending ? "টু-স্টেপ ভেরিফিকেশন" : "অ্যাডমিন ভেরিফিকেশন"}
+                  {is2FAPending ? "Two-Step Verification" : "Admin Verification"}
                 </h3>
                 <p className="text-sm text-gray-400 font-medium px-4">
                   {is2FAPending 
-                    ? "নিরাপত্তার জন্য আপনার ফোনে পাঠানো ৬ সংখ্যার কোডটি লিখুন।"
-                    : "অ্যাডমিন বা মডারেটর প্যানেল ব্যবহার করতে আপনার অ্যাক্সেস পাসওয়ার্ডটি লিখুন।"}
+                    ? "Please enter the 6-digit code sent to your phone for security."
+                    : "Enter your access password to use the admin or moderator panel."}
                 </p>
               </div>
               <div className="space-y-4">
@@ -8744,7 +8749,7 @@ const handleSaveQuickEdit = async () => {
                         disabled={isSendingOTP}
                         className="w-full bg-primary text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3"
                       >
-                        {isSendingOTP ? "কোড পাঠানো হচ্ছে..." : "কোড পাঠান (SMS)"}
+                        {isSendingOTP ? "Sending code..." : "Send Code (SMS)"}
                         {!isSendingOTP && <Phone size={20} />}
                       </button>
                     ) : (
@@ -8756,20 +8761,20 @@ const handleSaveQuickEdit = async () => {
                           onKeyDown={(e) =>
                             e.key === "Enter" && handleVerifyOTP()
                           }
-                          placeholder="ভেরিফিকেশন কোড"
+                          placeholder="Verification Code"
                           className={`w-full bg-gray-50 border ${adminOTPError ? "border-red-500" : "border-gray-200"} rounded-2xl py-5 px-6 outline-none focus:ring-2 focus:ring-primary font-bold text-center text-lg tracking-widest`}
                         />
                         <button
                           onClick={handleVerifyOTP}
                           className="w-full bg-primary text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 mt-4"
                         >
-                          ভেরিফাই করুন
+                          Verify Code
                         </button>
                         <button
                           onClick={() => setAdminOTPSent(false)}
                           className="w-full text-center text-xs text-primary font-bold mt-4 underline"
                         >
-                          পিছনে যান
+                          Go Back
                         </button>
                       </div>
                     )}
@@ -8789,7 +8794,7 @@ const handleSaveQuickEdit = async () => {
                         onKeyDown={(e) =>
                           e.key === "Enter" && handleVerifyAdminPassword()
                         }
-                        placeholder="পাসওয়ার্ড লিখুন..."
+                        placeholder="Enter Password..."
                         className={`w-full bg-gray-50 border ${adminPasswordError ? "border-red-500" : "border-gray-200"} rounded-2xl py-5 pl-6 pr-14 outline-none focus:ring-2 focus:ring-primary font-bold text-center text-lg tracking-widest`}
                       />
                       <button
@@ -8805,7 +8810,7 @@ const handleSaveQuickEdit = async () => {
                           animate={{ opacity: 1, y: 0 }}
                           className="text-xs text-red-500 font-bold text-center mt-2"
                         >
-                          ভুল পাসওয়ার্ড! আবার চেষ্টা করুন।
+                          Incorrect password! Please try again.
                         </motion.p>
                       )}
                     </div>
@@ -8813,7 +8818,7 @@ const handleSaveQuickEdit = async () => {
                       onClick={handleVerifyAdminPassword}
                       className="w-full bg-secondary text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3"
                     >
-                      প্যানেল প্রবেশ করুন
+                      Enter Panel
                       <ArrowUpRight size={20} />
                     </button>
                   </>
@@ -8822,7 +8827,7 @@ const handleSaveQuickEdit = async () => {
                   onClick={() => signOut(auth)}
                   className="w-full bg-white text-gray-400 font-bold py-3 hover:text-red-500 transition-all text-xs"
                 >
-                    লগ আউট করুন
+                    Log Out
                 </button>
               </div>
             </motion.div>
@@ -8945,7 +8950,7 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ShoppingCart className="text-primary" size={24} />
-                    <h3 className="text-lg font-black text-secondary">শপিং কার্ট ({cartCount})</h3>
+                    <h3 className="text-lg font-black text-secondary">Shopping Cart ({cartCount})</h3>
                   </div>
                   <button
                     onClick={() => setIsCartDrawerOpen(false)}
@@ -8960,12 +8965,12 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
                   {cartItems.length === 0 ? (
                     <div className="text-center py-20">
                       <ShoppingCart className="mx-auto text-gray-300 mb-4" size={64} />
-                      <p className="text-sm font-bold text-gray-400">আপনার কার্ট খালি রয়েছে।</p>
+                      <p className="text-sm font-bold text-gray-400">Your cart is empty.</p>
                       <button
                         onClick={() => setIsCartDrawerOpen(false)}
                         className="mt-4 px-6 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-all"
                       >
-                        শপিং শুরু করুন
+                        Start Shopping
                       </button>
                     </div>
                   ) : (
@@ -8985,14 +8990,14 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
                           <div className="flex items-center justify-between mt-2.5">
                             <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
                               <button
-                                onClick={() => updateQuantity(idx, item.quantity - 1)}
+                                onClick={() => updateQuantity(item.product.id, -1, item.color, item.size)}
                                 className="px-2 py-1 text-gray-500 hover:bg-gray-100 transition-all"
                               >
                                 -
                               </button>
                               <span className="px-3 text-xs font-bold text-secondary">{item.quantity}</span>
                               <button
-                                onClick={() => updateQuantity(idx, item.quantity + 1)}
+                                onClick={() => updateQuantity(item.product.id, 1, item.color, item.size)}
                                 className="px-2 py-1 text-gray-500 hover:bg-gray-100 transition-all"
                               >
                                 +
@@ -9002,7 +9007,7 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
                           </div>
                         </div>
                         <button
-                          onClick={() => removeItem(idx)}
+                          onClick={() => removeItem(item.product.id, item.color, item.size)}
                           className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-all"
                         >
                           <Trash2 size={16} />
@@ -9016,18 +9021,18 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
                 {cartItems.length > 0 && (
                   <div className="p-6 border-t border-gray-100 bg-gray-50/50 space-y-4">
                     <div className="flex justify-between items-center text-sm font-bold text-secondary">
-                      <span>সাব-টোটাল:</span>
+                      <span>Subtotal:</span>
                       <span className="text-lg font-black text-primary">
                         ৳{cartItems.reduce((acc, curr) => acc + getProductPrice(curr.product, curr.quantity) * curr.quantity, 0)}
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-bold">শিপিং এবং অন্যান্য চার্জ চেকআউট পেজে হিসাব করা হবে।</p>
+                    <p className="text-[10px] text-gray-400 font-bold">Shipping and other charges will be calculated at checkout.</p>
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <button
                         onClick={() => setIsCartDrawerOpen(false)}
                         className="w-full bg-white hover:bg-gray-50 text-secondary border border-gray-200 font-bold py-3.5 rounded-xl transition-all active:scale-95 text-xs text-center"
                       >
-                        শপিং চালিয়ে যান
+                        Continue Shopping
                       </button>
                       <button
                         onClick={() => {
@@ -9038,7 +9043,7 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
                         }}
                         className="w-full bg-primary hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 text-xs text-center"
                       >
-                        অর্ডার সম্পন্ন করুন
+                        Complete Order
                       </button>
                     </div>
                   </div>

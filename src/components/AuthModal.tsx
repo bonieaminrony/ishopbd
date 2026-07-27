@@ -52,23 +52,23 @@ export default function AuthModal(props: AuthModalProps) {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl relative z-10 overflow-hidden"
+              className="bg-white w-full max-w-[460px] rounded-3xl p-10 shadow-2xl relative z-10 overflow-hidden border border-gray-100"
             >
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-red-50 text-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <User size={32} />
+                <div className="w-12 h-12 bg-red-50 text-primary rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                  <User size={24} />
                 </div>
-                <h3 className="text-3xl font-black text-secondary">
-                  {authModalType === "login" ? "Log In" : "Create Account"}
+                <h3 className="text-2xl font-bold text-secondary tracking-tight">
+                  {authModalType === "login" ? "Welcome Back" : "Create Account"}
                 </h3>
-                <p className="text-base text-gray-500 font-bold mt-2">
+                <p className="text-sm text-gray-400 font-medium mt-1">
                   {authModalType === "login" ? "Please login to track your orders" : "Create a new account to start shopping"}
                 </p>
               </div>
-              <form onSubmit={handleCustomAuth} className="space-y-5">
+              <form onSubmit={handleCustomAuth} className="space-y-4">
                 {authModalType === "signup" && (
                   <div>
-                    <label className="block text-sm font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-0.5">
                       Your Name
                     </label>
                     <input
@@ -77,12 +77,12 @@ export default function AuthModal(props: AuthModalProps) {
                       value={authName}
                       onChange={(e) => setAuthName(e.target.value)}
                       placeholder="Enter your full name"
-                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 text-base font-bold focus:border-primary outline-none transition-all"
+                      className="w-full bg-gray-50/50 border border-gray-200/80 rounded-xl py-3 px-4 text-sm font-medium text-secondary focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-300"
                     />
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-0.5">
                     Email or Phone Number
                   </label>
                   <input
@@ -91,11 +91,11 @@ export default function AuthModal(props: AuthModalProps) {
                     value={authIdentifier}
                     onChange={(e) => setAuthIdentifier(e.target.value)}
                     placeholder="example@mail.com or 01xxxxxxxxx"
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 text-base font-bold focus:border-primary outline-none transition-all"
+                    className="w-full bg-gray-50/50 border border-gray-200/80 rounded-xl py-3 px-4 text-sm font-medium text-secondary focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-300"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-0.5">
                     Password
                   </label>
                   <input
@@ -104,42 +104,42 @@ export default function AuthModal(props: AuthModalProps) {
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
                     placeholder="Your Password"
-                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 text-base font-bold focus:border-primary outline-none transition-all"
+                    className="w-full bg-gray-50/50 border border-gray-200/80 rounded-xl py-3 px-4 text-sm font-medium text-secondary focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-gray-300"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isAuthLoading}
-                  className="w-full bg-primary text-white py-4 rounded-2xl text-lg font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-6"
+                  className="w-full bg-primary text-white py-3.5 rounded-xl text-sm font-semibold shadow-md shadow-primary/10 hover:bg-black transition-all disabled:opacity-50 mt-6 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isAuthLoading ? (
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       {authModalType === "login" ? "Login" : "Create Account"}
-                      <ArrowRight size={20} />
+                      <ArrowRight size={16} />
                     </>
                   )}
                 </button>
               </form>
-              <div className="mt-8">
-                <div className="relative flex items-center justify-center mb-6">
+              <div className="mt-6">
+                <div className="relative flex items-center justify-center mb-5">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-100"></div>
                   </div>
-                  <div className="relative bg-white px-4 text-xs font-black text-gray-400 uppercase tracking-widest">
-                    OR
+                  <div className="relative bg-white px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    OR CONTINUE WITH
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => {
                       setIsAuthModalOpen(false);
                       handleLogin("google");
                     }}
-                    className="flex items-center justify-center gap-2 bg-white border border-gray-100 py-3 rounded-xl text-sm font-bold hover:bg-gray-50 transition-all shadow-sm"
+                    className="flex items-center justify-center gap-2 bg-white border border-gray-200 py-2.5 rounded-xl text-xs font-semibold text-secondary hover:bg-gray-50 transition-all shadow-sm cursor-pointer"
                   >
-                    <img loading="lazy" src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+                    <img loading="lazy" src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
                     Google 
                   </button>
                   <button
@@ -147,22 +147,23 @@ export default function AuthModal(props: AuthModalProps) {
                       setIsAuthModalOpen(false);
                       handleLogin("facebook");
                     }}
-                    className="flex items-center justify-center gap-2 bg-[#1877F2] text-white py-3 rounded-xl text-sm font-bold hover:bg-[#166fe5] transition-all shadow-sm shadow-[#1877F2]/10"
+                    className="flex items-center justify-center gap-2 bg-[#1877F2] text-white py-2.5 rounded-xl text-xs font-semibold hover:bg-[#166fe5] transition-all shadow-sm shadow-[#1877F2]/10 cursor-pointer"
                   >
-                    <Facebook size={18} />
+                    <Facebook size={16} />
                     Facebook
                   </button>
                 </div>
               </div>
               <div className="mt-8 text-center">
                 <button
+                  type="button"
                   onClick={() => setAuthModalType(authModalType === "login" ? "signup" : "login")}
-                  className="text-sm font-bold text-gray-500 hover:text-primary transition-colors"
+                  className="text-xs font-medium text-gray-400 hover:text-primary transition-colors cursor-pointer"
                 >
                   {authModalType === "login" ? (
-                    <>Don't have an account? <span className="text-secondary font-black ml-1">Register</span></>
+                    <>Don't have an account? <span className="text-primary font-semibold ml-1">Register</span></>
                   ) : (
-                    <>Already have an account? <span className="text-secondary font-black ml-1">Login</span></>
+                    <>Already have an account? <span className="text-primary font-semibold ml-1">Login</span></>
                   )}
                 </button>
               </div>

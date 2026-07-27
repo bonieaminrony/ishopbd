@@ -120,6 +120,7 @@ async function startServer() {
 
   // Reduced body size limit to prevent DoS. Image uploads handled separately with higher limit.
   app.use("/api/chat", express.json({ limit: '32kb' }));
+  app.use("/api/ai-recommendations", express.json({ limit: '32kb' }));
   app.use("/api/send-push", express.json({ limit: '16kb' }));
   app.use("/api/send-sms", express.json({ limit: '8kb' }));
   app.use("/api/send-bulk-sms", express.json({ limit: '256kb' }));
@@ -176,7 +177,7 @@ async function startServer() {
   app.use("/api", (req, res, next) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (!rateLimit(ip + ":api", 300, 60_000)) {
-      return res.status(429).json({ error: "অতিরিক্ত রিকোয়েস্ট করা হয়েছে। অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।" });
+      return res.status(429).json({ error: "Too many requests. Please wait a moment." });
     }
     next();
   });
@@ -199,28 +200,40 @@ async function startServer() {
     if (!bf.allowed) {
       return res.status(429).json({
         success: false,
-        error: `অনেক বেশি ভুল চেষ্টা করা হয়েছে। ${bf.lockedFor} সেকেন্ড পর আবার চেষ্টা করুন।`
+        error: `Too many failed attempts. Try again in ${bf.lockedFor} seconds.`
       });
     }
 
     const masterPassword = process.env.MASTER_ADMIN_PASSWORD;
+    try {
+      fs.appendFileSync("debug.log", `[${new Date().toISOString()}] Verify admin request: masterPassword loaded as '${masterPassword}'\n`);
+    } catch (e) {}
     if (!masterPassword) {
       console.error('[SECURITY] MASTER_ADMIN_PASSWORD not set — admin login disabled.');
       return res.status(503).json({ success: false, error: 'Admin login is currently disabled.' });
     }
 
     const { password } = req.body;
+    try {
+      fs.appendFileSync("debug.log", `[${new Date().toISOString()}] Verify admin request: received password = '${password}'\n`);
+    } catch (e) {}
     if (typeof password !== 'string' || password.length === 0 || password.length > 200) {
       return res.status(400).json({ success: false, error: 'Invalid password format.' });
     }
 
     if (password.trim() === masterPassword.trim()) {
+      try {
+        fs.appendFileSync("debug.log", `[${new Date().toISOString()}] Verify admin request: Success!\n`);
+      } catch (e) {}
       clearAdminFail(ip);
       return res.json({ success: true });
     }
 
+    try {
+      fs.appendFileSync("debug.log", `[${new Date().toISOString()}] Verify admin request: Failed check. Compare: '${password.trim()}' vs '${masterPassword.trim()}'\n`);
+    } catch (e) {}
     recordAdminFail(ip);
-    return res.status(401).json({ success: false, error: 'পাসওয়ার্ড ভুল হয়েছে।' });
+    return res.status(401).json({ success: false, error: 'Incorrect password.' });
   });
 
   // ---- Image Upload Endpoint ----
@@ -281,19 +294,19 @@ async function startServer() {
   app.post("/api/send-sms", async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (!rateLimit(ip + ":sms", 5, 60_000)) {
-      return res.status(429).json({ success: false, message: "অতিরিক্ত এসএমএস রিকোয়েস্ট করা হয়েছে। অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।" });
+      return res.status(429).json({ success: false, message: "Too many SMS requests. Please wait a moment." });
     }
     const { phone, message, senderId } = req.body;
 
     // Input validation
     if (!phone || typeof phone !== 'string') {
-      return res.status(400).json({ success: false, message: 'ফোন নম্বর দেওয়া হয়নি' });
+      return res.status(400).json({ success: false, message: 'Phone number was not provided.' });
     }
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return res.status(400).json({ success: false, message: 'মেসেজ খালি রাখা যাবে না' });
+      return res.status(400).json({ success: false, message: 'Message cannot be empty.' });
     }
     if (message.length > 1000) {
-      return res.status(400).json({ success: false, message: 'মেসেজ ১০০০ অক্ষরের বেশি হতে পারবে না' });
+      return res.status(400).json({ success: false, message: 'Message cannot exceed 1000 characters.' });
     }
 
     // SMS Configuration from .env
@@ -302,7 +315,7 @@ async function startServer() {
 
     if (!SMS_API_KEY) {
       console.warn("SMS_API_KEY not set in environment. SMS not sent.");
-      return res.status(200).json({ success: false, message: "এসএমএস এপিআই কী কনফিগার করা নেই" });
+      return res.status(200).json({ success: false, message: "SMS API key is not configured." });
     }
 
     // Format phone number to 8801XXXXXXXXX format
@@ -341,12 +354,12 @@ async function startServer() {
 
       res.json({ 
         success: isSuccess, 
-        message: isSuccess ? "এসএমএস সফলভাবে পাঠানো হয়েছে" : (data.error_message || "এসএমএস পাঠাতে ব্যর্থ হয়েছে"), 
+        message: isSuccess ? "SMS sent successfully" : (data.error_message || "Failed to send SMS"), 
         data 
       });
     } catch (error: any) {
       console.error("Error sending SMS:", error);
-      res.status(500).json({ success: false, error: "সার্ভার সমস্যার কারণে এসএমএস পাঠাতে ব্যর্থ হয়েছে" });
+      res.status(500).json({ success: false, error: "Failed to send SMS due to server error" });
     }
   });
 
@@ -354,7 +367,7 @@ async function startServer() {
   app.post("/api/send-bulk-sms", async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (!rateLimit(ip + ":bulksms", 2, 60_000)) {
-      return res.status(429).json({ success: false, message: "অতিরিক্ত রিকোয়েস্ট করা হয়েছে। অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।" });
+      return res.status(429).json({ success: false, message: "Too many requests. Please wait a moment." });
     }
     const { phones, message, senderId } = req.body;
 
@@ -362,13 +375,13 @@ async function startServer() {
     const SMS_SENDER_ID = senderId || process.env.SMS_SENDER_ID || "8809648908219";
 
     if (!SMS_API_KEY) {
-      return res.status(200).json({ success: false, message: "এসএমএস এপিআই কী কনফিগার করা নেই" });
+      return res.status(200).json({ success: false, message: "SMS API key is not configured." });
     }
     if (!phones || !Array.isArray(phones) || phones.length === 0) {
-      return res.status(400).json({ success: false, message: "কোনো ফোন নম্বর দেওয়া হয়নি" });
+      return res.status(400).json({ success: false, message: "No phone numbers were provided." });
     }
     if (!message || message.trim().length === 0) {
-      return res.status(400).json({ success: false, message: "মেসেজ খালি রাখা যাবে না" });
+      return res.status(400).json({ success: false, message: "Message cannot be empty." });
     }
 
     // Setup SSE headers for real-time streaming progress
@@ -423,7 +436,7 @@ async function startServer() {
           sendEvent({ type: "batch_done", batchNum, success: true, count: batch.length, sent: totalSuccess, failed: totalFail });
         } else {
           totalFail += batch.length;
-          sendEvent({ type: "batch_done", batchNum, success: false, count: batch.length, error: data.error_message || "এপিআই এরর", sent: totalSuccess, failed: totalFail });
+          sendEvent({ type: "batch_done", batchNum, success: false, count: batch.length, error: data.error_message || "API Error", sent: totalSuccess, failed: totalFail });
         }
       } catch (error: any) {
         totalFail += batch.length;
@@ -470,7 +483,7 @@ async function startServer() {
   app.post("/api/create-order", async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (!rateLimit(ip + ":create-order", 10, 60_000)) {
-      return res.status(429).json({ success: false, error: "অতিরিক্ত রিকোয়েস্ট করা হয়েছে।" });
+      return res.status(429).json({ success: false, error: "Too many requests." });
     }
 
     const { newOrder, checkoutItems } = req.body;
@@ -515,7 +528,7 @@ async function startServer() {
         if (refsArray.length > 0) {
            const snaps = await transaction.getAll(...refsArray);
            snaps.forEach(snap => {
-             if (!snap.exists) throw new Error(`প্রোডাক্ট পাওয়া যায়নি`);
+             if (!snap.exists) throw new Error(`Product not found`);
              productDataMap[snap.id] = snap.data();
            });
         }
@@ -528,7 +541,7 @@ async function startServer() {
           const iColor = item.color ? String(item.color).trim().toLowerCase() : null;
           const iSize = item.size ? String(item.size).trim().toLowerCase() : null;
           const reqQty = Number(item.quantity) || 1;
-          if (reqQty <= 0) throw new Error("ইনভ্যালিড কোয়ান্টিটি");
+          if (reqQty <= 0) throw new Error("Invalid quantity");
 
           let currentVariants = [...(pData.variants || [])];
           let currentStock = Number(pData.stock || 0);
@@ -538,12 +551,12 @@ async function startServer() {
           if (item.wholesaleSizeQty && Object.keys(item.wholesaleSizeQty).length > 0) {
              for (const [wSize, wQty] of Object.entries(item.wholesaleSizeQty)) {
                 const qtyNum = Number(wQty);
-                if (qtyNum < 0) throw new Error("ইনভ্যালিড কোয়ান্টিটি");
+                if (qtyNum < 0) throw new Error("Invalid quantity");
                 if (qtyNum === 0) continue;
                 const vIndex = currentVariants.findIndex(v => (v.size ? String(v.size).trim().toLowerCase() : null) === wSize.trim().toLowerCase());
                 if (vIndex > -1) {
                   const vStock = Number(currentVariants[vIndex].stock || 0);
-                  if (vStock < qtyNum && !pData.isComingSoon) throw new Error(`দুঃখিত, ${pData.name} এর স্টক শেষ!`);
+                  if (vStock < qtyNum && !pData.isComingSoon) throw new Error(`Sorry, ${pData.name} is out of stock!`);
                   currentVariants[vIndex].stock = vStock - qtyNum;
                   variantMatched = true;
                 }
@@ -559,14 +572,14 @@ async function startServer() {
              });
              if (vIndex > -1) {
                 const vStock = Number(currentVariants[vIndex].stock || 0);
-                if (vStock < reqQty && !pData.isComingSoon) throw new Error(`দুঃখিত, ${pData.name} এর স্টক শেষ!`);
+                if (vStock < reqQty && !pData.isComingSoon) throw new Error(`Sorry, ${pData.name} is out of stock!`);
                 currentVariants[vIndex].stock = vStock - reqQty;
                 variantMatched = true;
              }
           }
 
           if (!variantMatched) {
-            if (currentStock < reqQty && !pData.isComingSoon) throw new Error(`দুঃখিত, ${pData.name} এর স্টক শেষ!`);
+            if (currentStock < reqQty && !pData.isComingSoon) throw new Error(`Sorry, ${pData.name} is out of stock!`);
             currentStock -= reqQty;
           }
 
@@ -598,7 +611,7 @@ async function startServer() {
             const pData = productDataMap[pId];
             
             let reqQty = Number(item.quantity) || 1;
-            if (reqQty <= 0) throw new Error("ইনভ্যালিড কোয়ান্টিটি");
+            if (reqQty <= 0) throw new Error("Invalid quantity");
             if (item.wholesaleSizeQty && Object.keys(item.wholesaleSizeQty).length > 0) {
                 reqQty = 0;
                 for (const wQty of Object.values(item.wholesaleSizeQty)) {
@@ -620,20 +633,20 @@ async function startServer() {
         const clientSubtotal = Number(newOrder.subtotal) || 0;
         const clientDelivery = Number(newOrder.deliveryCharge) || 0;
         const clientPoints = Number(newOrder.pointsDiscount) || 0;
-        if (clientPoints > userPoints) throw new Error("আপনার পর্যাপ্ত পয়েন্ট নেই!");
+        if (clientPoints > userPoints) throw new Error("You do not have enough reward points!");
         const clientDiscount = Number(newOrder.discount) || 0; // If any other discount
         
         // 1. Verify Subtotal matches server calculated subtotal
         if (Math.abs(clientSubtotal - expectedSubtotal) > 5) {
             console.error(`Subtotal mismatch! Client: ${clientSubtotal}, Server: ${expectedSubtotal}`);
-            throw new Error("অর্ডারের দামে অমিল পাওয়া গেছে। সিকিউরিটি কারণে অর্ডারটি ব্লক করা হয়েছে।");
+            throw new Error("Order price mismatch. The order has been blocked for security reasons.");
         }
         
         // 2. Verify Total math
         const expectedTotalMath = clientSubtotal + clientDelivery - clientPoints - clientDiscount;
         if (Math.abs(clientTotal - expectedTotalMath) > 5) {
             console.error(`Total math mismatch! ClientTotal: ${clientTotal}, Math: ${expectedTotalMath}`);
-            throw new Error("টোটাল হিসেবে কারচুপি ধরা পড়েছে। অর্ডারটি ব্লক করা হয়েছে।");
+            throw new Error("Total calculation discrepancy detected. The order has been blocked.");
         }
 
         const orderId = newOrder.orderId || newOrder.id || `ORD${Date.now()}`;
@@ -641,7 +654,7 @@ async function startServer() {
         newOrder.createdAt = admin.firestore.FieldValue.serverTimestamp();
         newOrder.status = "pending";
         
-        if (newOrder.total < 0) throw new Error("ইনভ্যালিড টোটাল অ্যামাউন্ট");
+        if (newOrder.total < 0) throw new Error("Invalid total amount");
 
         transaction.set(db.collection("orders").doc(orderId), newOrder);
 
@@ -655,10 +668,10 @@ async function startServer() {
         }
       });
 
-      res.json({ success: true, message: "অর্ডার সফলভাবে তৈরি হয়েছে" });
+      res.json({ success: true, message: "Order created successfully" });
     } catch (e) {
       console.error("Order creation error:", e);
-      res.status(500).json({ success: false, error: e.message || "অর্ডার প্রসেস করতে সমস্যা হয়েছে" });
+      res.status(500).json({ success: false, error: e.message || "Failed to process order" });
     }
   });
 
@@ -666,26 +679,26 @@ async function startServer() {
     // Rate limit: 10 order confirmations per IP per minute
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (!rateLimit(ip + ":order", 10, 60_000)) {
-      return res.status(429).json({ success: false, error: "অতিরিক্ত রিকোয়েস্ট করা হয়েছে।" });
+      return res.status(429).json({ success: false, error: "Too many requests." });
     }
 
     const { customerName, customerPhone, items, total, address } = req.body;
 
     // Input validation
     if (!customerName || typeof customerName !== 'string' || customerName.trim().length === 0 || customerName.length > 200) {
-      return res.status(400).json({ success: false, error: 'কাস্টমার নাম সঠিক নয়।' });
+      return res.status(400).json({ success: false, error: 'Invalid customer name.' });
     }
     if (!customerPhone || typeof customerPhone !== 'string' || customerPhone.length > 20) {
-      return res.status(400).json({ success: false, error: 'ফোন নম্বর সঠিক নয়।' });
+      return res.status(400).json({ success: false, error: 'Invalid phone number.' });
     }
     if (!address || typeof address !== 'string' || address.length > 1000) {
-      return res.status(400).json({ success: false, error: 'ঠিকানা সঠিক নয়।' });
+      return res.status(400).json({ success: false, error: 'Invalid address.' });
     }
     if (!items || !Array.isArray(items) || items.length === 0 || items.length > 50) {
-      return res.status(400).json({ success: false, error: 'আইটেম তালিকা সঠিক নয়।' });
+      return res.status(400).json({ success: false, error: 'Invalid item list.' });
     }
     if (typeof total !== 'number' || total < 0 || total > 10_000_000) {
-      return res.status(400).json({ success: false, error: 'মোট পরিমাণ সঠিক নয়।' });
+      return res.status(400).json({ success: false, error: 'Invalid total quantity.' });
     }
 
     const notifyEmail = process.env.ORDER_NOTIFY_EMAIL || process.env.EMAIL_USER;
@@ -717,10 +730,10 @@ async function startServer() {
       } else {
         console.warn("EMAIL_USER or EMAIL_PASS not set. Email not sent.");
       }
-      res.json({ success: true, message: "অর্ডার সফলভাবে প্রসেস করা হয়েছে" });
+      res.json({ success: true, message: "Order processed successfully" });
     } catch (error) {
       console.error("Error sending email:", error);
-      res.status(500).json({ success: false, error: "ইমেইল পাঠাতে ব্যর্থ হয়েছে" });
+      res.status(500).json({ success: false, error: "Failed to send email" });
     }
   });
 
@@ -1064,13 +1077,13 @@ async function startServer() {
     // Stricter rate limit for AI: 10 req/min per IP
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (!rateLimit(ip + ":chat", 10, 60_000)) {
-      return res.status(429).json({ error: "এআই রিকোয়েস্ট লিমিট শেষ হয়েছে। অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন।" });
+      return res.status(429).json({ error: "AI request limit reached. Please wait a moment." });
     }
 
     const { messages, modelName = "gemini-1.5-flash" } = req.body;
     
     if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "এআই কনফিগার করা নেই" });
+      return res.status(500).json({ error: "AI is not configured." });
     }
 
     try {
@@ -1119,7 +1132,7 @@ async function startServer() {
         .map(p => `- ${p.name}: Price ৳${p.price}, Stock: ${p.stock}${p.isComingSoon ? " (Pre-order)" : ""}`)
         .join("\n");
 
-      const systemInstruction = `You are an AI assistant for 'i SHOP BD', the best premium online shop in Bangladesh. Always start your response with 'আসসালামুয়ালাইকুম স্যার' and address the user as 'স্যার' throughout the conversation. Answer questions about rechargeable fans, smart watches, headphones, and accessories, and suggest products based on their budget and interest. Answer in Bengali with a friendly tone. Use proper BDT pricing (৳).
+      const systemInstruction = `You are an AI assistant for 'i SHOP BD', the best premium online shop in Bangladesh. Always start your response with a friendly greeting and address the user politely. Answer questions about rechargeable fans, smart watches, headphones, and accessories, and suggest products based on their budget and interest. Answer in English with a friendly tone. Use proper BDT pricing (৳).
 Here is the current real-time products catalog of i SHOP BD:
 ${productsContext}
 
@@ -1139,7 +1152,93 @@ If a product is out of stock (Stock is 0 or less), let them know. If they want t
       res.json({ text: response.text });
     } catch (error) {
       console.error("Gemini Error:", error);
-      res.status(500).json({ error: "এআই থেকে রেসপন্স পেতে ব্যর্থ হয়েছে" });
+      res.status(500).json({ error: "Failed to get response from AI" });
+    }
+  });
+
+  app.post("/api/ai-recommendations", async (req, res) => {
+    // AI request limit: 30 req/min per IP
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    if (!rateLimit(ip + ":recommendations", 30, 60_000)) {
+      return res.status(429).json({ error: "Request limit reached. Please wait a moment." });
+    }
+
+    const { currentProductId, viewedProductIds = [], searchQuery = "" } = req.body;
+    
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: "Gemini API key is not configured" });
+    }
+
+    try {
+      const db = getFirestore();
+      const productsSnap = await db.collection("products").get();
+      const allProducts = productsSnap.docs
+        .map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: data.name || "Unknown Product",
+            category: data.category || "General",
+            isPublished: data.isPublished !== false,
+            deleted: !!data.deleted
+          };
+        })
+        .filter(p => !p.deleted && p.isPublished);
+
+      if (allProducts.length === 0) {
+        return res.json({ productIds: [] });
+      }
+
+      const currentProduct = allProducts.find(p => p.id === currentProductId);
+      const viewedProducts = allProducts.filter(p => viewedProductIds.includes(p.id));
+
+      const catalogText = allProducts
+        .map(p => `ID: "${p.id}", Name: "${p.name}", Category: "${p.category}"`)
+        .join("\n");
+
+      const prompt = `You are a product recommendation system for an e-commerce store in Bangladesh.
+Current product the user is looking at:
+${currentProduct ? `Name: "${currentProduct.name}", Category: "${currentProduct.category}"` : "None"}
+
+User's recently viewed products:
+${viewedProducts.length > 0 ? viewedProducts.map(p => `- Name: "${p.name}", Category: "${p.category}"`).join("\n") : "None"}
+
+User's search query:
+"${searchQuery || "None"}"
+
+Available products catalog (ID, Name, Category):
+${catalogText}
+
+Task: Recommend the top 5 most relevant product IDs from the catalog.
+Rule 1: Never recommend the current product (ID: "${currentProductId}").
+Rule 2: Respond ONLY with a valid JSON array of strings containing the selected product IDs (e.g. ["p1", "p2", "p3"]). No markdown formatting, no comments, no extra text.`;
+
+      const genAI = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+      });
+
+      const response = await genAI.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      });
+
+      let text = response.text || "[]";
+      text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+      try {
+        const productIds = JSON.parse(text);
+        if (Array.isArray(productIds)) {
+          const validIds = productIds.filter(id => allProducts.some(p => p.id === id));
+          return res.json({ productIds: validIds.slice(0, 5) });
+        }
+      } catch (parseErr) {
+        console.error("Failed to parse Gemini recommendations JSON output:", text);
+      }
+
+      res.json({ productIds: [] });
+    } catch (error: any) {
+      console.error("AI Recommendations Error:", error);
+      res.status(500).json({ error: "Failed to generate recommendations" });
     }
   });
 
@@ -1264,10 +1363,10 @@ If a product is out of stock (Stock is 0 or less), let them know. If they want t
         res.setHeader("Content-Type", "image/png");
         return res.sendFile(logoPath);
       }
-      res.status(404).send("ছবি পাওয়া যায়নি");
+      res.status(404).send("Image not found");
     } catch (error) {
       console.error("Error serving product image:", error);
-      res.status(500).send("ছবি ফেচ করতে সমস্যা হয়েছে");
+      res.status(500).send("Failed to fetch image");
     }
   });
 
@@ -1347,7 +1446,7 @@ If a product is out of stock (Stock is 0 or less), let them know. If they want t
   // ---- Global Error Handler ----
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('Unhandled Error:', err.stack);
-    res.status(500).json({ error: 'ইন্টারনাল সার্ভার এরর' });
+    res.status(500).json({ error: 'Internal server error' });
   });
 
   app.listen(PORT, "0.0.0.0", () => {

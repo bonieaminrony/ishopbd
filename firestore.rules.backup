@@ -1,0 +1,276 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net - Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.get('email_verified', false) == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { 
+      return id is string && id.size() >= 1 && id.size() <= 128 && 
+             id.matches('^[a-zA-Z0-9_\\-@.]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Master accounts for bootstrap and recovery
+    function isMaster() {
+      return isSignedIn() && 'email' in request.auth.token && (
+        request.auth.token.email.lower() == "bonieaminrony@gmail.com" ||
+        request.auth.token.email.lower() == "islamicsoktitv@gmail.com" ||
+        request.auth.token.email.lower() == "ishopbd.online@gmail.com" ||
+        request.auth.token.email.lower() == "ifilmbd2025@gmail.com"
+      );
+    }
+
+    function isAdmin() { 
+      return isMaster() || (
+        isSignedIn() && (
+          (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', 'none') in ["admin", "owner"]) ||
+          ('email' in request.auth.token &&
+           exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.get('role', 'none') in ["admin", "owner"])
+        )
+      ); 
+    }
+
+    function isModerator() {
+      return isMaster() || (
+        isSignedIn() && (
+          (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.get('role', 'none') in ["admin", "owner", "moderator"]) ||
+          ('email' in request.auth.token &&
+           exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.token.email.lower())).data.get('role', 'none') in ["admin", "owner", "moderator"])
+        )
+      );
+    }
+
+    // --- ENTITY VALIDATIONS ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'balance']) &&
+             data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.balance is number && data.balance >= 0 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 20)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 1000));
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'price', 'image', 'category']) &&
+             data.name is string && data.name.size() <= 1000 &&
+             data.price is number && data.price >= 0 &&
+             data.category is string && data.category.size() <= 200 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 20000));
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['customerName', 'customerPhone', 'address', 'items', 'total', 'status', 'createdAt']) &&
+             data.customerName is string && data.customerName.size() <= 200 &&
+             data.customerPhone is string && data.customerPhone.size() <= 20 &&
+             data.address is string && data.address.size() <= 1000 &&
+             data.items is list && data.items.size() > 0 && data.items.size() <= 50 &&
+             data.total is number && data.total >= 0 &&
+             data.status in ['pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'];
+    }
+
+    function isNewOrderPending(data) {
+      return data.status == 'pending';
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['userId', 'amount', 'type', 'createdAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.amount is number &&
+             data.type in ['deposit', 'refund', 'purchase', 'adjustment'];
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'rating', 'comment', 'createdAt']) &&
+             data.userName is string && data.userName.size() <= 200 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() <= 2000;
+    }
+
+    function isValidSupportChat(data) {
+      return (!('messages' in data) || (data.messages is list && data.messages.size() <= 500));
+    }
+
+    function isValidRefundRequest(data) {
+      return data.keys().hasAll(['orderId', 'userId', 'amount', 'status', 'createdAt']) &&
+             data.orderId is string && data.orderId.size() <= 128 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.amount is number && data.amount >= 0 &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['title', 'message', 'createdAt']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.message is string && data.message.size() <= 2000 &&
+             (!('type' in data) || (data.type in ['broadcast', 'direct']));
+    }
+
+    function isValidCampaign(data) {
+      return data.keys().hasAll(['name', 'slug', 'isActive']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.slug is string && data.slug.size() <= 200 &&
+             data.isActive is bool;
+    }
+
+    function isValidAdmin(data) {
+      return data.keys().hasAll(['email', 'role', 'createdAt']) &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['admin', 'moderator', 'owner'];
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isModerator();
+      allow list: if isModerator();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isModerator() || (
+        isOwner(userId) && isValidUser(incoming()) && (
+          // Action: Profile Update
+          (incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'address', 'updatedAt', 'lastNotifCheck'])) ||
+          // Action: Balance Change (decreasing only - app logic should handle spending)
+          (incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'updatedAt']) && incoming().balance <= existing().balance)
+        )
+      );
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isModerator() && isValidProduct(incoming()) && (incoming().createdAt == request.time || incoming().createdAt is string);
+      allow delete: if isModerator();
+      allow update: if isModerator() || (
+        // Public engagement metrics - strictly constrained increments
+        incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'rating', 'reviewCount', 'updatedAt']) &&
+        incoming().get('name', '') == existing().get('name', '') &&
+        incoming().get('category', '') == existing().get('category', '')
+      );
+
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if isValidId(reviewId) && isSignedIn() && isValidReview(incoming()) && incoming().createdAt == request.time;
+        allow delete: if isModerator() || (isSignedIn() && existing().userId == request.auth.uid);
+      }
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isModerator();
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isModerator();
+    }
+
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && (isModerator() || (isSignedIn() && resource.data.userId == request.auth.uid) || (resource.data.get('userId', '') == 'guest'));
+      allow list: if isModerator() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidOrder(incoming()); // Allow creating orders directly from frontend
+      allow update: if isModerator() || (
+        isOwner(existing().get('userId', '')) && 
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+        incoming().status == 'cancelled' && existing().status == 'pending' &&
+        incoming().updatedAt == request.time
+      );
+      allow delete: if isModerator();
+    }
+
+    match /transactions/{transactionId} {
+      allow get, list: if isSignedIn() && (resource.data.userId == request.auth.uid || isModerator());
+      allow create: if isValidId(transactionId) && isValidTransaction(incoming()) && (
+        isModerator() || (isSignedIn() && incoming().userId == request.auth.uid && incoming().createdAt == request.time)
+      );
+      allow update, delete: if isModerator();
+    }
+
+    match /support_chats/{chatId} {
+      function isChatParticipant() {
+        return isModerator() || 
+               (isSignedIn() && (resource.data.get('userId', '') == request.auth.uid || chatId == request.auth.uid)) || 
+               (chatId.matches('guest_.*'));
+      }
+      allow get: if isValidId(chatId) && isChatParticipant();
+      allow list: if isModerator() || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+      allow create: if isValidId(chatId) && isSignedIn() && isValidSupportChat(incoming()); 
+      allow update: if isChatParticipant() && isValidSupportChat(incoming());
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && (
+        isOwner(adminId) || 
+        request.auth.token.get('email', '').lower() == adminId.lower() || 
+        isAdmin() || 
+        isModerator()
+      );
+      allow list: if isModerator();
+      
+      // Fixed Vulnerability: Removed the ability to use incoming().email to bypass the check.
+      // Now it STRICTLY checks if the user's AUTHENTICATED email is already an admin.
+      allow create: if (isModerator() && isValidAdmin(incoming())) || (
+        isSignedIn() && request.auth.uid == adminId && (
+          'email' in request.auth.token && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()))
+        ) && isValidAdmin(incoming()) && incoming().email.lower() == request.auth.token.email.lower()
+      );
+      allow update: if (isModerator() && isValidAdmin(incoming())) || (
+        isSignedIn() && request.auth.uid == adminId && (
+          'email' in request.auth.token && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()))
+        ) && isValidAdmin(incoming()) && incoming().email.lower() == request.auth.token.email.lower()
+      );
+      
+      allow delete: if isMaster() || (isAdmin() && 
+        adminId != "bonieaminrony@gmail.com" && 
+        adminId != "islamicsoktitv@gmail.com" && 
+        adminId != "ishopbd.online@gmail.com" && 
+        adminId != "ifilmbd2025@gmail.com");
+    }
+
+    match /notifications/{notificationId} {
+      allow list: if (resource.data.get('userId', '') == 'all') || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+      allow get: if (resource.data.get('userId', '') == 'all') || (isSignedIn() && (resource.data.get('userId', '') == request.auth.uid || isModerator()));
+      allow create, update: if isModerator() && isValidNotification(incoming());
+      allow delete: if isModerator() || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+    }
+
+    match /refund_requests/{refundId} {
+      allow get, list: if isSignedIn() && (resource.data.userId == request.auth.uid || isModerator());
+      allow create: if isValidId(refundId) && isSignedIn() && incoming().userId == request.auth.uid && isValidRefundRequest(incoming()) && incoming().createdAt == request.time;
+      allow update, delete: if isModerator() && isValidRefundRequest(incoming());
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if true;
+      allow create, update: if isModerator() && isValidCampaign(incoming()); 
+      allow delete: if isModerator();
+    }
+
+    match /config/{configId} {
+      // Only allow public read for safe, non-sensitive config documents.
+      // Sensitive config (API keys, courier keys) must be stored in /admin_config/
+      // which requires moderator access.
+      allow read: if configId == 'siteConfig' || configId == 'appSettings' || configId == 'announcement';
+      allow write: if isModerator();
+    }
+
+    match /admin_config/{configId} {
+      // Admin-only config: API keys, courier credentials, sensitive settings
+      allow read: if isModerator();
+      allow write: if isAdmin();
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

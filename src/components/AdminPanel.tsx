@@ -757,7 +757,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
                               >
-                                <Download size={14} /> Todayকের রিপোর্ট
+                                <Download size={14} /> Today's Report
                               </button>
                               <button
                                 onClick={() => {
@@ -766,7 +766,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
                               >
-                                <Download size={14} /> এ—এ¤ ৭ দিনের রিপোর্ট
+                                <Download size={14} /> Last 7 Days Report
                               </button>
                               <button
                                 onClick={() => {
@@ -775,7 +775,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
                               >
-                                <Download size={14} /> এ—এ¤ ৩০ দিনের রিপোর্ট
+                                <Download size={14} /> Last 30 Days Report
                               </button>
                               <div className="h-px bg-gray-100 my-1"></div>
                               <button
@@ -785,7 +785,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 }}
                                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
                               >
-                                <Landmark size={14} /> All অর্ডার এক্সপোর্ট
+                                <Landmark size={14} /> Export All Orders
                               </button>
                             </div>
                           )}
@@ -5179,23 +5179,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                </div>
                                <button
                                  onClick={async () => {
-                                   if (!window.confirm("আপনি কি এই Refunds রিকোয়েস্টটি অ্যাপ্রুভ করতে চান? এটি Usersের ব্যালেন্সে টাকা যোগ করে দেবে।")) return;
-                                   try {
-                                     if (notif.userId === 'all') {
-                                       const dismissedStr = localStorage.getItem('dismissedNotifs') || '[]';
-                                       let dismissed: string[] = [];
-                                       try { dismissed = JSON.parse(dismissedStr); } catch(e) {}
-                                       dismissed.push(notif.id);
-                                       localStorage.setItem('dismissedNotifs', JSON.stringify(dismissed));
-                                       setNotifications(prev => prev.filter(n => n.id !== notif.id));
-                                     } else {
-                                       await deleteDoc(doc(db, "notifications", notif.id));
-                                     }
-                                     toast.success("Coupon applied successfully! You get Free Delivery.");
-                                   } catch (err) {
-                                     toast.error("Wrong password! Try again.");
-                                   }
-                                 }}
+                                    if (!window.confirm("Are you sure you want to delete this notification?")) return;
+                                    try {
+                                      await deleteDoc(doc(db, "notifications", notif.id));
+                                      toast.success("Notification deleted successfully.");
+                                    } catch (err) {
+                                      toast.error("Failed to delete notification. Try again.");
+                                    }
+                                  }}
                                  className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-400 rounded-xl hover:bg-red-100 hover:text-red-600 flex-shrink-0 transition-colors"
                                  title="Delete Order"
                                >
