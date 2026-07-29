@@ -53,8 +53,8 @@ export default function NotifModal(props: NotifModalProps) {
                     <Bell size={20} />
                   </div>
                   <div>
-                    <h3 className="font-black text-secondary">নোটিফিকেশন</h3>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">ষ আপডেটaহ</p>
+                    <h3 className="font-black text-secondary">Notifications</h3>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">ALL UPDATES</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -63,7 +63,7 @@ export default function NotifModal(props: NotifModalProps) {
                       onClick={handleClearAllNotifications}
                       className="text-xs font-black text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-all"
                     >
-                      সব মুছুন
+                      Clear All
                     </button>
                   )}
                   <button 
@@ -80,7 +80,7 @@ export default function NotifModal(props: NotifModalProps) {
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300 mb-4">
                       <Bell size={32} />
                     </div>
-                    <p className="text-sm font-black text-gray-400">এখনো কোন নোটিফিকেশন নেই</p>
+                    <p className="text-sm font-black text-gray-400">No notifications yet</p>
                   </div>
                 ) : (
                   notifications.map((notif: any) => (

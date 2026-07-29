@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle } from 'lucide-react';
+import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle, Settings, Package, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { db } from '../lib/firebase';
 import { collection, doc, getDocs, updateDoc, deleteDoc, query, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -382,7 +382,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-gray-900 tracking-tight leading-tight">
-                        Active Campaigns
+                        Admin Dashboard
                       </h3>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
                         i SHOP BD
@@ -420,7 +420,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       }}
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && showOnlyPreOrders ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <div className={`w-2 h-2 rounded-full ${showOnlyPreOrders && adminTab === "orders" ? "bg-white animate-pulse" : "bg-yellow-500"}`} />
+                      <Clock size={18} />
                       Pre Order ({orderHistory.filter(o => {
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return isPreOrder;
@@ -450,7 +450,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           onClick={() => setAdminTab("products")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "products" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <PlusCircle size={18} /> Products ({products.length})
+                          <Package size={18} /> Products ({products.length})
                         </button>
                         <button
                           onClick={() => setAdminTab("categories")}
@@ -462,7 +462,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           onClick={() => setAdminTab("refunds")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "refunds" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <RefreshCcw size={18} /> Refunds ({refundRequests.filter(r => r.status === "pending").length})
+                          <RotateCcw size={18} /> Refunds ({refundRequests.filter(r => r.status === "pending").length})
                         </button>
                         <button
                           onClick={() => setAdminTab("users")}
@@ -487,14 +487,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                             onClick={() => setAdminTab("profit_analysis")}
                             className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "profit_analysis" ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                           >
-                            <TrendingUp size={18} /> Accounts
+                            <Wallet size={18} /> Accounts
                           </button>
                         )}
                         <button
                           onClick={() => setAdminTab("settings")}
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "settings" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
-                          <ShieldCheck size={18} /> Settings
+                          <Settings size={18} /> Settings
                         </button>
                       </>
                     )}
@@ -1683,901 +1683,499 @@ export default function AdminPanel(props: AdminPanelProps) {
                           <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
                             <PlusCircle size={20} className="text-primary" />
                             {editingProduct?.id
-                              ? "Products এডিট করুন"
-                              : "নতুন Products Add"}
+                              ? "Edit Product"
+                              : "Add New Product"}
                           </h4>
                           {editingProduct && (
                             <button
                               onClick={() => setEditingProduct(null)}
                               className="text-[10px] font-bold text-primary hover:underline"
                             >
-                              বাতিল করুন
+                              Cancel
                             </button>
                           )}
                         </div>
-                        <form onSubmit={saveProduct} className="space-y-4">
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Tag size={16} className="text-primary" /> Basic Information</h5>
-                          <div id="field-name">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-                              প্রোডাক্ট নাম
-                              {productFormErrors.name && (
-                                <span className="text-red-500 normal-case">
-                                  নাম দিতে হবে
-                                </span>
-                              )}
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.name || ""}
-                              onChange={(e) => {
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  name: e.target.value,
-                                } as any);
-                                if (productFormErrors.name)
-                                  setProductFormErrors((prev) => ({
-                                    ...prev,
-                                    name: false,
-                                  }));
-                              }}
-                              className={`w-full bg-gray-50 border ${productFormErrors.name ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold`}
-                              placeholder="e.g. Smart Watch সিরিজ ৯"
-                            />
-                          </div>
-                                                    <div id="field-sms-name">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                              এসএমএস প্রোডাক্ট নাম (ঐচ্ছিক)
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.smsName || ""}
-                              onChange={(e) => {
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  smsName: e.target.value,
-                                } as any);
-                              }}
-                              className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                              placeholder="e.g. SW-9"
-                            />
-                          </div>
-                          <div id="field-code">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-                              প্রোডাক্ট কোড (Search Code)
-                              {productFormErrors.code && (
-                                <span className="text-red-500 normal-case">
-                                  নাম দিতে হবে
-                                </span>
-                              )}
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.code || ""}
-                              onChange={(e) => {
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  code: e.target.value,
-                                } as any);
-                                if (productFormErrors.code)
-                                  setProductFormErrors((prev) => ({
-                                    ...prev,
-                                    code: false,
-                                  }));
-                              }}
-                              className={`w-full bg-gray-50 border ${productFormErrors.code ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold`}
-                              placeholder="e.g. SW-001"
-                            />
-                          </div>
-                          </div>
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><Wallet size={16} className="text-primary" /> Pricing & Stock</h5>
-                          <div className={`grid gap-4 ${isMasterAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
-                            {isMasterAdmin && (
-                              <div>
-                                <label className="block text-[10px] font-bold text-indigo-500 uppercase mb-1.5">
-                                  ক্রয়মূল্য (৳) - গোপন
+                        <form onSubmit={saveProduct} className="space-y-4 overflow-y-auto max-h-[calc(100vh-140px)] pr-1 no-scrollbar">
+
+                          {/* ━━━ Step 1: Name & Code ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                              <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">1</span>
+                              <span className="text-sm font-bold text-gray-700">Product Name & Code</span>
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <div id="field-name">
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1 flex justify-between items-center">
+                                  <span>Product Full Name</span>
+                                  {productFormErrors.name ? <span className="text-red-500 normal-case font-normal">Name is required</span> : <span className="text-red-400 normal-case font-normal">* Required</span>}
                                 </label>
                                 <input
-                                  type="number"
-                                  value={editingProduct?.buyingPrice || ""}
+                                  type="text"
+                                  value={editingProduct?.name || ""}
                                   onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    setEditingProduct((prev) => ({ ... (prev || {}), buyingPrice: val }));
+                                    setEditingProduct({ ...(editingProduct || {}), name: e.target.value } as any);
+                                    if (productFormErrors.name) setProductFormErrors((prev) => ({ ...prev, name: false }));
                                   }}
-                                  className="w-full bg-indigo-50 border border-indigo-200 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-bold text-indigo-900 placeholder-indigo-300 transition-all"
-                                  placeholder="0"
+                                  className={`w-full bg-gray-50 border ${productFormErrors.name ? "border-red-400 ring-1 ring-red-400" : "border-gray-200"} rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm font-semibold transition-all`}
+                                  placeholder="e.g., Samsung Galaxy A55 5G (8GB/128GB)"
                                 />
                               </div>
-                            )}
-                            <div id="field-price">
-                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-                                মূল্য (৳) *
-                                {productFormErrors.price && (
-                                  <span className="text-red-500 normal-case font-bold">
-                                    দাম দিন
-                                  </span>
-                                )}
-                              </label>
-                              <input
-                                type="number"
-                                value={editingProduct?.price || ""}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value);
-                                  setEditingProduct((prev) => ({ ...(prev || {}), price: val }));
-                                  if (productFormErrors.price)
-                                    setProductFormErrors((prev) => ({
-                                      ...prev,
-                                      price: false,
-                                    }));
-                                }}
-                                className={`w-full bg-gray-50/50 border ${productFormErrors.price ? "border-red-500 ring-2 ring-red-500/20" : "border-gray-200"} rounded-xl py-3 px-4 outline-none focus:border-primary focus:bg-white text-sm font-bold transition-all`}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">
-                                আগের মূল্য (৳)
-                              </label>
-                              <input
-                                type="number"
-                                value={editingProduct?.originalPrice || ""}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value);
-                                  setEditingProduct((prev) => ({ ...(prev || {}), originalPrice: val }));
-                                }}
-                                className="w-full bg-gray-50/50 border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-primary focus:bg-white text-sm font-bold transition-all"
-                              />
-                            </div>
-                          </div>
-                          {/* Physical & Stock Details Row */}
-                          <div className="grid grid-cols-3 gap-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">
-                                ওজন/পরিমাণ
-                              </label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={editingProduct?.weight || ""}
-                                onChange={(e) => {
-                                  const val = e.target.value === "" ? 0 : Number(e.target.value);
-                                  setEditingProduct((prev) => ({ ...(prev || {}), weight: val }));
-                                }}
-                                className="w-full bg-gray-50/50 border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-primary focus:bg-white text-sm font-bold transition-all"
-                                placeholder="e.g. 1"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">
-                                একক (Unit)
-                              </label>
-                              <select
-                                value={editingProduct?.unit || "piece"}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditingProduct((prev) => ({ ...(prev || {}), unit: val }));
-                                }}
-                                className="w-full bg-gray-50/50 border border-gray-200 rounded-xl py-3 px-4 outline-none focus:border-primary focus:bg-white text-sm font-bold transition-all cursor-pointer"
-                              >
-                                <option value="piece">Piece</option>
-                                <option value="kg">KG</option>
-                                <option value="gm">Gram</option>
-                                <option value="liter">Liter</option>
-                                <option value="ml">ML</option>
-                                <option value="packet">Packet</option>
-                                <option value="box">Box</option>
-                                <option value="set">Set</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5">
-                                Stock (Quantity)
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  value={
-                                    editingProduct?.stock === undefined ||
-                                    editingProduct?.stock === null
-                                      ? ""
-                                      : editingProduct.stock
-                                  }
-                                  onChange={(e) => {
-                                    const val =
-                                      e.target.value === ""
-                                        ? 0
-                                        : Number(e.target.value);
-                                    setEditingProduct((prev) => ({ ...(prev || {}), stock: val }));
-                                  }}
-                                  className="w-full bg-gray-50/50 border border-gray-200 rounded-xl py-3 px-4 pr-12 outline-none focus:border-primary focus:bg-white text-sm font-bold transition-all"
-                                  placeholder="০"
-                                />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-500 uppercase pointer-events-none">
-                                  {(() => {
-                                    switch (editingProduct?.unit) {
-                                      case "piece": return "Pcs";
-                                      case "kg": return "Kg";
-                                      case "gm": return "Gm";
-                                      case "liter": return "Ltr";
-                                      case "ml": return "Ml";
-                                      case "packet": return "Pkt";
-                                      case "box": return "Box";
-                                      case "set": return "Set";
-                                      default: return editingProduct?.unit || "Pcs";
-                                    }
-                                  })()}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          </div>
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><ImageIcon size={16} className="text-primary" /> Media & SEO</h5>
-                          <div id="field-tags">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-                              ট্যাগ (Google Search এবং ওয়েবসাইটের সার্চের জন্য)
-                            </label>
-                            <div className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl p-2 min-h-[52px] flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
-                              {(editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : []).map((tag, idx) => (
-                                <span key={idx} className="flex items-center gap-1.5 bg-[#272727] text-gray-200 text-xs font-medium px-3 py-1.5 rounded-lg border border-[#3f3f3f] shadow-sm">
-                                  {tag}
-                                  <button 
-                                    type="button" 
-                                    onClick={() => {
-                                      const tagsArray = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-                                      const newTags = tagsArray.filter((_, i) => i !== idx);
-                                      setEditingProduct((prev: any) => ({ ...(prev || {}), tags: newTags.join(', ') }));
-                                    }} 
-                                    className="hover:text-white transition-colors"
-                                  >
-                                    <X size={14} />
-                                  </button>
-                                </span>
-                              ))}
-                              <input
-                                type="text"
-                                className="flex-1 bg-transparent outline-none text-sm min-w-[150px] px-2 py-1 font-bold text-gray-700"
-                                placeholder={(!editingProduct?.tags || editingProduct.tags.trim() === '') ? "e.g. smartwatch, apple watch (Comma or Enter to add)" : "Add more tags..."}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ',') {
-                                    e.preventDefault();
-                                    const val = e.currentTarget.value;
-                                    if (val.trim()) {
-                                      const tagsArray = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-                                      const newTags = val.split(',').map(t => t.trim()).filter(Boolean);
-                                      const combined = Array.from(new Set([...tagsArray, ...newTags])).join(', ');
-                                      setEditingProduct((prev: any) => ({ ...(prev || {}), tags: combined }));
-                                      e.currentTarget.value = '';
-                                    }
-                                  }
-                                }}
-                                onBlur={(e) => {
-                                  const val = e.currentTarget.value;
-                                  if (val.trim()) {
-                                    const tagsArray = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-                                    const newTags = val.split(',').map(t => t.trim()).filter(Boolean);
-                                    const combined = Array.from(new Set([...tagsArray, ...newTags])).join(', ');
-                                    setEditingProduct((prev: any) => ({ ...(prev || {}), tags: combined }));
-                                    e.currentTarget.value = '';
-                                  }
-                                }}
-                                onPaste={(e) => {
-                                  e.preventDefault();
-                                  const paste = e.clipboardData.getData('text');
-                                  if (paste.trim()) {
-                                    const tagsArray = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-                                    const newTags = paste.split(',').map(t => t.trim()).filter(Boolean);
-                                    const combined = Array.from(new Set([...tagsArray, ...newTags])).join(', ');
-                                    setEditingProduct((prev: any) => ({ ...(prev || {}), tags: combined }));
-                                  }
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <div id="field-image">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-                              প্রধান ছবি (Link vs Upload)
-                              {productFormErrors.image && (
-                                <span className="text-red-500 normal-case">
-                                  নাম দিতে হবে
-                                </span>
-                              )}
-                            </label>
-                            <div className="space-y-2">
-                              <input
-                                type="text"
-                                value={editingProduct?.image || ""}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditingProduct((prev) => ({ ...(prev || {}), image: val }));
-                                  if (productFormErrors.image)
-                                    setProductFormErrors((prev) => ({
-                                      ...prev,
-                                      image: false,
-                                    }));
-                                }}
-                                className={`w-full bg-gray-50 border ${productFormErrors.image ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs`}
-                                placeholder="Image Link (https://...)"
-                              />
-                              <div className="relative">
-                                <input
-                                  key={editingProduct?.image || "empty"}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    handleAdminImageUpload(e);
-                                    if (productFormErrors.image)
-                                      setProductFormErrors((prev) => ({
-                                        ...prev,
-                                        image: false,
-                                      }));
-                                  }}
-                                  className="hidden"
-                                  id="adminImageUpload"
-                                />
-                                <label
-                                  htmlFor="adminImageUpload"
-                                  className="w-full bg-gray-100 text-secondary font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer border-2 border-dashed border-gray-200 hover:bg-gray-200 transition-all"
-                                >
-                                  <Upload size={16} /> প্রধান ছবি আপলোড করুন
-                                </label>
-                              </div>
-                              {editingProduct?.image && (
-                                <div className="relative w-24 h-24 group mt-2">
-                                  <img loading="lazy"
-                                    src={editingProduct.image}
-                                    className="w-24 h-24 rounded-xl object-cover border border-gray-200"
-                                    alt="Preview"
+                              <div className="grid grid-cols-2 gap-3">
+                                <div id="field-code">
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1 flex justify-between items-center">
+                                    <span>Product Code</span>
+                                    <span className="text-red-400 normal-case font-normal">* Required</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingProduct?.code || ""}
+                                    onChange={(e) => {
+                                      setEditingProduct({ ...(editingProduct || {}), code: e.target.value } as any);
+                                      if (productFormErrors.code) setProductFormErrors((prev) => ({ ...prev, code: false }));
+                                    }}
+                                    className={`w-full bg-gray-50 border ${productFormErrors.code ? "border-red-400 ring-1 ring-red-400" : "border-gray-200"} rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm font-bold transition-all`}
+                                    placeholder="e.g., SAM-A55"
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setEditingProduct((prev) => ({ ...(prev || {}), image: "" }))
-                                    }
-                                    className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"
-                                  >
-                                    <X size={12} />
-                                  </button>
+                                  <p className="text-[9px] text-gray-400 mt-1">Used for searching</p>
                                 </div>
-                              )}
+                                <div id="field-sms-name">
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">SMS Name <span className="text-gray-400 normal-case font-normal">(Optional)</span></label>
+                                  <input
+                                    type="text"
+                                    value={editingProduct?.smsName || ""}
+                                    onChange={(e) => setEditingProduct({ ...(editingProduct || {}), smsName: e.target.value } as any)}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm font-bold transition-all"
+                                    placeholder="e.g., Galaxy A55"
+                                  />
+                                  <p className="text-[9px] text-gray-400 mt-1">Short name for SMS</p>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                              অতিরিক্ত গ্যালারি ছবি
-                            </label>
-                            <div className="space-y-3">
-                              <div className="grid grid-cols-4 gap-2">
-                                {editingProduct?.images?.map((img, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="relative group aspect-square"
-                                  >
-                                    <img loading="lazy"
-                                      src={img}
-                                      className="w-full h-full object-cover rounded-lg border border-gray-100"
+
+                          {/* ━━━ Step 2: Price & Stock ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                              <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">2</span>
+                              <span className="text-sm font-bold text-gray-700">Price & Stock</span>
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <div className={`grid gap-3 ${isMasterAdmin ? "grid-cols-3" : "grid-cols-2"}`}>
+                                {isMasterAdmin && (
+                                  <div>
+                                    <label className="block text-[11px] font-bold text-indigo-500 uppercase mb-1">Buying Price 🔒</label>
+                                    <input
+                                      type="number"
+                                      value={editingProduct?.buyingPrice || ""}
+                                      onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), buyingPrice: Number(e.target.value) }))}
+                                      className="w-full bg-indigo-50 border border-indigo-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm font-bold text-indigo-900 transition-all"
+                                      placeholder="0"
                                     />
-                                    <button
-                                      type="button"
-                                      onClick={() => removeImage(idx)}
-                                      className="absolute -top-1 -right-1 bg-red-500 text-white p-1 rounded-full shadow-lg"
-                                    >
-                                      <X size={10} />
-                                    </button>
+                                  </div>
+                                )}
+                                <div id="field-price">
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1 flex justify-between items-center">
+                                    <span>Selling Price <span className="text-red-400">*</span></span>
+                                    {productFormErrors.price && <span className="text-red-500 normal-case font-normal">Price required</span>}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={editingProduct?.price || ""}
+                                    onChange={(e) => {
+                                      setEditingProduct((prev) => ({ ...(prev || {}), price: Number(e.target.value) }));
+                                      if (productFormErrors.price) setProductFormErrors((prev) => ({ ...prev, price: false }));
+                                    }}
+                                    className={`w-full bg-gray-50 border ${productFormErrors.price ? "border-red-400 ring-2 ring-red-400/20" : "border-gray-200"} rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm font-bold transition-all`}
+                                    placeholder="0"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Old Price <span className="text-gray-400 font-normal normal-case">(For discount)</span></label>
+                                  <input
+                                    type="number"
+                                    value={editingProduct?.originalPrice || ""}
+                                    onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), originalPrice: Number(e.target.value) }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all"
+                                    placeholder="0"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Weight</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={editingProduct?.weight || ""}
+                                    onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), weight: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all"
+                                    placeholder="1"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Unit</label>
+                                  <select
+                                    value={editingProduct?.unit || "piece"}
+                                    onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), unit: e.target.value }))}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all cursor-pointer"
+                                  >
+                                    <option value="piece">Piece</option>
+                                    <option value="kg">KG</option>
+                                    <option value="gm">Gram</option>
+                                    <option value="liter">Liter</option>
+                                    <option value="ml">ML</option>
+                                    <option value="packet">Packet</option>
+                                    <option value="box">Box</option>
+                                    <option value="set">Set</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Stock</label>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      value={editingProduct?.stock === undefined || editingProduct?.stock === null ? "" : editingProduct.stock}
+                                      onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), stock: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                                      className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 pr-10 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all"
+                                      placeholder="0"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 pointer-events-none">
+                                      {(() => { switch (editingProduct?.unit) { case "kg": return "Kg"; case "gm": return "Gm"; case "liter": return "Ltr"; case "ml": return "Ml"; case "packet": return "Pkt"; case "box": return "Box"; case "set": return "Set"; default: return "Pcs"; } })()}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ━━━ Step 3: Images ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                              <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">3</span>
+                              <span className="text-sm font-bold text-gray-700">Images</span>
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <div id="field-image">
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1 flex justify-between items-center">
+                                  <span>Main Image</span>
+                                  {productFormErrors.image ? <span className="text-red-500 normal-case font-normal">Image is required</span> : <span className="text-red-400 normal-case font-normal">* Required</span>}
+                                </label>
+                                <div className="space-y-2">
+                                  <input
+                                    type="text"
+                                    value={editingProduct?.image || ""}
+                                    onChange={(e) => {
+                                      setEditingProduct((prev) => ({ ...(prev || {}), image: e.target.value }));
+                                      if (productFormErrors.image) setProductFormErrors((prev) => ({ ...prev, image: false }));
+                                    }}
+                                    className={`w-full bg-gray-50 border ${productFormErrors.image ? "border-red-400 ring-1 ring-red-400" : "border-gray-200"} rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-xs transition-all`}
+                                    placeholder="Paste image link (https://...)"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-px bg-gray-100" />
+                                    <span className="text-[10px] text-gray-400 font-bold">OR</span>
+                                    <div className="flex-1 h-px bg-gray-100" />
+                                  </div>
+                                  <input key={editingProduct?.image || "empty"} type="file" accept="image/*" onChange={(e) => { handleAdminImageUpload(e); if (productFormErrors.image) setProductFormErrors((prev) => ({ ...prev, image: false })); }} className="hidden" id="adminImageUpload" />
+                                  <label htmlFor="adminImageUpload" className="w-full bg-gray-50 text-gray-600 font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer border-2 border-dashed border-gray-200 hover:border-primary/30 hover:bg-red-50/30 transition-all">
+                                    <Upload size={14} /> Upload image from computer
+                                  </label>
+                                  {editingProduct?.image && (
+                                    <div className="relative w-20 h-20 group">
+                                      <img loading="lazy" src={editingProduct.image} className="w-20 h-20 rounded-xl object-cover border border-gray-200" alt="Preview" />
+                                      <button type="button" onClick={() => setEditingProduct((prev) => ({ ...(prev || {}), image: "" }))} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white p-1 rounded-full shadow">
+                                        <X size={10} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Additional Images <span className="text-gray-400 font-normal normal-case">(Gallery)</span></label>
+                                <div className="grid grid-cols-5 gap-2">
+                                  {editingProduct?.images?.map((img, idx) => (
+                                    <div key={idx} className="relative group aspect-square">
+                                      <img loading="lazy" src={img} className="w-full h-full object-cover rounded-lg border border-gray-100" />
+                                      <button type="button" onClick={() => removeImage(idx)} className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full shadow">
+                                        <X size={9} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <label className="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-red-50/20 transition-all">
+                                    <PlusCircle size={18} className="text-gray-300" />
+                                    <span className="text-[8px] font-bold text-gray-300 mt-0.5">Add</span>
+                                    <input key={editingProduct?.images?.length || 0} type="file" multiple accept="image/*" className="hidden" onChange={handleAdminMultiImageUpload} />
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ━━━ Step 4: Category & Tags ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                              <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">4</span>
+                              <span className="text-sm font-bold text-gray-700">Category & Tags</span>
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <div id="field-category">
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1 flex justify-between items-center">
+                                  <span>Category</span>
+                                  {productFormErrors.category ? <span className="text-red-500 normal-case font-normal">Select Category</span> : <span className="text-red-400 normal-case font-normal">* Required</span>}
+                                </label>
+                                <div className="relative">
+                                  <select
+                                    value={editingProduct?.category || ""}
+                                    onChange={(e) => { setEditingProduct((prev) => ({ ...(prev || {}), category: e.target.value, subcategory: "" })); if (productFormErrors.category) setProductFormErrors((prev) => ({ ...prev, category: false })); }}
+                                    className={`appearance-none w-full bg-gray-50 border ${productFormErrors.category ? "border-red-400 ring-1 ring-red-400" : "border-gray-200"} rounded-xl py-2.5 pl-3.5 pr-10 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold cursor-pointer`}
+                                  >
+                                    <option value="">— Select Category —</option>
+                                    {categories.map((cat) => (<option key={cat.id} value={cat.name}>{cat.name}</option>))}
+                                  </select>
+                                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                                </div>
+                              </div>
+                              {(() => {
+                                const selCatObj = categories.find(c => c.name === editingProduct?.category);
+                                const subcats = selCatObj?.subcategories || [];
+                                if (subcats.length === 0) return null;
+                                return (
+                                  <div id="field-subcategory">
+                                    <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Sub-Category</label>
+                                    <div className="relative">
+                                      <select
+                                        value={editingProduct?.subcategory || ""}
+                                        onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), subcategory: e.target.value }))}
+                                        className="appearance-none w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-3.5 pr-10 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold cursor-pointer"
+                                      >
+                                        <option value="">— Select Sub-Category —</option>
+                                        {subcats.map((sub, idx) => (<option key={idx} value={sub}>{sub}</option>))}
+                                      </select>
+                                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                              <div id="field-tags">
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Search Tags <span className="text-gray-400 font-normal normal-case">(For Google & Site Search)</span></label>
+                                <div className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 min-h-[46px] flex flex-wrap gap-1.5 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                                  {(editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : []).map((tag, idx) => (
+                                    <span key={idx} className="flex items-center gap-1 bg-gray-800 text-gray-200 text-xs font-medium px-2.5 py-1 rounded-lg">
+                                      {tag}
+                                      <button type="button" onClick={() => { const arr = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : []; setEditingProduct((prev: any) => ({ ...(prev || {}), tags: arr.filter((_, i) => i !== idx).join(', ') })); }} className="hover:text-white transition-colors"><X size={12} /></button>
+                                    </span>
+                                  ))}
+                                  <input
+                                    type="text"
+                                    className="flex-1 bg-transparent outline-none text-sm min-w-[120px] px-1 py-0.5 font-medium text-gray-700"
+                                    placeholder={(!editingProduct?.tags || editingProduct.tags.trim() === '') ? "e.g., smartwatch, watch — Press Enter or comma to add" : "More tags..."}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const val = e.currentTarget.value; if (val.trim()) { const arr = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : []; const combined = Array.from(new Set([...arr, ...val.split(',').map(t => t.trim()).filter(Boolean)])).join(', '); setEditingProduct((prev: any) => ({ ...(prev || {}), tags: combined })); e.currentTarget.value = ''; } } }}
+                                    onBlur={(e) => { const val = e.currentTarget.value; if (val.trim()) { const arr = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : []; const combined = Array.from(new Set([...arr, ...val.split(',').map(t => t.trim()).filter(Boolean)])).join(', '); setEditingProduct((prev: any) => ({ ...(prev || {}), tags: combined })); e.currentTarget.value = ''; } }}
+                                    onPaste={(e) => { e.preventDefault(); const paste = e.clipboardData.getData('text'); if (paste.trim()) { const arr = editingProduct?.tags ? editingProduct.tags.split(',').map(t => t.trim()).filter(Boolean) : []; const combined = Array.from(new Set([...arr, ...paste.split(',').map(t => t.trim()).filter(Boolean)])).join(', '); setEditingProduct((prev: any) => ({ ...(prev || {}), tags: combined })); } }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ━━━ Step 5: Size & Color ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">5</span>
+                                <span className="text-sm font-bold text-gray-700">Size & Color (Variants)</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">Optional</span>
+                            </div>
+                            <div className="p-4">
+                              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-3">
+                                <p className="text-[11px] font-bold text-blue-600 mb-1">📌 Instructions:</p>
+                                <p className="text-[11px] text-blue-500">• If no size, enter <strong>"Free"</strong> in Size</p>
+                                <p className="text-[11px] text-blue-500">• Provide separate stock (Quantity) for each variant</p>
+                              </div>
+                              <div className="space-y-3">
+                                {editingProduct?.variants?.map((variant, idx) => (
+                                  <div key={variant.id || idx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 relative group hover:border-gray-300 transition-all">
+                                    <div className="flex gap-3 items-start">
+                                      <div className="w-14 h-14 flex-shrink-0 relative">
+                                        {variant.image ? (
+                                          <img loading="lazy" src={variant.image} className="w-14 h-14 rounded-xl object-cover border border-gray-200" alt="Variant" />
+                                        ) : (
+                                          <div className="w-14 h-14 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 bg-white"><ImageIcon size={18} /></div>
+                                        )}
+                                        <label className="absolute inset-0 cursor-pointer opacity-0 group-hover:opacity-100 flex items-center justify-center bg-black/20 rounded-xl transition-all">
+                                          <Upload size={12} className="text-white" />
+                                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleVariantImageUpload(e, idx)} />
+                                        </label>
+                                      </div>
+                                      <div className="flex-1 grid grid-cols-3 gap-2">
+                                        <div>
+                                          <label className="text-[9px] font-bold text-gray-400 uppercase">কালার</label>
+                                          <input type="text" value={variant.name} onChange={(e) => { const val = e.target.value; setEditingProduct((prev: any) => { const nv = [...(prev?.variants || [])]; if (nv[idx]) nv[idx] = { ...nv[idx], name: val }; return { ...prev, variants: nv }; }); }} placeholder="Red" className="w-full bg-white border border-gray-200 rounded-lg py-1.5 px-2 text-xs font-bold outline-none focus:ring-1 focus:ring-primary mt-0.5" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[9px] font-bold text-primary uppercase">সাইজ *</label>
+                                          <input type="text" value={variant.size || ""} onChange={(e) => { const val = e.target.value; setEditingProduct((prev: any) => { const nv = [...(prev?.variants || [])]; if (nv[idx]) nv[idx] = { ...nv[idx], size: val }; return { ...prev, variants: nv }; }); }} placeholder="XL / Free" className="w-full bg-red-50 border border-primary/20 rounded-lg py-1.5 px-2 text-xs font-bold text-primary outline-none focus:ring-1 focus:ring-primary mt-0.5" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[9px] font-bold text-emerald-600 uppercase">স্টক (Qty)</label>
+                                          <input type="number" value={variant.stock === undefined || variant.stock === null ? "" : variant.stock} onChange={(e) => { const val = e.target.value === "" ? 0 : parseInt(e.target.value); setEditingProduct((prev: any) => { if (!prev) return prev; const nv = [...(prev.variants || [])]; if (nv[idx]) nv[idx] = { ...nv[idx], stock: val }; return { ...prev, variants: nv }; }); }} placeholder="0" className="w-full bg-emerald-50 border border-emerald-200 rounded-lg py-1.5 px-2 text-xs font-bold text-emerald-700 outline-none focus:ring-1 focus:ring-emerald-500 mt-0.5" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                                      <div className="flex gap-1">
+                                        {["S","M","L","XL","XXL"].map(s => (
+                                          <button key={s} type="button" onClick={() => setEditingProduct((prev: any) => { const nv = [...(prev?.variants || [])]; if (nv[idx]) nv[idx] = { ...nv[idx], size: s }; return { ...prev, variants: nv }; })} className={`text-[8px] px-1.5 py-0.5 rounded border font-bold transition-all ${variant.size === s ? 'bg-primary text-white border-primary' : 'bg-white text-gray-400 border-gray-200 hover:border-primary/30'}`}>{s}</button>
+                                        ))}
+                                      </div>
+                                      <div className="flex gap-1.5">
+                                        <button type="button" onClick={() => setEditingProduct((prev: any) => { if (!prev) return prev; const nv = [...(prev.variants || [])]; const toClone = nv[idx]; if (toClone) nv.push({ ...toClone, id: Math.random().toString(36).substring(2, 9) }); return { ...prev, variants: nv }; })} className="p-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-all" title="Action"><Copy size={11} /></button>
+                                        <button type="button" onClick={() => removeVariant(idx)} className="p-1 bg-red-100 text-red-500 rounded-lg hover:bg-red-200 transition-all"><X size={11} /></button>
+                                      </div>
+                                    </div>
                                   </div>
                                 ))}
-                                <label className="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-all">
-                                  <PlusCircle
-                                    size={20}
-                                    className="text-gray-400"
-                                  />
-                                  <span className="text-[8px] font-bold text-gray-400 mt-1">
-                                     Add
-                                  </span>
-                                  <input
-                                    key={editingProduct?.images?.length || 0}
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={handleAdminMultiImageUpload}
-                                  />
-                                </label>
+                                <button type="button" onClick={addVariant} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 text-xs font-bold flex items-center justify-center gap-2 hover:border-primary/30 hover:text-primary hover:bg-red-50/20 transition-all">
+                                  <Plus size={16} /> নতুন সাইজ বা কালার যোগ করুন
+                                </button>
                               </div>
                             </div>
                           </div>
-                          </div>
-                          <div className="bg-white border border-gray-100 p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5 mb-6"><h5 className="text-sm font-bold text-secondary border-b border-gray-100 pb-3 mb-4 flex items-center gap-2">🎨 Variants & Sizes</h5>
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-3 text-center bg-gray-100 py-1 rounded-full">
-                              Productsের ভেরিয়েন্ট (Size & Stock Management)
-                            </label>
-                            <div className="space-y-4">
-                                  <div className="bg-blue-50 p-4 rounded-2xl mb-4 border border-blue-100">
-                                    <h5 className="text-sm font-bold text-blue-600 uppercase mb-2">▶ Stock Rules:</h5>
-                                    <p className="text-xs font-medium text-blue-500 mb-1.5">â€¢ যদি সাইজ বা করুন? না থাকে, তাহলে Size এ 'Free' Write here.</p>
-                                    <p className="text-xs font-medium text-blue-500">â€¢ প্রতিটি সাইজ বা কালারের জন্য আলাদাভাবে Stock (Quantity) যুক্ত করুন?</p>
-                                  </div>
-                                  
-                              {editingProduct?.variants?.map((variant, idx) => (
-                                <div
-                                  key={variant.id || idx}
-                                  className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-col gap-4 relative group hover:shadow-md transition-shadow"
-                                >
-                                  <div className="flex gap-4 items-start w-full">
-                                    <div className="w-16 h-16 flex-shrink-0 relative">
-                                      {variant.image ? (
-                                        <img loading="lazy"
-                                          src={variant.image}
-                                          className="w-16 h-16 rounded-xl object-cover border border-gray-100"
-                                          alt="Variant"
-                                        />
-                                      ) : (
-                                        <div className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-100 flex items-center justify-center text-gray-300">
-                                          <ImageIcon size={20} />
-                                        </div>
-                                      )}
-                                      <label className="absolute inset-0 cursor-pointer opacity-0 group-hover:opacity-100 flex items-center justify-center bg-black/20 rounded-xl transition-all">
-                                        <Upload size={14} className="text-white" />
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          className="hidden"
-                                          onChange={(e) => handleVariantImageUpload(e, idx)}
-                                        />
-                                      </label>
-                                    </div>
-                                    
-                                    <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-3">
-                                      <div className="space-y-1">
-                                        <label className="text-[9px] font-bold text-gray-400 uppercase">Color (Optional)</label>
-                                        <input
-                                          type="text"
-                                          value={variant.name}
-                                          onChange={(e) => {
-                                            const val = e.target.value;
-                                            setEditingProduct((prev: any) => {
-                                              const newVariants = [...(prev?.variants || [])];
-                                              if (newVariants[idx]) newVariants[idx] = { ...newVariants[idx], name: val };
-                                              return { ...prev, variants: newVariants };
-                                            });
-                                          }}
-                                          placeholder="e.g. Red"
-                                          className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-lg py-2 px-3 text-xs font-bold outline-none focus:ring-1 focus:ring-primary"
-                                        />
-                                      </div>
-                                      
-                                      <div className="space-y-1">
-                                        <label className="text-[9px] font-bold text-primary uppercase"> (Size)</label>
-                                        <input
-                                          type="text"
-                                          value={variant.size || ""}
-                                          onChange={(e) => {
-                                            const val = e.target.value;
-                                            setEditingProduct((prev: any) => {
-                                              const newVariants = [...(prev?.variants || [])];
-                                              if (newVariants[idx]) newVariants[idx] = { ...newVariants[idx], size: val };
-                                              return { ...prev, variants: newVariants };
-                                            });
-                                          }}
-                                          placeholder="e.g. XL"
-                                          className="w-full bg-red-50 border border-primary/20 rounded-lg py-2 px-3 text-xs font-bold text-primary outline-none focus:ring-2 focus:ring-primary/30"
-                                        />
-                                      </div>
-                                      <div className="space-y-1 col-span-2 md:col-span-1">
-                                        <label className="text-[9px] font-bold text-emerald-600 uppercase">Stock (Quantity)</label>
-                                        <div className="relative">
-                                          <input
-                                            type="number"
-                                            value={variant.stock === undefined || variant.stock === null ? "" : variant.stock}
-                                            onChange={(e) => {
-                                              const val = e.target.value === "" ? 0 : parseInt(e.target.value);
-                                              setEditingProduct((prev: any) => {
-                                                if (!prev) return prev;
-                                                const newVariants = [...(prev.variants || [])];
-                                                if (newVariants[idx]) newVariants[idx] = { ...newVariants[idx], stock: val };
-                                                return { ...prev, variants: newVariants };
-                                              });
-                                            }}
-                                            placeholder="০"
-                                            className="w-full bg-emerald-50 border border-emerald-100 rounded-lg py-2 px-3 text-sm font-bold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500/30"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center justify-between border-t border-gray-50 pt-3">
-                                    <div className="flex gap-1">
-                                      {["S", "M", "L", "XL", "XXL"].map(s => (
-                                        <button
-                                          key={s}
-                                          type="button"
-                                          onClick={() => {
-                                            setEditingProduct((prev: any) => {
-                                              const newVariants = [...(prev?.variants || [])];
-                                              if (newVariants[idx]) newVariants[idx] = { ...newVariants[idx], size: s };
-                                              return { ...prev, variants: newVariants };
-                                            });
-                                          }}
-                                          className={`text-[8px] px-2 py-1 rounded border font-bold ${variant.size === s ? 'bg-primary text-white border-primary' : 'bg-gray-50 text-gray-400 border-gray-100 hover:border-gray-200'} transition-all`}
-                                        >
-                                          {s}
-                                        </button>
-                                      ))}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                                        checked={variant.showExactStock !== false}
-                                        onChange={(e) => {
-                                          const val = e.target.checked;
-                                          setEditingProduct((prev: any) => {
-                                            if (!prev) return prev;
-                                            const newVariants = [...(prev.variants || [])];
-                                            if (newVariants[idx]) newVariants[idx] = { ...newVariants[idx], showExactStock: val };
-                                            return { ...prev, variants: newVariants };
-                                          });
-                                        }}
-                                        id={`showStock-${idx}`}
-                                      />
-                                      <label htmlFor={`showStock-${idx}`} className="text-[10px] font-bold text-gray-500">Show Stock Count</label>
-                                    </div>
-                                  </div>
-                                  <div className="absolute -top-2 -right-2 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingProduct((prev: any) => {
-                                          if (!prev) return prev;
-                                          const newVariants = [...(prev.variants || [])];
-                                          const toClone = newVariants[idx];
-                                          if (toClone) {
-                                            newVariants.push({
-                                              ...toClone,
-                                              id: Math.random().toString(36).substring(2, 9),
-                                            });
-                                          }
-                                          return { ...prev, variants: newVariants };
-                                        });
-                                      }}
-                                      className="p-1.5 bg-blue-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"
-                                      title="Action"
-                                    >
-                                      <Copy size={12} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeVariant(idx)}
-                                      className="p-1.5 bg-red-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={addVariant}
-                                className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 text-xs font-bold flex items-center justify-center gap-2 hover:bg-gray-50 hover:border-primary/20 hover:text-primary transition-all group"
-                              >
-                                <Plus size={18} className="group-hover:scale-125 transition-transform" /> নতুন সাইজ বা কালার Add
-                              </button>
+
+                          {/* ━━━ ধাপ ৬: বিস্তারিত তথ্য ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">৬</span>
+                                <span className="text-sm font-bold text-gray-700">প্রোডাক্টের বিস্তারিত তথ্য</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">Optional</span>
                             </div>
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                              ইউটিউব ভিডিও (Link)
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.videoUrl || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), videoUrl: val }));
-                              }}
-                              className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs"
-                              placeholder="https://youtube.com/watch?v=..."
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                              Products বিস্তারিত তথ্য (Description)
-                            </label>
-                            <textarea
-                              value={editingProduct?.description || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), description: val }));
-                              }}
-                              rows={3}
-                              className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-medium no-scrollbar"
-                              placeholder="Products সম্পর্কে বিস্তারিত লিখুন..."
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                              ব্র্যান্ড (Brand)
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.brand || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), brand: val }));
-                              }}
-                              className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-bold"
-                              placeholder="e.g. Samsung, Apple, No Brand"
-                            />
-                          </div>
-                          <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 mb-6">
-                            <label className="block text-xs font-bold text-amber-600 uppercase mb-4 flex items-center gap-2">
-                              <Tag size={16} /> হোলসেল রিট (Wholesale Pricing Tiers)
-                            </label>
-                            
-                            <div className="space-y-3">
-                              {editingProduct?.wholesaleTiers?.map((tier, idx) => (
-                                <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded-2xl border border-amber-100 shadow-sm">
-                                  <div className="flex-1">
-                                    <label className="text-[9px] font-bold text-gray-400 uppercase">Minimum Qty</label>
-                                    <input 
-                                      type="number"
-                                      value={tier.minQty}
-                                      onChange={(e) => {
-                                        const val = Number(e.target.value);
-                                        const newTiers = [...(editingProduct?.wholesaleTiers || [])];
-                                        newTiers[idx].minQty = val;
-                                        setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: newTiers }));
-                                      }}
-                                      className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-lg py-2 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500"
-                                      placeholder="e.g. 10"
-                                    />
-                                  </div>
-                                  <div className="flex-1">
-<label className="text-[9px] font-bold text-gray-400 uppercase">Price (Per Pc)</label>
-                                    <input 
-                                      type="number"
-                                      value={tier.price}
-                                      onChange={(e) => {
-                                        const val = Number(e.target.value);
-                                        const newTiers = [...(editingProduct?.wholesaleTiers || [])];
-                                        newTiers[idx].price = val;
-                                        setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: newTiers }));
-                                      }}
-                                      className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-lg py-2 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-500"
-                                      placeholder="e.g. 150"
-                                    />
-                                  </div>
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      const newTiers = editingProduct?.wholesaleTiers?.filter((_, i) => i !== idx);
-                                      setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: newTiers }));
-                                    }}
-                                    className="mt-4 p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                                  >
-                                    <X size={16} />
+                            <div className="p-4 space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">ব্র্যান্ড</label>
+                                  <input type="text" value={editingProduct?.brand || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), brand: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all" placeholder="Samsung, Apple..." />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">মডেল</label>
+                                  <input type="text" value={editingProduct?.modelName || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), modelName: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all" placeholder="Galaxy A55" />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">ওয়ারেন্টি</label>
+                                  <input type="text" value={editingProduct?.warranty || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), warranty: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all" placeholder="১ বছর অফিশিয়াল" />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">বক্সে যা আছে</label>
+                                  <input type="text" value={editingProduct?.inTheBox || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), inTheBox: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all" placeholder="1x চার্জার, 1x কেবল..." />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">বিবরণ (Description)</label>
+                                <textarea value={editingProduct?.description || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), description: e.target.value }))} rows={3} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-medium no-scrollbar transition-all resize-none" placeholder="প্রোডাক্ট সম্পর্কে বিস্তারিত লিখুন..." />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">মূল বৈশিষ্ট্য (Key Features) <span className="text-gray-400 font-normal normal-case">— প্রতি লাইনে একটি</span></label>
+                                <textarea value={editingProduct?.features || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), features: e.target.value }))} rows={3} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-medium no-scrollbar leading-relaxed transition-all resize-none" placeholder={"Bluetooth 5.3\n5000mAh ব্যাটারি\nType-C ফাস্ট চার্জিং"} />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">YouTube ভিডিও লিংক</label>
+                                <input type="text" value={editingProduct?.videoUrl || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), videoUrl: e.target.value }))} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-xs transition-all" placeholder="https://youtube.com/watch?v=..." />
+                              </div>
+
+                              {/* Specifications */}
+                              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                                <label className="block text-[11px] font-bold text-blue-600 uppercase mb-2 flex items-center gap-1"><List size={13} /> টেকনিক্যাল স্পেসিফিকেশন</label>
+                                <div className="space-y-2">
+                                  {(editingProduct?.specifications || []).map((spec, idx) => (
+                                    <div key={idx} className="flex gap-2 items-center bg-white rounded-lg border border-blue-100 p-2">
+                                      <input type="text" value={spec.key} onChange={(e) => { const val = e.target.value; const ns = [...(editingProduct?.specifications || [])]; ns[idx].key = val; setEditingProduct(prev => ({ ...(prev || {}), specifications: ns })); }} className="flex-1 bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-400" placeholder="যেমন: Battery" />
+                                      <input type="text" value={spec.value} onChange={(e) => { const val = e.target.value; const ns = [...(editingProduct?.specifications || [])]; ns[idx].value = val; setEditingProduct(prev => ({ ...(prev || {}), specifications: ns })); }} className="flex-1 bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2.5 text-xs font-bold outline-none focus:ring-1 focus:ring-blue-400" placeholder="যেমন: 5000mAh" />
+                                      <button type="button" onClick={() => setEditingProduct(prev => ({ ...(prev || {}), specifications: editingProduct?.specifications?.filter((_, i) => i !== idx) }))} className="p-1.5 bg-red-50 text-red-400 rounded-lg hover:bg-red-100 transition-all"><X size={12} /></button>
+                                    </div>
+                                  ))}
+                                  <button type="button" onClick={() => setEditingProduct(prev => ({ ...(prev || {}), specifications: [...(editingProduct?.specifications || []), { key: '', value: '' }] }))} className="w-full py-2 border-2 border-dashed border-blue-200 rounded-xl text-blue-500 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-blue-100 transition-all">
+                                    <Plus size={13} /> স্পেসিফিকেশন যোগ করুন
                                   </button>
                                 </div>
-                              ))}
-                              
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newTiers = [...(editingProduct?.wholesaleTiers || []), { minQty: 10, price: Number(editingProduct?.price || 0) }];
-                                  setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: newTiers }));
-                                }}
-                                className="w-full py-3 border-2 border-dashed border-amber-200 rounded-2xl text-amber-600 text-[11px] font-bold flex items-center justify-center gap-2 hover:bg-amber-100 transition-all"
-                              >
-                                <Plus size={16} /> নতুন হোলসেল রেট Add
-                              </button>
-                              
-                              <p className="text-[10px] text-amber-500 font-bold mt-2 text-center">
-                                * যেমন: ১০ পিস নিলে ১৫০ টাকা, ২০ পিস নিলে ১৪০ টাকা ইত্যাদি।
-                              </p>
-                            </div>
-                          </div>
-                          <div id="field-category">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 flex justify-between">
-              Categories
-                              {productFormErrors.category && (
-                                <span className="text-red-500 normal-case">
-              নাম দিতে হবে
-                                </span>
-                              )}
-                            </label>
-                            <select
-                              value={editingProduct?.category || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ 
-                                  ...(prev || {}), 
-                                  category: val,
-                                  subcategory: ""
-                                }));
-                                if (productFormErrors.category)
-                                  setProductFormErrors((prev) => ({
-                                    ...prev,
-                                    category: false,
-                                  }));
-                              }}
-                              className={`w-full bg-gray-50 border ${productFormErrors.category ? "border-red-500 ring-1 ring-red-500" : "border-gray-100"} rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold`}
-                            >
-                              <option value="">Select</option>
-                              {categories.map((cat) => (
-                                <option key={cat.id} value={cat.name}>
-                                  {cat.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          
-                          {/* Subcategory Select dropdown */}
-                          {(() => {
-                            const selCatObj = categories.find(c => c.name === editingProduct?.category);
-                            const subcats = selCatObj?.subcategories || [];
-                            if (subcats.length === 0) return null;
-                            return (
-                              <div id="field-subcategory" className="mt-3">
-                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                                  Subcategories
-                                </label>
-                                <select
-                                  value={editingProduct?.subcategory || ""}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setEditingProduct((prev) => ({ ...(prev || {}), subcategory: val }));
-                                  }}
-                                  className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                >
-                                  <option value="">Select Subcategory</option>
-                                  {subcats.map((sub, idx) => (
-                                    <option key={idx} value={sub}>
-                                      {sub}
-                                    </option>
-                                  ))}
-                                </select>
                               </div>
-                            );
-                          })()}
-                          <div className="flex items-center gap-2 py-2">
-                            <input
-                              type="checkbox"
-                              id="isTrendingCheck"
-                              checked={editingProduct?.isTrending || false}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  isTrending: e.target.checked,
-                                } as any)
-                              }
-                              className="w-4 h-4 text-primary rounded"
-                            />
-                            <label
-                              htmlFor="isTrendingCheck"
-                              className="text-xs font-bold text-gray-600"
-                            >
-              ট্রেন্ডিং সেকশনে দেখান
-                            </label>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 py-2">
-                            <input
-                              type="checkbox"
-                              id="isFlashSaleCheck"
-                              checked={editingProduct?.isFlashSale || false}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  isFlashSale: e.target.checked,
-                                } as any)
-                              }
-                              className="w-4 h-4 text-primary rounded"
-                            />
-                            <label
-                              htmlFor="isFlashSaleCheck"
-                              className="text-xs font-bold text-gray-600"
-                            >
-                              ফ্লাশ সেল প্রোডাক্ট?
-                            </label>
-                          </div>
-                          {editingProduct?.isFlashSale && (
-                            <div className="mb-4">
-                              <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">
-                                ফ্লাশ সেলের শেষ সময়
-                              </label>
-                              <input
-                                type="datetime-local"
-                                value={editingProduct.flashSaleEndDate || ""}
-                                onChange={(e) =>
-                                  setEditingProduct({
-                                    ...(editingProduct || {}),
-                                    flashSaleEndDate: e.target.value,
-                                  } as any)
-                                }
-                                className="w-full bg-gray-50/50 border border-gray-200 transition-all hover:border-gray-300 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                              />
+
+                              {/* Wholesale Pricing */}
+                              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                                <label className="block text-[11px] font-bold text-amber-600 uppercase mb-2 flex items-center gap-1"><Tag size={13} /> পাইকারি মূল্য (Wholesale)</label>
+                                <div className="space-y-2">
+                                  {editingProduct?.wholesaleTiers?.map((tier, idx) => (
+                                    <div key={idx} className="flex gap-2 items-end bg-white rounded-lg border border-amber-100 p-2">
+                                      <div className="flex-1">
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase">সর্বনিম্ন পরিমাণ</label>
+                                        <input type="number" value={tier.minQty} onChange={(e) => { const val = Number(e.target.value); const nt = [...(editingProduct?.wholesaleTiers || [])]; nt[idx].minQty = val; setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: nt })); }} className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2.5 text-xs font-bold outline-none focus:ring-1 focus:ring-amber-400 mt-0.5" placeholder="10" />
+                                      </div>
+                                      <div className="flex-1">
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase">মূল্য (প্রতি পিস)</label>
+                                        <input type="number" value={tier.price} onChange={(e) => { const val = Number(e.target.value); const nt = [...(editingProduct?.wholesaleTiers || [])]; nt[idx].price = val; setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: nt })); }} className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2.5 text-xs font-bold outline-none focus:ring-1 focus:ring-amber-400 mt-0.5" placeholder="150" />
+                                      </div>
+                                      <button type="button" onClick={() => setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: editingProduct?.wholesaleTiers?.filter((_, i) => i !== idx) }))} className="p-1.5 bg-red-50 text-red-400 rounded-lg hover:bg-red-100 transition-all mb-0.5"><X size={12} /></button>
+                                    </div>
+                                  ))}
+                                  <button type="button" onClick={() => setEditingProduct(prev => ({ ...(prev || {}), wholesaleTiers: [...(editingProduct?.wholesaleTiers || []), { minQty: 10, price: Number(editingProduct?.price || 0) }] }))} className="w-full py-2 border-2 border-dashed border-amber-200 rounded-xl text-amber-600 text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-amber-100 transition-all">
+                                    <Plus size={13} /> পাইকারি রেট যোগ করুন
+                                  </button>
+                                  <p className="text-[10px] text-amber-500 text-center">* যেমন: ১০ পিস নিলে ১৫০ টাকা, ২০ পিস নিলে ১৪০ টাকা।</p>
+                                </div>
+                              </div>
                             </div>
-                          )}
-                          <div className="flex items-center gap-2 py-2">
-                            <input
-                              type="checkbox"
-                              id="isFreeDeliveryCheck"
-                              checked={editingProduct?.isFreeDelivery || false}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  isFreeDelivery: e.target.checked,
-                                } as any)
-                              }
-                              className="w-4 h-4 text-primary rounded"
-                            />
-                            <label
-                              htmlFor="isFreeDeliveryCheck"
-                              className="text-xs font-bold text-gray-600"
-                            >
-                              ফ্রি ডেলিভারি
-                            </label>
                           </div>
-                          <div className="flex items-center gap-2 py-1">
-                            <input
-                              type="checkbox"
-                              id="isComingSoonCheck"
-                              checked={editingProduct?.isComingSoon || false}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  isComingSoon: e.target.checked,
-                                } as any)
-                              }
-                              className="w-4 h-4 text-primary rounded"
-                            />
-                            <label
-                              htmlFor="isComingSoonCheck"
-                              className="text-xs font-bold text-gray-600"
-                            >
-                             শীঘ্রই আসছে (প্রি-অর্ডার)
-                            </label>
+
+                          {/* ━━━ ধাপ ৭: পাবলিশিং অপশন ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                              <span className="bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">৭</span>
+                              <span className="text-sm font-bold text-gray-700">পাবলিশিং অপশন</span>
+                            </div>
+                            <div className="p-3 space-y-1">
+                              <label htmlFor="isPublishedCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
+                                <input type="checkbox" id="isPublishedCheck" checked={editingProduct?.isPublished !== false} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), isPublished: e.target.checked } as any)} className="w-4 h-4 rounded accent-primary" />
+                                <span className="text-sm font-semibold text-gray-600 group-hover:text-gray-800 transition-colors">✅ পাবলিশড — ওয়েবসাইটে দেখাবে</span>
+                              </label>
+                              <label htmlFor="isTrendingCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
+                                <input type="checkbox" id="isTrendingCheck" checked={editingProduct?.isTrending || false} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), isTrending: e.target.checked } as any)} className="w-4 h-4 rounded accent-primary" />
+                                <span className="text-sm font-semibold text-gray-600 group-hover:text-gray-800 transition-colors">🔥 ট্রেন্ডিং সেকশনে দেখান</span>
+                              </label>
+                              <label htmlFor="isFreeDeliveryCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
+                                <input type="checkbox" id="isFreeDeliveryCheck" checked={editingProduct?.isFreeDelivery || false} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), isFreeDelivery: e.target.checked } as any)} className="w-4 h-4 rounded accent-primary" />
+                                <span className="text-sm font-semibold text-gray-600 group-hover:text-gray-800 transition-colors">🚚 ফ্রি ডেলিভারি</span>
+                              </label>
+                              <label htmlFor="isComingSoonCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
+                                <input type="checkbox" id="isComingSoonCheck" checked={editingProduct?.isComingSoon || false} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), isComingSoon: e.target.checked } as any)} className="w-4 h-4 rounded accent-primary" />
+                                <span className="text-sm font-semibold text-gray-600 group-hover:text-gray-800 transition-colors">⏳ শীঘ্রই আসছে (Pre-Order)</span>
+                              </label>
+                              <label htmlFor="isFlashSaleCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
+                                <input type="checkbox" id="isFlashSaleCheck" checked={editingProduct?.isFlashSale || false} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), isFlashSale: e.target.checked } as any)} className="w-4 h-4 rounded accent-primary" />
+                                <span className="text-sm font-semibold text-gray-600 group-hover:text-gray-800 transition-colors">⚡ ফ্লাশ সেল</span>
+                              </label>
+                              {editingProduct?.isFlashSale && (
+                                <div className="px-3 pb-1">
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">ফ্লাশ সেলের শেষ সময়</label>
+                                  <input type="datetime-local" value={editingProduct.flashSaleEndDate || ""} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), flashSaleEndDate: e.target.value } as any)} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all" />
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 py-1">
-                            <input
-                              type="checkbox"
-                              id="isPublishedCheck"
-                              checked={editingProduct?.isPublished !== false}
-                              onChange={(e) =>
-                                setEditingProduct({
-                                  ...(editingProduct || {}),
-                                  isPublished: e.target.checked,
-                                } as any)
-                              }
-                              className="w-4 h-4 text-primary rounded"
-                            />
-                            <label
-                              htmlFor="isPublishedCheck"
-                              className="text-xs font-bold text-gray-600"
-                            >
-                              পাবলিশড (টিক মার্ক থাকলে ওয়েবসাইটে দেখাবে, না থাকলে হাইড থাকবে)
-                            </label>
-                          </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="submit"
-                              className="flex-1 bg-primary text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 transition-all active:scale-95"
-                            >
-                              {editingProduct?.id
-                                ? "Products এডিট করুন"
-                              : "Products Add"}
+
+                          {/* ━━━ সেভ বাটন ━━━ */}
+                          <div className="flex gap-2 pb-4">
+                            <button type="submit" className="flex-1 bg-primary text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 active:scale-95 transition-all text-sm">
+                              {editingProduct?.id ? "✏️ প্রোডাক্ট আপডেট করুন" : "✅ প্রোডাক্ট সেভ করুন"}
                             </button>
                             {editingProduct && (
-                              <button
-                                type="button"
-                                onClick={() => setEditingProduct(null)}
-                                className="bg-gray-100 text-gray-500 px-6 rounded-2xl hover:bg-gray-200 transition-all"
-                              >
-                                <X size={20} />
+                              <button type="button" onClick={() => setEditingProduct(null)} className="bg-gray-100 text-gray-500 px-5 rounded-2xl hover:bg-gray-200 transition-all font-bold text-sm">
+                                Cancel
                               </button>
                             )}
                           </div>
                         </form>
+
                       </div>
                     </div>
                     {/* Products Table */}
@@ -3072,7 +2670,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           </div>
                           <h4 className="text-xl font-bold text-secondary mb-2">Admin প্যানেল</h4>
                           <p className="text-sm font-medium leading-relaxed max-w-xs">
-                           বামে থাকা লিস্ট থেকে একটি চ্যাট সিলেক্ট করে মেসেজ দেখুন এবং রিপ্লাই দিন।
+                           বামে থাকা লিস্ট থেকে একটি চ্যাট সিলেক্ট করে Message দেখুন এবং রিপ্লাই দিন।
                           </p>
                         </div>
                       )}
@@ -3085,7 +2683,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                        <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                           <div>
                              <h4 className="text-xl font-bold text-secondary">Refunds রিকুয়েস্ট</h4>
-                             <p className="text-xs text-gray-400 font-bold">Customerদের Refunds রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
+                             <p className="text-xs text-gray-400 font-bold">Customer refund requests will be shown here</p>
                           </div>
                           <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl flex items-center gap-2 font-bold text-xs">
                              <Clock size={16} /> Pending: {refundRequests.filter(r => r.status === "pending").length}
@@ -3432,7 +3030,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             ) : (
                               <AlertCircle size={24} className="text-yellow-500" />
                             )}
-                            <h4 className="font-bold text-gray-800">SMS পাঠানোর ফলাফল</h4>
+                            <h4 className="font-bold text-gray-800">SMS Sending Results</h4>
                           </div>
                           <div className="flex gap-6 text-sm">
                             <span className="text-green-600 font-bold"> Success: {bulkSmsResult.successCount}</span>
@@ -3478,7 +3076,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               }}
                               className="px-4 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors whitespace-nowrap"
                             >
-                              <X size={14} className="inline mr-1" /> এই পেজ বাতিল
+                              <X size={14} className="inline mr-1" /> এই পেজ Cancel
                             </button>
                             <button
                               onClick={() => {
@@ -3509,7 +3107,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <>
                               <div className="flex items-center justify-between mb-3 px-1">
                                 <span className="text-xs text-gray-400">
-                                 পেজ {bulkSmsPage + 1}/{totalPages || 1} | এই পেজে আছে: {pagePhones.length} টা | Selected: <span className="text-teal-600 font-bold">{pageSelectedCount}</span>
+                                 পেজ {bulkSmsPage + 1}/{totalPages || 1} | On this page: {pagePhones.length} items | Selected: <span className="text-teal-600 font-bold">{pageSelectedCount}</span>
                                 </span>
                                 <span className="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">
                                    Total: {filtered.length} টা
@@ -3567,7 +3165,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 <div className="text-center py-12">
                                   <Phone size={48} className="mx-auto mb-4 text-gray-200" />
                                   <p className="text-gray-400 font-bold text-sm">
-                                    {bulkSmsSearch ? "No phone number found" : "কোনো অর্ডার থেকে নম্বর পাওয়া যায়নি"}
+                                    {bulkSmsSearch ? "No phone number found" : "No numbers found from orders"}
                                   </p>
                                 </div>
                               )}
@@ -3638,9 +3236,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                 {adminTab === "settings" && (
                   <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
                     <div className="max-w-4xl mx-auto mb-8 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto no-scrollbar">
-                      <button onClick={() => setSettingsTab('general')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'general' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>সাধারণ Settings</button>
+                      <button onClick={() => setSettingsTab('general')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'general' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>General Settings</button>
                       <button onClick={() => setSettingsTab('banners')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'banners' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Homepage Banners</button>
-                      <button onClick={() => setSettingsTab('admins')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'admins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Admin ম্যানেজমেন্ট</button>
+                      <button onClick={() => setSettingsTab('admins')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'admins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Admin Management</button>
                       <button onClick={() => setSettingsTab('users')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'users' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Users Access</button>
                     </div>
                     {settingsTab === 'general' && (
@@ -3649,16 +3247,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                          <div className="flex items-center justify-between mb-8">
                            <h4 className="text-xl font-bold text-secondary flex items-center gap-2">
-                             <Tag size={24} className="text-primary" /> কুপন Settings
+                             <Tag size={24} className="text-primary" /> Coupon & Payment Settings
                            </h4>
                            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold">
-                              ব্যবহার হয়েছে: {orderHistory.filter(o => o.appliedCoupon === (siteConfig?.couponCode || "ISHOPBD5")).length} বার
+                              Used: {orderHistory.filter(o => o.appliedCoupon === (siteConfig?.couponCode || "ISHOPBD5")).length} times
                            </div>
                          </div>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                            <div>
                               <div className="flex justify-between items-center mb-2 ml-1">
-                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">Country Code</label>
+                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">Coupon Code</label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
                                   <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isCouponPublic ? 'bg-primary' : 'bg-gray-300'}`}>
                                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${siteConfig?.isCouponPublic ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -3669,129 +3267,6 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                               <input type="text" value={siteConfig?.couponCode || ""} onChange={(e) => setSiteConfig(prev => prev ? {...prev, couponCode: e.target.value.toUpperCase()} : null)} className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold tracking-widest" placeholder="e.g. ISHOPBD10" />
                             </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                              মডেল নাম/নাম্বার (Model)
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.modelName || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), modelName: val }));
-                              }}
-                              className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-bold"
-                              placeholder="e.g. Awei T29 Pro"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                              ওয়ারেন্টি (Warranty)
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.warranty || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), warranty: val }));
-                              }}
-                              className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-bold"
-                              placeholder="e.g. 6 Months Official Warranty"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                              বক্সে যা যা আছে (In the Box)
-                            </label>
-                            <input
-                              type="text"
-                              value={editingProduct?.inTheBox || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), inTheBox: val }));
-                              }}
-                              className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-medium"
-                              placeholder="e.g. 1x Earbuds, 1x Charging Cable, 1x User Manual"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                              হাইলাইটেড ফিচার্স (Key Features) - প্রতি লাইনে একটি করে
-                            </label>
-                            <textarea
-                              value={editingProduct?.features || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingProduct((prev) => ({ ...(prev || {}), features: val }));
-                              }}
-                              rows={4}
-                              className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-xs font-medium no-scrollbar leading-relaxed"
-                              placeholder="Bluetooth 5.3\n5000mAh Battery\nType-C Fast Charging"
-                            />
-                          </div>
-                          <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 mb-6">
-                            <label className="block text-xs font-bold text-blue-600 uppercase mb-4 flex items-center gap-2">
-                              <List size={16} /> স্পেসিফিকেশন (Specifications)
-                            </label>
-                            
-                            <div className="space-y-3">
-                              {(editingProduct?.specifications || []).map((spec, idx) => (
-                                <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded-2xl border border-blue-100 shadow-sm">
-                                  <div className="flex-1">
-                                    <label className="text-[9px] font-bold text-gray-400 uppercase">Key (যেমন: Battery)</label>
-                                    <input 
-                                      type="text"
-                                      value={spec.key}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const newSpecs = [...(editingProduct?.specifications || [])];
-                                        newSpecs[idx].key = val;
-                                        setEditingProduct(prev => ({ ...(prev || {}), specifications: newSpecs }));
-                                      }}
-                                      className="w-full bg-gray-50 border border-gray-100 rounded-lg py-2 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                      placeholder="Battery"
-                                    />
-                                  </div>
-                                  <div className="flex-1">
-                                    <label className="text-[9px] font-bold text-gray-400 uppercase">Value (যেমন: 5000mAh)</label>
-                                    <input 
-                                      type="text"
-                                      value={spec.value}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        const newSpecs = [...(editingProduct?.specifications || [])];
-                                        newSpecs[idx].value = val;
-                                        setEditingProduct(prev => ({ ...(prev || {}), specifications: newSpecs }));
-                                      }}
-                                      className="w-full bg-gray-50 border border-gray-100 rounded-lg py-2 px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                      placeholder="5000mAh"
-                                    />
-                                  </div>
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      const newSpecs = editingProduct?.specifications?.filter((_, i) => i !== idx);
-                                      setEditingProduct(prev => ({ ...(prev || {}), specifications: newSpecs }));
-                                    }}
-                                    className="mt-4 p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                                  >
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                              ))}
-                              
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newSpecs = [...(editingProduct?.specifications || []), { key: '', value: '' }];
-                                  setEditingProduct(prev => ({ ...(prev || {}), specifications: newSpecs }));
-                                }}
-                                className="w-full py-3 border-2 border-dashed border-blue-200 rounded-2xl text-blue-600 text-[11px] font-bold flex items-center justify-center gap-2 hover:bg-blue-100 transition-all"
-                              >
-                                <Plus size={16} /> নতুন স্পেসিফিকেশন Add
-                              </button>
-                            </div>
-                          </div>
                             <div>
                               <div className="flex justify-between items-center mb-2 ml-1">
                                 <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">WhatsApp Order Number</label>
@@ -3808,7 +3283,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-[#D12053]">
-                                   বিকাশ নাম্বার (Send Money)
+                                   Nagad Number (Send Money)
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
                                    <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isBkashEnabled ? 'bg-primary' : 'bg-gray-300'}`}>
@@ -3837,7 +3312,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-[#23A354]">
-                                   বিকাশ নাম্বার (Send Money)
+                                   bKash Number (Send Money)
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
                                    <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isNagadEnabled ? 'bg-[#23A354]' : 'bg-gray-300'}`}>
@@ -3866,7 +3341,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-[#8C3494]">
-                                   রকেট নাম্বার (Send Money)
+                                   Rocket Number (Send Money)
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
                                    <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isRocketEnabled ? 'bg-[#8C3494]' : 'bg-gray-300'}`}>
@@ -3895,7 +3370,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             <div>
                                <div className="flex justify-between items-center mb-2 ml-1">
                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest text-secondary">
-                                   অতিরিক্ত গ্যালারি ছবি
+                                   Bank Payment Option
                                  </label>
                                  <label className="flex items-center gap-2 cursor-pointer group">
                                    <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${siteConfig?.isBankEnabled ? 'bg-secondary' : 'bg-gray-300'}`}>
@@ -3943,7 +3418,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                            <div className="md:col-span-2">
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                আমাদের সম্পর্কে (About Us)
+                                About Us
                               </label>
                               <textarea
                                 value={siteConfig?.aboutUs || ""}
@@ -3954,7 +3429,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div className="md:col-span-2">
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                গোপনীয়তা নীতি (Privacy Policy)
+                                Privacy Policy
                               </label>
                               <textarea
                                 value={siteConfig?.privacyPolicy || ""}
@@ -3964,7 +3439,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div className="md:col-span-2">
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                Refunds পলিসি (Refund Policy)
+                                Refund Policy
                               </label>
                               <textarea
                                 value={siteConfig?.refundPolicy || ""}
@@ -3974,7 +3449,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div className="md:col-span-2">
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                নিয়ম ও শর্তাবলী (Terms & Conditions)
+                                Terms & Conditions
                               </label>
                               <textarea
                                 value={siteConfig?.termsAndConditions || ""}
@@ -3984,13 +3459,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                অতিরিক্ত গ্যালারি ছবি
+                                Checkout Warning Text
                               </label>
                               <textarea
                                 value={siteConfig?.checkoutWarningText || ""}
                                 onChange={(e) => setSiteConfig(prev => prev ? {...prev, checkoutWarningText: e.target.value} : null)}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-medium h-24 resize-none no-scrollbar"
-                                placeholder="০"
+                                placeholder="0"
                               />
                            </div>
                             {/* SMS Template */}
@@ -4003,14 +3478,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     value={siteConfig?.smsTemplateStart || ""}
                                     onChange={(e) => setSiteConfig(prev => prev ? {...prev, smsTemplateStart: e.target.value} : null)}
                                     className="w-full bg-white border border-blue-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm h-20 resize-none no-scrollbar"
-                                    placeholder="যেমন: প্রিয় Customer, আপনার অর্ডারটি অর্ডার হয়েছে?"
+                                    placeholder="e.g. Dear Customer, your order has been placed successfully."
                                   />
                                 </div>
                                 <div className="bg-white border-2 border-dashed border-blue-300 rounded-xl px-4 py-3 text-xs text-blue-500">
                                    <strong>Cash on Delivery:</strong><br/>
-                                  Products: [Productsের নাম ও পরিমাণ]<br/>
-                                  অর্ডার নং: [অর্ডার নম্বর]<br/>
-                                  মোট বিল: ৳[টাকা]
+                                  Products: [Product Name & Quantity]<br/>
+                                  Order No: [Order Number]<br/>
+                                  Total Bill: ৳[Amount]
                                 </div>
                                 <div>
                                   <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-widest">Last part / Additional message</label>
@@ -4018,14 +3493,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     value={siteConfig?.smsTemplateEnd || ""}
                                     onChange={(e) => setSiteConfig(prev => prev ? {...prev, smsTemplateEnd: e.target.value} : null)}
                                     className="w-full bg-white border border-blue-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm h-20 resize-none no-scrollbar"
-                                    placeholder="যেমন: কোনো প্রয়োজনে আমাদের সাথে যোগাAdd: 01777600844"
+                                    placeholder="e.g. For any queries, contact us at: 01777600844"
                                   />
                                 </div>
                                 {/* Toggle */}
                                 <div className="flex items-center justify-between bg-white border border-blue-100 rounded-xl px-4 py-3">
                                   <div>
                                     <p className="text-sm font-bold text-gray-700">Confirm SMS Enabled</p>
-                                    <p className="text-xs text-gray-400">চালু করলে অর্ডার করুন পর Customer এসএমএস পাবে?</p>
+                                    <p className="text-xs text-gray-400">If enabled, customer will receive SMS after order</p>
                                   </div>
                                   <input
                                     type="checkbox"
@@ -4039,7 +3514,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                এআই চ্যাটবট (AI Bot)
+                                AI Chatbot
                               </label>
                               <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 h-12">
                                 <span className="text-sm font-medium text-gray-700">Check</span>
@@ -4061,13 +3536,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   value={adminKeys?.geminiApiKey || ""}
                                   onChange={(e) => setAdminKeys(prev => prev ? {...prev, geminiApiKey: e.target.value} : {geminiApiKey: e.target.value})}
                                   className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                  placeholder="০"
+                                  placeholder="0"
                                 />
                              </div>
                            )}
                             {/* Steadfast Courier Settings */}
                             <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 space-y-4">
-                              <h4 className="font-bold text-gray-800 text-sm">কুরিয়ার Settings (Steadfast)</h4>
+                              <h4 className="font-bold text-gray-800 text-sm">Courier Settings (Steadfast)</h4>
                               <div>
                                  <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
                                    Steadfast API Key
@@ -4089,13 +3564,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                                    value={adminKeys?.steadfastSecretKey || ""}
                                    onChange={(e) => setAdminKeys(prev => prev ? {...prev, steadfastSecretKey: e.target.value} : {steadfastSecretKey: e.target.value})}
                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                   placeholder="০"
+                                   placeholder="0"
                                  />
                               </div>
                             </div>
                             {/* Pathao Courier Settings */}
                             <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 space-y-4">
-                              <h4 className="font-bold text-gray-800 text-sm">কুরিয়ার Settings (Pathao)</h4>
+                              <h4 className="font-bold text-gray-800 text-sm">Courier Settings (Pathao)</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                    <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
@@ -4149,7 +3624,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                অতিরিক্ত গ্যালারি ছবি
+                                Support Phone 1
                               </label>
                               <input
                                 type="text"
@@ -4160,7 +3635,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                অতিরিক্ত গ্যালারি ছবি
+                                Support Phone 2
                               </label>
                               <input
                                 type="text"
@@ -4171,7 +3646,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div className="md:col-span-2">
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                অতিরিক্ত গ্যালারি ছবি
+                                Facebook URL
                               </label>
                               <input
                                 type="text"
@@ -4182,38 +3657,38 @@ export default function AdminPanel(props: AdminPanelProps) {
                            </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                কম্পিউটার অ্যাপ ডাউনলোড লিঙ্ক
+                                PC App Download Link
                               </label>
                               <input
                                 type="text"
                                 value={siteConfig?.computerAppUrl || ""}
                                 onChange={(e) => setSiteConfig(prev => prev ? {...prev, computerAppUrl: e.target.value} : null)}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                placeholder="যেমন: /apps/ishopbd-setup.exe"
+                                placeholder="e.g., /apps/ishopbd-setup.exe"
                               />
                            </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                অ্যান্ড্রয়েড অ্যাপ ডাউনলোড লিঙ্ক (APK/Play Store)
+                                Android App Download Link (APK/Play Store)
                               </label>
                               <input
                                 type="text"
                                 value={siteConfig?.androidAppUrl || ""}
                                 onChange={(e) => setSiteConfig(prev => prev ? {...prev, androidAppUrl: e.target.value} : null)}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                placeholder="যেমন: /apps/ishopbd.apk"
+                                placeholder="e.g., /apps/ishopbd.apk"
                               />
                            </div>
                            <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest">
-                                আইফোন অ্যাপ ডাউনলোড লিঙ্ক (App Store)
+                                iPhone App Download Link (App Store)
                               </label>
                               <input
                                 type="text"
                                 value={siteConfig?.iphoneAppUrl || ""}
                                 onChange={(e) => setSiteConfig(prev => prev ? {...prev, iphoneAppUrl: e.target.value} : null)}
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                placeholder="যেমন: https://apps.apple.com/us/app/ishopbd/id..."
+                                placeholder="e.g., https://apps.apple.com/..."
                               />
                            </div>
                          </div>
@@ -4225,7 +3700,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                </div>
                                <div>
                                    <p className="text-xs font-bold text-gray-900">Make Public</p>
-                                   <p className="text-[10px] text-gray-400 font-bold">Customerরা চেকআউট পেজে এই কোডটি দেখতে পাবে</p>
+                                   <p className="text-[10px] text-gray-400 font-bold">Customers will see this code on the checkout page</p>
                                </div>
                              </div>
                              <button
@@ -4239,7 +3714,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                              onClick={() => handleSaveSiteConfig(siteConfig)}
                              className="w-full bg-secondary text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-secondary/20 hover:bg-black transition-all active:scale-95 text-xs uppercase"
                            >
-                             কনফিগারেশন সেভ করুন
+                             Save Configuration
                            </button>
                          </div>
                       </div>
@@ -4249,14 +3724,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                     {settingsTab === 'banners' && (
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                       <h4 className="text-xl font-bold text-secondary mb-6 flex items-center gap-2">
-                        <ImageIcon size={24} className="text-primary" /> হোমপেজ
+                        <ImageIcon size={24} className="text-primary" /> Homepage
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
                           <div className="space-y-4">
                             <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                অতিরিক্ত গ্যালারি ছবি
+                                Banner Title
                               </label>
                               <input
                                 type="text"
@@ -4277,12 +3752,12 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       })
                                 }
                                 className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
-                                placeholder="e.g. সেরা মানের Products"
+                                placeholder="e.g. Best Quality Products"
                               />
                             </div>
                             <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                সাব-টাইটেল
+                                Sub-title
                               </label>
                               <input
                                 type="text"
@@ -4340,7 +3815,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                    টাইটেল ফন্ট
+                                    Title Font
                                   </label>
                                   <select
                                     value={
@@ -4370,7 +3845,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </div>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                    টাইটেল ওয়েট
+                                    Title Weight
                                   </label>
                                   <select
                                     value={
@@ -4400,7 +3875,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                    সাব-টাইটেল ফন্ট
+                                    Subtitle Font
                                   </label>
                                   <select
                                     value={
@@ -4430,7 +3905,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </div>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                    সাব-টাইটেল ওয়েট
+                                    Subtitle Weight
                                   </label>
                                   <select
                                     value={
@@ -4459,7 +3934,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                    টাইটেল সাইজ
+                                    Title Size
                                   </label>
                                   <select
                                     value={
@@ -4488,7 +3963,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </div>
                                 <div>
                                   <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-                                    সাব-টাইটেল সাইজ
+                                    Subtitle Size
                                   </label>
                                   <select
                                     value={
@@ -4521,7 +3996,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <div className="space-y-1">
                                 <div className="flex justify-between items-center">
                                   <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">
-                                    পজিশন (X)
+                                    Position (X)
                                   </label>
                                   <span className="text-[10px] font-bold text-primary">
                                     {
@@ -4569,7 +4044,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <div className="space-y-1">
                                 <div className="flex justify-between items-center">
                                   <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">
-                                    পজিশন (Y)
+                                    Position (Y)
                                   </label>
                                   <span className="text-[10px] font-bold text-primary">
                                     {
@@ -4617,7 +4092,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             <div className="mb-6">
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2 tracking-widest px-1">
-                                ব্যানার টাইএª
+                                Banner Type
                                </label>
                               <div className="grid grid-cols-2 gap-2">
                                 <button
@@ -4632,7 +4107,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       : "border-gray-100 bg-gray-50 text-gray-400"
                                   }`}
                                 >
-                                  হিরো ব্যানার (স্লাইডার)
+                                  Hero Banner (Slider)
                                 </button>
                                 <button
                                   type="button"
@@ -4646,7 +4121,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       : "border-gray-100 bg-gray-50 text-gray-400"
                                   }`}
                                 >
-                                  ক্যাম্পেইন ব্যানার (নিচে)
+                                  Campaign Banner (Bottom)
                                 </button>
                                 <button
                                   type="button"
@@ -4660,7 +4135,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       : "border-gray-100 bg-gray-50 text-gray-400"
                                   }`}
                                 >
-                                  ডান-উপরের ব্যানার
+                                  Top Right Banner
                                 </button>
                                 <button
                                   type="button"
@@ -4674,13 +4149,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       : "border-gray-100 bg-gray-50 text-gray-400"
                                   }`}
                                 >
-                                  ডান-নিচের ব্যানার (ফ্ল্যাশ সেল)
+                                  Bottom Right Banner (Flash Sale)
                                 </button>
                               </div>
                             </div>
                             <div>
                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
-              ব্যানারের ছবি
+              Banner Image
                               </label>
                               <div
                                 onClick={() =>
@@ -4712,7 +4187,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       className="text-gray-300 mb-2"
                                     />
                                     <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">
-              ছবি আপলোড করুন
+              Upload Image
                                     </span>
                                   </>
                                 )}
@@ -4733,8 +4208,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 className="flex-1 bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:bg-black transition-all active:scale-95 text-xs uppercase"
                               >
                                 {editingBanner
-                                  ? "ব্যানার Update করুন"
-                                  : "ব্যানার Add"}
+                                  ? "Update Banner"
+                                  : "Add Banner"}
                               </button>
                               {editingBanner && (
                                 <button
@@ -4768,7 +4243,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   }}
                                   className="px-4 bg-gray-100 text-gray-600 font-bold py-4 rounded-xl hover:bg-gray-200 transition-all text-xs uppercase"
                                 >
-                                  বাতিল
+                                  Cancel
                                 </button>
                               )}
                             </div>
@@ -4776,7 +4251,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </div>
                         <div className="space-y-4">
                           <h5 className="font-bold text-secondary text-sm">
-                           সক্রিয় ব্যানারসমূহ ({activeBanners.length})
+                           Active Banners ({activeBanners.length})
                           </h5>
                           <div className="space-y-3">
                             {activeBanners.map((banner) => (
@@ -4803,7 +4278,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     </div>
                                     {banner.linkedProductId && (
                                       <p className="text-[8px] text-primary font-bold uppercase mt-1">
-                                        আপনার সাথে শীঘ্রই যোগাযোগ করা হবে।
+                                        You will be contacted shortly.
                                       </p>
                                     )}
                                   </div>
@@ -4846,7 +4321,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       </h4>
                       <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
                         <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-4 tracking-widest">
-                          {editingAdmin ? "Admin/Moderator এডিট করুন" : "নতুন Admin/Moderator Add"}
+                          {editingAdmin ? "Edit Admin/Moderator" : "Add New Admin/Moderator"}
                         </label>
                         <div className="flex flex-col xl:flex-row gap-3">
                           <input
@@ -4904,18 +4379,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                                  onClick={() => setEditingAdmin(null)}
                                  className="bg-gray-200 text-gray-600 font-bold px-6 py-3 rounded-2xl hover:bg-gray-300 transition-all active:scale-95"
                                >
-                                 বাতিল
+                                 Cancel
                                </button>
                              )}
                           </div>
                         </div>
                         <p className="text-[10px] text-gray-400 mt-4 italic font-medium">
-                          আপনার সাথে শীঘ্রই যোগাযোগ করা হবে।
+                          You will be contacted shortly.
                         </p>
                       </div>
                       <div className="space-y-4">
                         <h5 className="font-bold text-secondary text-sm">
-                         সক্রিয় Usersসমূহ ({adminList.length})
+                         Active Users ({adminList.length})
                         </h5>
                         {adminList.map((admin) => (
                           <div
@@ -4998,7 +4473,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           }}
                           className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all flex items-center gap-2"
                         >
-                          <RefreshCcw size={14} className={isUsersLoading ? "animate-spin" : ""} /> রিফ্রেশ
+                          <RefreshCcw size={14} className={isUsersLoading ? "animate-spin" : ""} /> Refresh
                         </button>
                       </div>
                       <div className="overflow-x-auto">
@@ -5036,14 +4511,14 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       onClick={() => handleEditUserBalance(u)}
                                       className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg hover:bg-blue-100 transition-all"
                                    >
-                                     ব্যালেন্স Update
+                                     Update Balance
                                    </button>
                                  </td>
                                </tr>
                              ))}
                              {userList.length === 0 && !isUsersLoading && (
                                <tr>
-                                 <td colSpan={3} className="py-8 text-center text-gray-400 text-sm italic">কোন Users পাওয়া যায়নি</td>
+                                 <td colSpan={3} className="py-8 text-center text-gray-400 text-sm italic">No Users Found</td>
                                </tr>
                              )}
                           </tbody>
@@ -5059,11 +4534,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                       />
                       <div>
                         <p className="font-bold text-yellow-800 text-sm">
-                          আপনার সাথে শীঘ্রই যোগাযোগ করা হবে।
+                          You will be contacted shortly.
                         </p>
                         <p className="text-xs text-yellow-700 leading-relaxed font-medium">
-                          পেমেন্ট করার পর ট্রানজেকশন আইডিটি নিচে অটোমেটিক
-                          সেট হয়ে যাবে।
+                          After payment, the transaction ID will automatically
+                          be set below.
                         </p>
                       </div>
                     </div>
@@ -5080,7 +4555,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                          </div>
                          <div>
                             <h4 className="text-xl font-bold text-secondary">Send Notification</h4>
-<p className="text-xs text-gray-500 font-bold">নতুন প্রোডাক্ট বা অফারের তথ্য All গ্রাহককে পাঠান</p>
+<p className="text-xs text-gray-500 font-bold">Send new product or offer info to all customers</p>
                          </div>
                       </div>
                       
@@ -5110,7 +4585,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                          </div>
                          <div className="flex flex-col gap-4">
                             <div className="flex-1">
-                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1.5 ml-1">বিস্তারিত Admin</label>
+                               <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1.5 ml-1">Detailed Admin</label>
                                <textarea 
                                   required
                                   rows={4}
@@ -5130,7 +4605,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                ) : (
                                   <>
                                      <Send size={18} />
-                                     একসাথে পাঠান
+                                     Send All
                                   </>
                                )}
                             </button>
@@ -5144,8 +4619,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                          <Bell size={24} />
                        </div>
                        <div>
-                         <h4 className="text-xl font-bold text-secondary">All নোটিফিকেশন হিস্ট্রি</h4>
-                         <p className="text-xs text-gray-400 font-bold">Customerদের Refunds রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
+                         <h4 className="text-xl font-bold text-secondary">All Notification History</h4>
+                         <p className="text-xs text-gray-400 font-bold">Customer refund requests will be shown here</p>
                        </div>
                      </div>
                      {notifications.filter((n: any) => n.type === "broadcast" || n.userId === "all").length === 0 ? (
@@ -5206,7 +4681,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
                             <div>
                                <h4 className="text-xl font-bold text-secondary">Customer List</h4>
-                             <p className="text-xs text-gray-400 font-bold">Customerদের Refunds রিকোয়েস্টগুলো এখানে দেখা যাবে</p>
+                             <p className="text-xs text-gray-400 font-bold">Customer refund requests will be shown here</p>
                             </div>
                          </div>
                          
@@ -5243,7 +4718,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                             {u.displayName ? u.displayName[0] : <User size={16} />}
                                          </div>
                                          <div>
-                                            <p className="font-bold text-secondary text-sm">{u.displayName || "অজানা Users"}</p>
+                                            <p className="font-bold text-secondary text-sm">{u.displayName || "Unknown User"}</p>
                                             <p className="text-[10px] text-gray-400 font-bold">
                                               {u.email?.endsWith("@mobile.user") ? u.email.replace("@mobile.user", "") : u.email}
                                             </p>
@@ -5260,13 +4735,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                                             className="bg-primary/10 text-primary px-3 py-2 rounded-xl text-[10px] font-bold hover:bg-primary/20 active:scale-95 transition-all flex items-center gap-1.5"
                                           >
                                             <MessageSquare size={12} />
-                                            মেসেজ
+                                            Message
                                           </button>
                                           <button 
                                             onClick={() => handleEditUserBalance(u)}
                                             className="bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-[10px] font-bold hover:bg-blue-100 active:scale-95 transition-all"
                                           >
-                                            ব্যালেন্স Update
+                                            Update Balance
                                           </button>
                                        </div>
                                    </td>

@@ -831,7 +831,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   </div>
                 </div>
 
-                <div className="pt-1">
+                <div className="pt-1 sticky bottom-4 z-50 shadow-2xl md:shadow-none md:static">
                   <button
                     type="submit"
                     form="checkout-form"

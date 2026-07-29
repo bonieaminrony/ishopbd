@@ -649,10 +649,10 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       }
                       addToCartInternal(selectedProduct, tempSelectedColor || undefined, tempSelectedSize || undefined, tempSelectedQty);
                     }} 
-                    className="w-[130px] md:w-[150px] shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm h-[46px] rounded-xl transition-all flex items-center justify-center gap-1.5 border border-gray-200"
+                    className="w-[46px] md:w-[150px] shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm h-[46px] rounded-xl transition-all flex items-center justify-center gap-1.5 border border-gray-200"
                   >
                     <ShoppingCart size={16} />
-                    Add to Cart
+                    <span className="hidden md:inline">Add to Cart</span>
                   </button>
 
                   <button 
@@ -782,19 +782,19 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   <div className="flex flex-wrap gap-2 mb-0">
                     <button 
                       onClick={() => setActiveTab('specification')}
-                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'specification' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'specification' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 hover:text-primary border-transparent hover:bg-gray-50'}`}
                     >
                       Specification
                     </button>
                     <button 
                       onClick={() => setActiveTab('description')}
-                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'description' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'description' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 hover:text-primary border-transparent hover:bg-gray-50'}`}
                     >
                       Description
                     </button>
                     <button 
                       onClick={() => setActiveTab('reviews')}
-                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'reviews' ? 'bg-[#ef4a23] text-white border-[#ef4a23]' : 'bg-white text-gray-700 hover:text-[#ef4a23] border-transparent hover:bg-gray-50'}`}
+                      className={`px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-colors border-t border-l border-r ${activeTab === 'reviews' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 hover:text-primary border-transparent hover:bg-gray-50'}`}
                     >
                       Reviews ({activeReviews.length})
                     </button>
@@ -871,7 +871,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                           <h2 className="text-lg font-bold text-gray-800 mb-4">Reviews ({activeReviews.length})</h2>
                           
                           {/* Write Review Form */}
-                          <div className="mb-10 bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                          <div className="mb-6 md:mb-10 bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-100">
                              <h4 className="text-base font-bold text-gray-900 mb-3">Write a Review</h4>
                              <div className="space-y-4 max-w-2xl">
                                <div className="flex gap-2">
@@ -970,7 +970,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                                        {review.images.map((img, idx) => (
                                          <div 
                                            key={idx} 
-                                           className="w-20 h-20 rounded-lg overflow-hidden border border-gray-100 cursor-pointer hover:opacity-90 transition-opacity"
+                                           className="w-16 h-16 md:w-20 md:h-20 shrink-0 rounded-lg overflow-hidden border border-gray-100 cursor-pointer hover:opacity-90 transition-opacity"
                                            onClick={() => {
                                              setModalDisplayImage(img);
                                              setUserInteractedWithGallery(true);

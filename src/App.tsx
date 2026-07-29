@@ -163,433 +163,11 @@ import {
   requestPushPermission,
 } from "./lib/firebase";
 // Mock Data in Bengali - Gadget Focused (Moved to state for dynamic loading)
-const districtThanaMap: Record<string, string[]> = {
-  "Bagerhat": ["Bagerhat Sadar", "Chitalmari", "Fakirhat", "Kachua", "Mollahat", "Mongla", "Morrelganj", "Rampal", "Sarankhola"],
-  "Bandarban": ["Alikadam", "Bandarban Sadar", "Lama", "Naikhongchhari", "Rowangchhari", "Ruma", "Thanchi"],
-  "Barguna": ["Amtali", "Bamna", "Barguna Sadar", "Betagi", "Patharghata", "Taltali"],
-  "Barishal": ["Agailjhara", "Airport", "Babuganj", "Bakerganj", "Banaripara", "Bandar", "Barishal Sadar", "Gournadi", "Hizla", "Kaunia", "Kotwali", "Mehendiganj", "Muladi", "Wazirpur"],
-  "Bhola": ["Bhola Sadar", "Burhanuddin", "Char Fasson", "Daulatkhan", "Lalmohan", "Manpura", "Tazumuddin"],
-  "Bogura": ["Adamdighi", "Bogura Sadar", "Dhunat", "Dupchanchia", "Gabtali", "Kahaloo", "Nandigram", "Sariakandi", "Shajahanpur", "Sherpur", "Shibganj", "Sonatala"],
-  "Brahmanbaria": ["Akhaura", "Ashuganj", "Bancharampur", "Bijoynagar", "Brahmanbaria Sadar", "Kasba", "Nabinagar", "Nasirnagar", "Sarail"],
-  "Chandpur": ["Chandpur Sadar", "Faridganj", "Haimchar", "Hajiganj", "Kachua", "Matlab Dakkhin", "Matlab Uttar", "Shahrasti"],
-  "Chapainawabganj": ["Bholahat", "Chapainawabganj Sadar", "Gomastapur", "Nachole", "Shibganj"],
-  "Chattogram": ["Akbarshah", "Anwara", "Bakalia", "Bandar", "Banshkhali", "Bayazid Bostami", "Boalkhali", "Chandanaish", "Chandgaon", "Chawkbazar", "Double Mooring", "EPZ", "Fatikchhari", "Halishahar", "Hathazari", "Karnaphuli", "Khulshi", "Kotwali", "Lohagara", "Mirsharai", "Pahartali", "Panchlaish", "Patenga", "Patiya", "Rangunia", "Raozan", "Sadarghat", "Sandwip", "Satkania", "Sitakunda"],
-  "Chuadanga": ["Alamdanga", "Chuadanga Sadar", "Damurhuda", "Jibannagar"],
-  "Cox's Bazar": ["Chakaria", "Cox's Bazar Sadar", "Eidgaon", "Kutubdia", "Maheshkhali", "Pekua", "Ramu", "Teknaf", "Ukhiya"],
-  "Cumilla": ["Barura", "Brahmanpara", "Burichang", "Chandina", "Chauddagram", "Cumilla Adarsha Sadar", "Cumilla Sadar South", "Daudkandi", "Debidwar", "Homna", "Laksam", "Lalmai", "Meghna", "Monohargonj", "Muradnagar", "Nangalkot", "Titas"],
-  "Dhaka": ["Adabor", "Badda", "Banani", "Bangshal", "Bhashantek", "Bhatara", "Cantonment", "Chawkbazar", "Dakshinkhan", "Darus Salam", "Demra", "Dhamrai", "Dhanmondi", "Dohar", "Gendaria", "Gulshan", "Hatirjheel", "Hazaribagh", "Jatrabari", "Kadamtali", "Kafrul", "Kalabagan", "Kamrangirchar", "Keraniganj", "Khilgaon", "Khilkhet", "Kotwali", "Lalbagh", "Mirpur", "Mohammadpur", "Motijheel", "Nawabganj", "New Market", "Pallabi", "Paltan", "Ramna", "Rampura", "Rupnagar", "Sabujbagh", "Savar", "Shah Ali", "Shahbag", "Sher-e-Bangla Nagar", "Shyampur", "Sutrapur", "Tejgaon", "Turag", "Uttara", "Uttarkhan", "Vatara", "Wari"],
-  "Dinajpur": ["Birampur", "Birganj", "Biral", "Bochaganj", "Chirirbandar", "Dinajpur Sadar", "Ghoraghat", "Hakimpur", "Kaharole", "Khansama", "Nawabganj", "Parbatipur", "Phulbari"],
-  "Faridpur": ["Alfadanga", "Bhanga", "Boalmari", "Charbhadrasan", "Faridpur Sadar", "Madhukhali", "Nagarkanda", "Sadarpur", "Saltha"],
-  "Feni": ["Chhagalnaiya", "Daganbhuiyan", "Feni Sadar", "Fulgazi", "Parshuram", "Sonagazi"],
-  "Gaibandha": ["Gaibandha Sadar", "Gobindaganj", "Palashbari", "Phulchhari", "Sadullapur", "Saghata", "Sundarganj"],
-  "Gazipur": ["Bason", "Gacha", "Gazipur Sadar", "Kaliakair", "Kaliganj", "Kapasia", "Kashimpur", "Konabari", "Pubail", "Sreepur", "Tongi"],
-  "Gopalganj": ["Gopalganj Sadar", "Kashiani", "Kotalipara", "Muksudpur", "Tungipara"],
-  "Habiganj": ["Ajmiriganj", "Bahubal", "Baniachong", "Chunarughat", "Habiganj Sadar", "Lakhai", "Madhabpur", "Nabiganj", "Shaistagonj"],
-  "Jamalpur": ["Baksiganj", "Dewanganj", "Islampur", "Jamalpur Sadar", "Madarganj", "Melandaha", "Sarishabari"],
-  "Jashore": ["Abhaynagar", "Bagherpara", "Chaugachha", "Jashore Sadar", "Jhikargachha", "Keshabpur", "Manirampur", "Sharsha"],
-  "Jhalokati": ["Jhalokati Sadar", "Kathalia", "Nalchity", "Rajapur"],
-  "Jhenaidah": ["Harinakundu", "Jhenaidah Sadar", "Kaliganj", "Kotchandpur", "Maheshpur", "Shailkupa"],
-  "Joypurhat": ["Akkelpur", "Joypurhat Sadar", "Kalai", "Khetlal", "Panchbibi"],
-  "Khagrachhari": ["Dighinala", "Guimara", "Khagrachhari Sadar", "Lakshmichhari", "Mahalchhari", "Manikchhari", "Matiranga", "Panchhari", "Ramgarh"],
-  "Khulna": ["Aranghata", "Batiaghata", "Dacope", "Daulatpur", "Dighalia", "Dumuria", "Harintana", "Khalishpur", "Khan Jahan Ali", "Khulna Sadar", "Koyra", "Labanchara", "Paikgachha", "Phultala", "Rupsha", "Sonadanga", "Terokhada"],
-  "Kishoreganj": ["Austagram", "Bajitpur", "Bhairab", "Hossainpur", "Itna", "Karimganj", "Katiadi", "Kishoreganj Sadar", "Kuliarchar", "Mithamain", "Nikli", "Pakundia", "Tarail"],
-  "Kurigram": ["Bhurungamari", "Char Rajibpur", "Chilmari", "Kurigram Sadar", "Nageshwari", "Phulbari", "Rajarhat", "Rowmari", "Ulipur"],
-  "Kushtia": ["Bheramara", "Daulatpur", "Khoksa", "Kumarkhali", "Kushtia Sadar", "Mirpur"],
-  "Lakshmipur": ["Kamalnagar", "Lakshmipur Sadar", "Raipur", "Ramganj", "Ramgati"],
-  "Lalmonirhat": ["Aditmari", "Hatibandha", "Kaliganj", "Lalmonirhat Sadar", "Patgram"],
-  "Madaripur": ["Dasar", "Kalkini", "Madaripur Sadar", "Rajoir", "Shibchar"],
-  "Magura": ["Magura Sadar", "Mohammadpur", "Shalikha", "Sreepur"],
-  "Manikganj": ["Daulatpur", "Ghior", "Harirampur", "Manikganj Sadar", "Saturia", "Shibalaya", "Singair"],
-  "Meherpur": ["Gangni", "Meherpur Sadar", "Mujibnagar"],
-  "Moulvibazar": ["Barlekha", "Juri", "Kamalganj", "Kulaura", "Moulvibazar Sadar", "Rajnagar", "Sreemangal"],
-  "Munshiganj": ["Gazaria", "Lohajang", "Munshiganj Sadar", "Sirajdikhan", "Sreenagar", "Tongibari"],
-  "Mymensingh": ["Bhaluka", "Dhobaura", "Fulbaria", "Gafargaon", "Gouripur", "Haluaghat", "Ishwarganj", "Muktagachha", "Mymensingh Sadar", "Nandail", "Pagla", "Phulpur", "Tarakanda", "Trishal"],
-  "Naogaon": ["Atrai", "Badalgachhi", "Dhamoirhat", "Manda", "Mohadevpur", "Naogaon Sadar", "Niamatpur", "Patnitala", "Porsha", "Raninagar", "Sapahar"],
-  "Narail": ["Kalia", "Lohagara", "Narail Sadar"],
-  "Narayanganj": ["Araihazar", "Bandar", "Fatullah", "Narayanganj Sadar", "Rupganj", "Siddhirganj", "Sonargaon"],
-  "Narsingdi": ["Belabo", "Monohardi", "Narsingdi Sadar", "Palash", "Raipura", "Shibpur"],
-  "Natore": ["Bagatipara", "Baraigram", "Gurudaspur", "Lalpur", "Naldanga", "Natore Sadar", "Singra"],
-  "Netrokona": ["Atpara", "Barhatta", "Durgapur", "Kalmakanda", "Kendua", "Khaliajuri", "Madan", "Mohanganj", "Netrokona Sadar", "Purbadhala"],
-  "Nilphamari": ["Dimla", "Domar", "Jaldhaka", "Kishoreganj", "Nilphamari Sadar", "Saidpur"],
-  "Noakhali": ["Begumganj", "Chatkhil", "Companiganj", "Hatia", "Kabirhat", "Noakhali Sadar", "Senbug", "Sonaimuri", "Subarnachar"],
-  "Pabna": ["Atgharia", "Bera", "Bhangura", "Chatmohar", "Faridpur", "Ishwardi", "Pabna Sadar", "Santhia", "Sujanagar"],
-  "Panchagarh": ["Atwari", "Boda", "Debiganj", "Panchagarh Sadar", "Tetulia"],
-  "Patuakhali": ["Bauphal", "Dashmina", "Dumki", "Galachipa", "Kalapara", "Mirzaganj", "Patuakhali Sadar", "Rangabali"],
-  "Pirojpur": ["Bhandaria", "Kaukhali", "Mathbaria", "Nazirpur", "Nesarabad", "Pirojpur Sadar", "Zianagar"],
-  "Rajbari": ["Baliakandi", "Goalanda", "Kalukhali", "Pangsha", "Rajbari Sadar"],
-  "Rajshahi": ["Airport", "Bagha", "Bagmara", "Belpukur", "Boalia", "Chandrima", "Charghat", "Damkura", "Durgapur", "Godagari", "Karnahar", "Kashiadanga", "Katakhali", "Mohanpur", "Motihar", "Paba", "Puthia", "Rajpara", "Rajshahi Sadar", "Shah Makhdum", "Tanore"],
-  "Rangamati": ["Bagaichhari", "Barkal", "Belaichhari", "Juraichhari", "Kaptai", "Kawkhali", "Langadu", "Naniarchar", "Rajasthali", "Rangamati Sadar"],
-  "Rangpur": ["Badarganj", "Gangachara", "Haragach", "Hazirhat", "Kaunia", "Kotwali", "Mahiganj", "Mithapukur", "Parshuram", "Pirgachha", "Pirganj", "Rangpur Sadar", "Tajhat", "Taraganj"],
-  "Satkhira": ["Assasuni", "Debhata", "Kalaroa", "Kaliganj", "Satkhira Sadar", "Shyamnagar", "Tala"],
-  "Shariatpur": ["Bhedarganj", "Damudya", "Gosairhat", "Jajira", "Naria", "Shariatpur Sadar"],
-  "Sherpur": ["Jhenaigati", "Nakla", "Nalitabari", "Sherpur Sadar", "Sreebardi"],
-  "Sirajganj": ["Belkuchi", "Chauhali", "Kamarkhanda", "Kazipur", "Raiganj", "Shahjadpur", "Sirajganj Sadar", "Tarash", "Ullapara"],
-  "Sunamganj": ["Bishwambarpur", "Chhatak", "Derai", "Dharmapasha", "Dowarabazar", "Jagannathpur", "Jamalganj", "Madhyanagar", "Shalla", "Shanthiganj", "Sunamganj Sadar", "Tahirpur"],
-  "Sylhet": ["Airport", "Balaganj", "Beanibazar", "Bishwanath", "Companiganj", "Dakshin Surma", "Fenchuganj", "Golapganj", "Gowainghat", "Jaintiapur", "Jalalabad", "Kanaighat", "Kotwali", "Moglabazar", "Osmaninagar", "Shah Paran", "Sylhet Sadar", "Zakiganj"],
-  "Tangail": ["Basail", "Bhuapur", "Delduar", "Dhanbari", "Ghatail", "Gopalpur", "Kalihati", "Madhupur", "Mirzapur", "Nagarpur", "Sakhipur", "Tangail Sadar"],
-  "Thakurgaon": ["Baliadangi", "Haripur", "Pirganj", "Ranisankail", "Thakurgaon Sadar"]
-};
-const ALL_DISTRICTS = [
-  "Bagerhat", "Bandarban", "Barguna", "Barishal", "Bhola", "Bogura", "Brahmanbaria",
-  "Chandpur", "Chapainawabganj", "Chattogram", "Chuadanga", "Cox's Bazar", "Cumilla",
-  "Dhaka", "Dinajpur", "Faridpur", "Feni", "Gaibandha", "Gazipur", "Gopalganj",
-  "Habiganj", "Jamalpur", "Jashore", "Jhalokati", "Jhenaidah", "Joypurhat", "Khagrachhari",
-  "Khulna", "Kishoreganj", "Kurigram", "Kushtia", "Lakshmipur", "Lalmonirhat", "Madaripur",
-  "Magura", "Manikganj", "Meherpur", "Moulvibazar", "Munshiganj", "Mymensingh", "Naogaon",
-  "Narail", "Narayanganj", "Narsingdi", "Natore", "Netrokona", "Nilphamari", "Noakhali",
-  "Pabna", "Panchagarh", "Patuakhali", "Pirojpur", "Rajbari", "Rajshahi", "Rangamati",
-  "Rangpur", "Satkhira", "Shariatpur", "Sherpur", "Sirajganj", "Sunamganj", "Sylhet",
-  "Tangail", "Thakurgaon"
-];
-const default_categories: Category[] = [
-  { id: "1", name: "Charger Fan" },
-  { id: "2", name: "Smart Watch" },
-  { id: "3", name: "Headphone" },
-  { id: "4", name: "Power Bank" },
-  { id: "5", name: "Mobile Accessories" },
-  { id: "6", name: "T-Shirt" },
-];
-const default_products: Product[] = [
-  {
-    id: "p1",
-    name: "মিনি রিচার্জেবল চার্জার ফ্যান (Portable)",
-    price: 1250,
-    originalPrice: 1800,
-    discount: 30,
-    image:
-      "https://images.unsplash.com/photo-1619230558487-6e06dd8b6b23?w=400&h=400&fit=crop",
-    category: "Charger Fan",
-    isTrending: true,
-    colors: ["White", "Pink", "Blue"],
-  },
-  {
-    id: "p7",
-    name: "হাই স্পিড রিচার্জেবল বড় চার্জার ফ্যান",
-    price: 3500,
-    originalPrice: 4800,
-    discount: 27,
-    image:
-      "https://images.unsplash.com/photo-1618176580512-ff59560f9947?w=400&h=400&fit=crop",
-    category: "Charger Fan",
-    isTrending: true,
-    colors: ["White", "Black"],
-  },
-  {
-    id: "p8",
-    name: "মিনি পকেট ফ্যান (বিকাশ স্পেশাল)",
-    price: 350,
-    originalPrice: 600,
-    discount: 42,
-    image:
-      "https://images.unsplash.com/photo-1620330058230-f655ae832da2?w=400&h=400&fit=crop",
-    category: "Charger Fan",
-    isTrending: true,
-    colors: ["Yellow", "Green", "Sky Blue"],
-  },
-  {
-    id: "p2",
-    name: "প্রিমিয়াম ব্লুটুথ হেডফোন (Heavy Bass)",
-    price: 2400,
-    originalPrice: 3200,
-    discount: 25,
-    image:
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop",
-    category: "Headphone",
-    colors: ["Black", "Silver", "Red"],
-  },
-  {
-    id: "p3",
-    name: "স্মার্ট ওয়াচ সিরিজ ৯ (Ultra Display)",
-    price: 3200,
-    originalPrice: 4500,
-    discount: 29,
-    image:
-      "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop",
-    category: "Smart Watch",
-    colors: ["Orange", "Black", "Blue"],
-  },
-  {
-    id: "p4",
-    name: "২০,০০০ mAh ফাস্ট চার্জিং পাওয়ার ব্যাংক",
-    price: 1850,
-    originalPrice: 2400,
-    discount: 23,
-    image:
-      "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=400&h=400&fit=crop",
-    category: "Power Bank",
-    colors: ["White", "Black"],
-  },
-  {
-    id: "p5",
-    name: "সুপার ফাস্ট চার্জিং ক্যাবল (Type-C)",
-    price: 450,
-    originalPrice: 600,
-    discount: 25,
-    image:
-      "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=400&h=400&fit=crop",
-    category: "Mobile Accessories",
-    colors: ["Red", "Black", "White"],
-  },
-  {
-    id: "p6",
-    name: "ওয়্যারলেস নেক ব্যান্ড ইয়ারফোন",
-    price: 950,
-    originalPrice: 1500,
-    discount: 36,
-    image:
-      "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&h=400&fit=crop",
-    category: "Headphone",
-    colors: ["Blue", "Black"],
-  },
-  {
-    id: "p9",
-    name: "প্রিমিয়াম কটন টি-শার্ট (Premium Quality)",
-    price: 450,
-    originalPrice: 750,
-    discount: 40,
-    image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&h=400&fit=crop",
-    category: "T-Shirt",
-    variants: [
-      { id: "v1", name: "Black", size: "M", stock: 10, image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=400&h=400&fit=crop" },
-      { id: "v2", name: "Black", size: "L", stock: 15, image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=400&h=400&fit=crop" },
-      { id: "v3", name: "Black", size: "XL", stock: 5, image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=400&h=400&fit=crop" },
-      { id: "v4", name: "White", size: "M", stock: 12, image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&h=400&fit=crop" },
-      { id: "v5", name: "White", size: "L", stock: 8, image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&h=400&fit=crop" },
-    ]
-  },
-];
-const banners = [
-  {
-    id: 1,
-    title: "সেরা মানের পণ্য, আমাদের অঙ্গীকার",
-    subtitle: "১০০% অরিজিনাল গ্যারান্টি",
-    image: "https://images.unsplash.com/photo-1441984907796-39575fe82c71?w=1600&h=900&fit=crop",
-  },
-];
-const BENGALI_FONTS = [
-  { name: "Default (Hind Siliguri)", value: "font-sans" },
-  { name: "Lalsalu (Anek Bangla)", value: "font-lalsalu" },
-  { name: "Ador (Mina)", value: "font-ador" },
-  { name: "Galada (Stylized)", value: "font-galada" },
-  { name: "Atma (Playful)", value: "font-atma" },
-  { name: "Tiro Bangla (Serif)", value: "font-tiro" },
-  { name: "Noto Sans (Clean)", value: "font-noto" },
-  { name: "Baloo Da 2 (Rounded)", value: "font-baloo" },
-  { name: "Sulaiman Lipi", value: "font-sulaiman" },
-];
-const ProductSkeleton = () => (
-  <div className="bg-white dark:bg-slate-800 rounded-md shadow-sm border border-gray-100 dark:border-slate-700 flex flex-col h-full animate-pulse">
-    <div className="relative aspect-square bg-gray-200 dark:bg-slate-700" />
-    <div className="p-3 flex flex-col flex-1 gap-2">
-      <div className="w-1/3 h-3 bg-gray-200 dark:bg-slate-700 rounded" />
-      <div className="w-full h-5 bg-gray-200 dark:bg-slate-700 rounded mt-1" />
-      <div className="w-2/3 h-5 bg-gray-200 dark:bg-slate-700 rounded mb-2" />
-      <div className="mt-auto flex items-end justify-between">
-        <div className="w-1/2 h-6 bg-gray-200 dark:bg-slate-700 rounded" />
-      </div>
-      <div className="w-full h-10 bg-gray-200 dark:bg-slate-700 rounded-lg mt-2" />
-    </div>
-  </div>
-);
-const ProductCard = React.memo(({ 
-  product, 
-  openProductDetails, 
-  t, 
-  handleBuyNow,
-  handleLikeProduct,
-  isLiked
-}: { 
-  product: Product; 
-  openProductDetails: (p: Product) => void; 
-  t: any;
-  handleBuyNow: (p: Product) => void;
-  handleLikeProduct: (productId: string) => void;
-  isLiked: boolean;
-}) => {
-  const { addToCart } = useCartContext();
-  const isOutOfStock =
-    !product.isComingSoon &&
-    (product.variants && product.variants.length > 0
-      ? product.variants.every((v) => (v.stock || 0) <= 0)
-      : (product.stock || 0) <= 0);
-
-
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col h-full group"
-    >
-      <a
-        href={`?product=${product.id}`}
-        className="relative aspect-square overflow-hidden cursor-pointer flex items-center justify-center bg-cream block"
-        onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
-      >
-        <img
-          src={product.image}
-          alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
-        
-        {/* Badges - Even larger for visibility */}
-        <div className="absolute top-1.5 left-1.5 flex flex-col gap-1.5 z-10">
-          {product.discount > 0 && (
-            <div className="bg-primary text-white text-[10px] md:text-xs font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md">
-              -{product.discount}%
-            </div>
-          )}
-          {product.isFreeDelivery && (
-            <div className="bg-emerald-600 text-white text-[9px] md:text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md flex items-center gap-1 border border-emerald-500/10">
-              <Truck size={11} /> ফ্রি ডেলিভারি
-            </div>
-          )}
-        </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleLikeProduct(product.id);
-          }}
-          className={`absolute top-1.5 right-1.5 px-2 py-1 bg-white hover:bg-gray-50 text-[10px] font-bold rounded-full transition-all shadow-md transform hover:scale-105 flex items-center gap-1 z-10 ${
-            isLiked ? "text-primary" : "text-gray-400 hover:text-primary"
-          }`}
-        >
-          <Heart size={11} fill={isLiked ? "#ec2029" : "none"} className={isLiked ? "text-primary" : ""} />
-          {product.likes !== undefined && product.likes >= 0 && (
-            <span className="text-[10px] text-gray-700 font-bold ml-0.5">{product.likes || 0}</span>
-          )}
-        </button>
-      </a>
-      <div className="p-2 md:p-3 flex flex-col flex-1">
-        {(product.brand || product.code) && (
-          <span className="text-[8px] md:text-[10px] font-bold text-gray-400 mb-1 px-0.5 uppercase tracking-wide">
-            {product.brand || product.code}
-          </span>
-        )}
-        <a 
-          href={`?product=${product.id}`}
-          onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
-          className="block"
-        >
-          <h4 className="text-base md:text-lg font-medium text-gray-800 line-clamp-2 mb-1.5 px-0.5 min-h-[44px] group-hover:text-primary transition-colors cursor-pointer leading-tight">
-            {product.name}
-          </h4>
-        </a>
-        <div className="mt-auto px-0.5">
-          <div className="flex items-baseline justify-between gap-1">
-            <span className="text-red-600 font-bold text-xl md:text-2xl tracking-tight">
-              ৳{product.price}
-            </span>
-            {product.originalPrice > product.price && (
-              <span className="text-[10px] md:text-[12px] text-gray-400 line-through">
-                ৳{product.originalPrice}
-              </span>
-            )}
-          </div>
-          
-          <div className="relative">
-            <motion.button
-              disabled={isOutOfStock}
-              whileTap={isOutOfStock ? {} : { scale: 0.98 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                openProductDetails(product);
-              }}
-              className="w-full relative overflow-hidden bg-gradient-to-br from-primary to-red-600 text-white text-sm md:text-base font-bold py-2 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group/btn active:scale-95 flex items-center justify-center gap-2"
-            >
-              {isOutOfStock ? t("স্টক আউট", "Stock Out") : t("অর্ডার দিন", "Order Now")}
-              {!isOutOfStock && <ArrowRight size={14} />}
-            </motion.button>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-});
-const ZoomableImage = ({
-  src,
-  alt,
-  keyId,
-}: {
-  src: string;
-  alt: string;
-  keyId?: string;
-}) => {
-  const [isZoomed, setIsZoomed] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const lastTapRef = useRef<number>(0);
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isZoomed || !containerRef.current || window.innerWidth <= 768) return;
-    const { left, top, width, height } =
-      containerRef.current.getBoundingClientRect();
-    const x = ((e.clientX - left) / width) * 100;
-    const y = ((e.clientY - top) / height) * 100;
-    containerRef.current.style.setProperty("--zoom-x", `${x}%`);
-    containerRef.current.style.setProperty("--zoom-y", `${y}%`);
-  };
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!isZoomed || !containerRef.current) return;
-    // Don't prevent default to allow scrolling if user wants to scroll page
-    // but typically we wait for touchmove to pan the image origin
-    const touch = e.touches[0];
-    const { left, top, width, height } =
-      containerRef.current.getBoundingClientRect();
-    const x = ((touch.clientX - left) / width) * 100;
-    const y = ((touch.clientY - top) / height) * 100;
-    
-    // Clamp values between 0 and 100 to keep zoom within image bounds
-    const clampedX = Math.max(0, Math.min(100, x));
-    const clampedY = Math.max(0, Math.min(100, y));
-    
-    containerRef.current.style.setProperty("--zoom-x", `${clampedX}%`);
-    containerRef.current.style.setProperty("--zoom-y", `${clampedY}%`);
-  };
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    if (!isZoomed) {
-      containerRef.current?.style.setProperty("--zoom-x", `${x}%`);
-      containerRef.current?.style.setProperty("--zoom-y", `${y}%`);
-    }
-    
-    setIsZoomed(!isZoomed);
-  };
-  return (
-    <div
-      ref={containerRef}
-      className={`relative w-full h-full overflow-hidden transition-all duration-300 ${isZoomed ? "cursor-zoom-out touch-none" : "cursor-zoom-in"}`}
-      onMouseMove={handleMouseMove}
-      onTouchMove={handleTouchMove}
-      onClick={handleClick}
-      style={{ "--zoom-x": "50%", "--zoom-y": "50%" } as any}
-    >
-      <motion.img
-        key={keyId}
-        src={src}
-        alt={alt}
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{
-          opacity: 1,
-          scale: isZoomed ? 2.5 : 1,
-        }}
-        drag={false}
-        style={{ transformOrigin: "var(--zoom-x) var(--zoom-y)" }}
-        className="w-full h-full object-cover pointer-events-auto"
-      />
-      {isZoomed && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md text-white text-[10px] px-4 py-1.5 rounded-full pointer-events-none md:hidden animate-bounce">
-          জুম করা আছে - টেনে দেখুন
-        </div>
-      )}
-      
-    </div>
-  );
-};
-import toast, { Toaster } from "react-hot-toast";
+import { districtThanaMap, ALL_DISTRICTS, DEFAULT_CATEGORIES as default_categories, DEFAULT_PRODUCTS as default_products, DEFAULT_BANNERS as banners, BENGALI_FONTS } from './constants/data';
+import { ProductSkeleton } from './components/ProductSkeleton';
+import { ProductCard } from './components/ProductCard';
+import ZoomableImage from './components/ui/ZoomableImage';
+import toast, { Toaster } from 'react-hot-toast';
 import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues } from './utils/helpers';
 import { FlashSaleCountdown } from './components/FlashSaleCountdown';
 import { useUIContext } from './context/UIContext';
@@ -1629,7 +1207,7 @@ function App() {
           privacyPolicy: data.privacyPolicy || "আপনার ব্যক্তিগত গোপনীয়তাকে আমরা সম্মান করি। আমাদের ওয়েবসাইটে দেওয়া আপনার সকল তথ্য (যেমন: নাম, ফোন নাম্বার, ঠিকানা) সম্পূর্ণ নিরাপদ।",
           refundPolicy: data.refundPolicy || "পণ্য হাতে পাওয়ার পর কোনো সমস্যা থাকলে ২৪ ঘন্টার মধ্যে জানান...",
           termsAndConditions: data.termsAndConditions || "আমাদের ওয়েবসাইট ব্যবহার করার জন্য আপনাকে ধন্যবাদ। অর্ডার করার মাধ্যমে আমরা আমাদের ডেলিভারি ও পেমেন্ট শর্তাবলীর সাথে একমত পোষণ করেছেন",
-checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarningText : "সম্মানিত গ্রাহক, রিটার্ন প্রোডাক্ট আমাদের কুরিয়ার চার্জ লস হওয়ার জন্য যথেষ্ট। তাই ভালোভাবে চেক করে প্রোডাক্ট অর্ডার করুন। আপনার সুন্দর সিদ্ধান্তের জন্য আপনাকে ধন্যবাদ।",
+checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarningText : "প্রিয় গ্রাহক, ক্যাশ অন ডেলিভারিতে অর্ডার করার আগে দয়া করে নিশ্চিত হোন যে প্রোডাক্টটি আপনার প্রয়োজন এবং আপনি তা রিসিভ করবেন। অনাকাঙ্ক্ষিত রিটার্ন এড়াতে আপনার সহযোগিতা আমাদের একান্ত কাম্য।",
           supportPhone1: data.supportPhone1 || "01777-600844",
           supportPhone2: data.supportPhone2 || "01977-600844",
           isAiEnabled: data.isAiEnabled !== undefined ? data.isAiEnabled : false,
@@ -1664,7 +1242,7 @@ checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarni
           privacyPolicy: "আপনার ব্যক্তিগত গোপনীয়তাকে আমরা সম্মান করুন আমাদের ওয়েবসাইটে দেওয়া আপনার সকল তথ্য (যেমন: নাম, ফোন নাম্বার, ঠিকানা) সম্পূর্ণ নিরাপদ।",
           refundPolicy: "পণ্য হাতে পাওয়া পর কোনো সমস্যা থাকলে ২৪ ঘন্টার মধ্যে আমাদের সাথে যোগাযোগ করুন। সঠিক প্রমাণ সাপেক্ষে আমরা দ্রুত রিফান্ড বা এক্সচেঞ্জ করে থাকি",
           termsAndConditions: "আমাদের ওয়েবসাইট ব্যবহার করুন জন্য আপনাকে ধন্যবাদ। অর্ডার করুন মাধ্যমে আমরা আমাদের ডেলিভারি ও পেমেন্ট শর্তাবলীর সাথে একমত পোষণ করেছেন",
-checkoutWarningText: "সম্মানিত গ্রাহক, রিটার্ন প্রোডাক্ট আমাদের কুরিয়ার চার্জ লস হওয়ার জন্য যথেষ্ট। তাই ভালোভাবে চেক করে প্রোডাক্ট অর্ডার করুন। আপনার সুন্দর সিদ্ধান্তের জন্য আপনাকে ধন্যবাদ।",
+checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন ডেলিভারিতে অর্ডার করার আগে দয়া করে নিশ্চিত হোন যে প্রোডাক্টটি আপনার প্রয়োজন এবং আপনি তা রিসিভ করবেন। অনাকাঙ্ক্ষিত রিটার্ন এড়াতে আপনার সহযোগিতা আমাদের একান্ত কাম্য।",
           supportPhone1: "01777-600844",
           supportPhone2: "01977-600844",
           facebookUrl: "https://facebook.com/ishopbd",
@@ -4300,7 +3878,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         const dismissedStr = localStorage.getItem('dismissedNotifs') || '[]';
         let dismissed: string[] = [];
         try { dismissed = JSON.parse(dismissedStr); } catch(e){}
-        const filteredNotifs = notifs.filter(n => !dismissed.includes(n.id) && n.title !== 'dgfdb' && n.title !== 'hhh' && n.message !== 'bcvbc' && n.message !== 'hhh');
+        const filteredNotifs = notifs.filter((n: any) => !dismissed.includes(n.id) && n.title !== 'dgfdb' && n.title !== 'hhh' && n.message !== 'bcvbc' && n.message !== 'hhh');
         setNotifications(filteredNotifs);
         isInitialNotifLoad.current = false;
         
@@ -6836,7 +6414,7 @@ const handleSaveQuickEdit = async () => {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
               />
-              <button className="absolute right-0 top-0 bottom-0 px-6 bg-primary text-white hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center">
+              <button className="cursor-pointer absolute right-0 top-0 bottom-0 px-6 bg-primary text-white hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center">
                 <Search size={18} />
               </button>
             </form>
@@ -6884,7 +6462,7 @@ const handleSaveQuickEdit = async () => {
           <div className="flex items-center gap-3 md:gap-4 text-secondary">
             <button
               onClick={() => setIsAppDownloadModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-full font-bold shadow-sm transition-all active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
+              className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-full font-bold shadow-sm transition-all active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
               title="ডাউনলোড করুন"
             >
               <Download size={16} />
@@ -6892,7 +6470,7 @@ const handleSaveQuickEdit = async () => {
             </button>
             <button
               onClick={() => setIsTrackingOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-full font-bold shadow-md shadow-orange-500/20 transition-all hover:shadow-orange-500/40 hover:-translate-y-0.5 active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
+              className="cursor-pointer flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-full font-bold shadow-md shadow-red-600/20 transition-all hover:shadow-red-600/40 hover:-translate-y-0.5 active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
               title={t("অর্ডার ট্র্যাক করুন", "Track Order")}
             >
               <Truck size={18} />
@@ -6910,7 +6488,7 @@ const handleSaveQuickEdit = async () => {
                   }
                   setIsAdminOpen(true);
                 }}
-                className={`flex items-center justify-center transition-all active:scale-95 rounded-xl ${isMasterAdmin ? "p-2 text-primary hover:bg-gray-100" : "bg-secondary text-white gap-2 px-3 md:px-4 py-2 text-[10px] font-black hover:bg-black"}`}
+                className={`cursor-pointer flex items-center justify-center transition-all active:scale-95 rounded-xl ${isMasterAdmin ? "p-2 text-primary hover:bg-gray-100" : "bg-secondary text-white gap-2 px-3 md:px-4 py-2 text-[10px] font-black hover:bg-black"}`}
                 title={isMasterAdmin ? t("ড্যাশবোর্ড", "Dashboard") : t("সাপোর্ট", "Support")}
               >
                 {isMasterAdmin ? (
@@ -6922,7 +6500,7 @@ const handleSaveQuickEdit = async () => {
             )}
             <button
               onClick={handleCheckNotifications}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors relative"
+              className="cursor-pointer p-1.5 hover:bg-gray-100 rounded-full transition-colors relative"
               title={t("নোটিফিকেশন", "Notifications")}
             >
               <Bell size={22} className={unseenNotifCount > 0 ? "text-primary fill-primary/10 animate-pulse" : "text-secondary"} />
@@ -6932,7 +6510,7 @@ const handleSaveQuickEdit = async () => {
             </button>
             <button
               onClick={openCartCheckout}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors relative"
+              className="cursor-pointer p-1.5 hover:bg-gray-100 rounded-full transition-colors relative"
             >
               <ShoppingCart size={22} />
               {cartCount > 0 && (
@@ -6950,7 +6528,7 @@ const handleSaveQuickEdit = async () => {
                 <>
                   {!user ? (
                     <button
-                      className="p-1.5 hover:bg-gray-100 rounded-full transition-colors group relative"
+                      className="cursor-pointer p-1.5 hover:bg-gray-100 rounded-full transition-colors group relative"
                       onClick={() => {
                         setIsAuthModalOpen(true);
                         setAuthModalType("login");
@@ -6972,7 +6550,7 @@ const handleSaveQuickEdit = async () => {
                     </button>
                   ) : (
                     <button
-                      className="p-1.5 hover:bg-gray-100 rounded-full transition-colors relative group border border-transparent hover:border-primary/20"
+                      className="cursor-pointer p-1.5 hover:bg-gray-100 rounded-full transition-colors relative group border border-transparent hover:border-primary/20"
                       disabled={isLoggingIn}
                       onClick={() => setIsProfileOpen(true)}
                     >
@@ -7091,7 +6669,7 @@ const handleSaveQuickEdit = async () => {
                   setIsProductDetailsOpen(false);
                   setSelectedProduct(null);
                 }}
-                className={`whitespace-nowrap text-base font-medium transition-all relative ${
+                className={`cursor-pointer whitespace-nowrap text-base font-medium transition-all relative ${
                   selectedCategory === "all"
                     ? "text-primary"
                     : "text-gray-500 hover:text-secondary"
@@ -7109,7 +6687,7 @@ const handleSaveQuickEdit = async () => {
                     setIsProductDetailsOpen(false);
                     setSelectedProduct(null);
                   }}
-                  className={`whitespace-nowrap text-sm font-medium transition-all px-3 py-1 rounded-full ${selectedCategory === cat.name ? "bg-primary text-white shadow-sm" : "text-gray-600 bg-gray-100 hover:bg-gray-200"}`}
+                  className={`cursor-pointer whitespace-nowrap text-sm font-medium transition-all px-3 py-1 rounded-full ${selectedCategory === cat.name ? "bg-primary text-white shadow-sm" : "text-gray-600 bg-gray-100 hover:bg-gray-200"}`}
                 >
                   {tc(cat.name)}
                 </button>
@@ -7196,7 +6774,7 @@ const handleSaveQuickEdit = async () => {
                         setIsProductDetailsOpen(false);
                         setSelectedProduct(null);
                       }}
-                      className={`w-full px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      className={`cursor-pointer w-full px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
                         selectedCategory === cat.name
                           ? "bg-white text-primary"
                           : "text-gray-600 hover:bg-white/80 hover:text-primary"
@@ -7443,7 +7021,7 @@ const handleSaveQuickEdit = async () => {
         ) : isCheckoutOpen ? (
           <CheckoutModal {...{ ALL_DISTRICTS, availableRewardPoints, calculateTotal, checkoutAddress, checkoutDistrict, checkoutDistrictSearch, checkoutItems, checkoutName, checkoutNote, checkoutPhone, checkoutPhoneFocused, getProductPrice, handleConfirmOrder, isApplyingRewardPoints, isCheckoutDistrictOpen, isOrderProcessing, isOrderSuccess, openProductDetails, paymentMethod, setPaymentMethod, removeItem, savedProfiles, setCheckoutAddress, setCheckoutDistrict, setCheckoutDistrictSearch, setCheckoutName, setCheckoutNote, setCheckoutPhone, setCheckoutPhoneFocused, setIsApplyingRewardPoints, setIsCheckoutDistrictOpen, setIsCheckoutOpen, t, toBengaliNumber, updateQuantity, isCheckoutOpen, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail, districtThanaMap, couponCode, setCouponCode, couponError, handleApplyCoupon, appliedCoupon, setAppliedCoupon }} />
         ) : isProductDetailsOpen && selectedProduct ? (
-          <ProductDetails {...{ selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
+          <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
         ) : (
           <ShopList {...{ brands, categories, activeCampaign, cleanLatex, setActiveCampaign, Home, selectedCategory, searchQuery, isTrendingFilterActive, newArrivals, t, ProductCard, openProductDetails, handleBuyNow, handleLikeProduct, likedProducts, featuredProducts, featuredScrollRef, handleFeaturedScroll, featuredScrollPercent, setFeaturedScrollPercent, handleFeaturedSliderChange, isProductDetailsOpen, flashSaleProducts, selectedBrand, minPrice, maxPrice, setIsTrendingFilterActive, setSelectedCategory, setSearchInput, setSelectedBrand, setMinPrice, setMaxPrice, setIsFilterMenuOpen, isFilterMenuOpen, sortBy, setSortBy, FilterMenuModal, isLoading, productsPerPage, ProductSkeleton, filteredProducts, PackageOpen, currentPage, setCurrentPage }} />
         )}
@@ -7533,7 +7111,7 @@ const handleSaveQuickEdit = async () => {
           <section className="mb-12 container mx-auto px-4">
             <div className="flex items-center gap-3 mb-4">
               <span className="w-1 h-6 rounded-full bg-primary"></span>
-              <h3 className="text-xl font-black text-secondary uppercase tracking-tight">চালু? ক্যাম্পেইন</h3>
+              <h3 className="text-xl font-black text-secondary uppercase tracking-tight">Active Campaigns</h3>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {campaigns.filter(c => c.isActive).map(campaign => (
@@ -7559,7 +7137,7 @@ const handleSaveQuickEdit = async () => {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-3">
                     <h4 className="text-white font-black text-xs md:text-sm line-clamp-1">{campaign.name}</h4>
-                    <p className="text-white/70 text-[10px] font-bold">{toBengaliNumber(campaign.productIds?.length || 0)}টি পণ্য</p>
+                    <p className="text-white/70 text-[10px] font-bold">{campaign.productIds?.length || 0} Items</p>
                   </div>
                 </motion.div>
               ))}
