@@ -369,16 +369,11 @@ function App() {
         const customerPhone = checkoutPhone.trim();
         const address = checkoutAddress.trim();
         const firstName = checkoutFirstName.trim();
-        const lastName = checkoutLastName.trim();
         const thana = checkoutThana.trim();
         const email = checkoutEmail.trim();
 
         if (!firstName) {
-          toast.error("First Name is required!");
-          return;
-        }
-        if (!lastName) {
-          toast.error("Last Name is required!");
+          toast.error("Name is required!");
           return;
         }
         if (!address) {
@@ -405,7 +400,7 @@ function App() {
         isOrderProcessingRef.current = true;
         setIsOrderProcessing(true);
 
-        const customerName = `${firstName} ${lastName}`;
+        const customerName = firstName;
         const checkoutArea = ((checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "ঢাকা জেলা (বাইরে)") || checkoutDistrict === "Dhaka") ? "inside" : "outside";
         const finalAddress = `${address}, ${thana}, ${checkoutDistrict}${checkoutNote ? ` (নোট: ${checkoutNote})` : ""}`;
         const paymentMethod = "cod";
@@ -1742,6 +1737,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   }, [trendingProducts.length]);
   const filteredOrders = useMemo(() => {
     return orderHistory.filter((order) => {
+      // Exclude soft-deleted orders from active lists
+      if (order.deleted) return false;
       // Separate pre-orders and regular orders
       const isPreOrder = (order.isPreOrder || order.items?.some((i: any) => i.product?.isComingSoon)) && order.status === "pending";
       if (showOnlyPreOrders) {
@@ -1800,6 +1797,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       );
     });
   }, [orderHistory, orderSearchQuery, showOnlyPreOrders, adminStartDate, adminEndDate, selectedOrderStatusFilter]);
+  const deletedOrders = useMemo(() => {
+    return orderHistory.filter((order) => order.deleted === true);
+  }, [orderHistory]);
+
   const masterEmails = useMemo(() => [
     "islamicsoktitv@gmail.com", 
     "bonieaminrony@gmail.com",
@@ -2340,32 +2341,52 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           setIsLoading(false);
         } catch(e) {}
       }
-      if (!cachedProducts || !lastFetch || now - parseInt(lastFetch) > 3600000) {
-        getDocs(collection(db, "products")).then(snapshot => {
-          const prodData = snapshot.docs
-            .map((d) => ({ ...d.data(), id: d.id }) as Product)
-            .filter((p) => !p.deleted);
-          setProducts(prodData);
-          try {
-            localStorage.setItem("cached_products", JSON.stringify(prodData));
-            localStorage.setItem("products_last_fetch", now.toString());
-            if (siteConfig?.productsUpdatedAt) {
-              localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+      if (!cachedProducts || !lastFetch || now - parseInt(lastFetch) > 600000) {
+        fetch("/api/products")
+          .then((res) => {
+            if (!res.ok) throw new Error("HTTP error " + res.status);
+            return res.json();
+          })
+          .then((prodData) => {
+            setProducts(prodData);
+            try {
+              localStorage.setItem("cached_products", JSON.stringify(prodData));
+              localStorage.setItem("products_last_fetch", now.toString());
+              if (siteConfig?.productsUpdatedAt) {
+                localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+              }
+            } catch (e) {
+              console.warn("localStorage write failed:", e);
             }
-          } catch (e) {
-            console.warn("localStorage write failed:", e);
-          }
-          if (productId) {
-             const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-             if (prod) setSelectedProduct(prod);
-          }
-          setIsLoading(false);
-        }).catch(err => {
-          if (!cachedProducts) {
-            handleFirestoreError(err, OperationType.GET, "products");
+            if (productId) {
+               const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
+               if (prod) setSelectedProduct(prod);
+            }
             setIsLoading(false);
-          }
-        });
+          })
+          .catch((err) => {
+            console.warn("API products fetch failed, falling back to Firestore SDK:", err);
+            getDocs(collection(db, "products")).then(snapshot => {
+              const prodData = snapshot.docs
+                .map((d) => ({ ...d.data(), id: d.id }) as Product)
+                .filter((p) => !p.deleted);
+              setProducts(prodData);
+              try {
+                localStorage.setItem("cached_products", JSON.stringify(prodData));
+                localStorage.setItem("products_last_fetch", now.toString());
+              } catch (e) {}
+              if (productId) {
+                 const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
+                 if (prod) setSelectedProduct(prod);
+              }
+              setIsLoading(false);
+            }).catch(fsErr => {
+              if (!cachedProducts) {
+                handleFirestoreError(fsErr, OperationType.GET, "products");
+                setIsLoading(false);
+              }
+            });
+          });
       }
       
       return;
@@ -2471,21 +2492,35 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     const localUpdatedAt = localStorage.getItem("products_updated_at");
     if (!localUpdatedAt || localUpdatedAt !== siteConfig.productsUpdatedAt) {
       console.log("Products cache is outdated, refetching products...");
-      getDocs(collection(db, "products")).then(snapshot => {
-        const prodData = snapshot.docs
-          .map((d) => ({ ...d.data(), id: d.id }) as Product)
-          .filter((p) => !p.deleted);
-        setProducts(prodData);
-        try {
-          localStorage.setItem("cached_products", JSON.stringify(prodData));
-          localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
-          localStorage.setItem("products_last_fetch", Date.now().toString());
-        } catch (e) {
-          console.warn("localStorage write failed:", e);
-        }
-      }).catch(err => {
-        console.error("Failed to refetch products:", err);
-      });
+      fetch("/api/products")
+        .then((res) => {
+          if (!res.ok) throw new Error("HTTP error " + res.status);
+          return res.json();
+        })
+        .then((prodData) => {
+          setProducts(prodData);
+          try {
+            localStorage.setItem("cached_products", JSON.stringify(prodData));
+            localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+            localStorage.setItem("products_last_fetch", Date.now().toString());
+          } catch (e) {
+            console.warn("localStorage write failed:", e);
+          }
+        })
+        .catch((err) => {
+          console.warn("Cache refresh API fetch failed, falling back to Firestore SDK:", err);
+          getDocs(collection(db, "products")).then(snapshot => {
+            const prodData = snapshot.docs
+              .map((d) => ({ ...d.data(), id: d.id }) as Product)
+              .filter((p) => !p.deleted);
+            setProducts(prodData);
+            try {
+              localStorage.setItem("cached_products", JSON.stringify(prodData));
+              localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+              localStorage.setItem("products_last_fetch", Date.now().toString());
+            } catch (e) {}
+          }).catch(fsErr => console.warn("Cache refresh fallback products fetch error:", fsErr));
+        });
     }
   }, [siteConfig?.productsUpdatedAt]);
   // Listen for browser back/forward buttons (popstate)
@@ -2597,6 +2632,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     showTrustBadges: true,
   });
   const [isSavingLandingConfig, setIsSavingLandingConfig] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [landingPreviewTab, setLandingPreviewTab] = useState<'mobile'|'desktop'>('mobile');
   const [productFormErrors, setProductFormErrors] = useState<
     Record<string, boolean>
@@ -3363,6 +3399,23 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       featuredScrollRef.current.scrollLeft = (percent / 100) * totalScrollable;
     }
   };
+
+  // Auto-scroll Featured Products every 3 seconds
+  useEffect(() => {
+    if (featuredProducts.length <= 1) return;
+    const interval = setInterval(() => {
+      const el = featuredScrollRef.current;
+      if (el) {
+        const isEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 20;
+        if (isEnd) {
+          el.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          el.scrollBy({ left: 280, behavior: 'smooth' });
+        }
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [featuredProducts]);
   useEffect(() => {
     if (newArrivals.length <= 1) return;
     const timer = setInterval(() => {
@@ -3404,6 +3457,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       return;
     }
     setProductFormErrors({});
+    setIsSavingProduct(true);
     try {
       // Check for duplicate code
       if (editingProduct.code?.trim()) {
@@ -3510,6 +3564,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       } else {
         alert("ডাটা সেভ করতে সমস্যা হয়েছে: " + (err.message || "Unknown error"));
       }
+    } finally {
+      setIsSavingProduct(false);
     }
   };
   const handleLikeProduct = useCallback(async (productId: string) => {
@@ -4811,6 +4867,7 @@ Rules:
         );
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, reviewPath);
+        throw err; // re-throw so outer catch handles it
       }
       // Update aggregation - handling potential nulls
       const productRef = doc(db, "products", productId);
@@ -4849,7 +4906,7 @@ Rules:
         setProducts(prev => prev.map(p => p.id === productId ? { ...p, rating: Number(newRating.toFixed(1)), reviewCount: newCount } : p));
       }
       setReviewForm({ rating: 5, comment: "", images: [], guestName: "" });
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.success("রিভিউ সফলভাবে জমা হয়েছে! ধন্যবাদ।");
     } catch (err) {
       console.error("Failed to submit review", err);
       // If it's a JSON string from handleFirestoreError, we've already logged it but let's notify user
@@ -5144,11 +5201,39 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
   };
   const deleteOrder = async (id: any) => {
     if (!id) return;
-    const conf = window.confirm("Are you sure you want to delete this order?");
+    const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি রিসাইকেল বিনে পাঠাতে চান?");
+    if (!conf) return;
+    try {
+      await updateDoc(doc(db, "orders", String(id)), {
+        deleted: true,
+        deletedAt: new Date().toISOString()
+      });
+      toast.success("অর্ডারটি রিসাইকেল বিনে পাঠানো হয়েছে।");
+    } catch (err: any) {
+      alert("ডিলিট করতে সমস্যা হয়েছে: " + err.message);
+    }
+  };
+
+  const restoreOrder = async (order: any) => {
+    if (!order || !order.id) return;
+    try {
+      await updateDoc(doc(db, "orders", String(order.id)), {
+        deleted: false,
+        deletedAt: null
+      });
+      toast.success("অর্ডারটি সফলভাবে পুনরুদ্ধার করা হয়েছে।");
+    } catch (err: any) {
+      alert("অর্ডার পুনরুদ্ধার করতে সমস্যা হয়েছে: " + err.message);
+    }
+  };
+
+  const permanentDeleteOrder = async (id: any) => {
+    if (!id) return;
+    const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি চিরতরে ডিলিট করতে চান? এই কাজ আর ফেরত নেওয়া যাবে না।");
     if (!conf) return;
     try {
       await deleteDoc(doc(db, "orders", String(id)));
-      alert("অর্ডারটি ডিলিট করা হয়েছে।");
+      toast.success("অর্ডারটি চিরতরে ডিলিট করা হয়েছে।");
     } catch (err: any) {
       alert("ডিলিট করতে সমস্যা হয়েছে: " + err.message);
     }
@@ -5730,8 +5815,8 @@ const handleSaveQuickEdit = async () => {
         {/* Sticky Header */}
         <header className="sticky top-0 z-[100] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-sm border-b border-gray-100 dark:border-slate-800 transition-all text-secondary dark:text-white">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-            <a href="/" className="text-xl font-extrabold text-primary flex items-center gap-1 hover:opacity-90 transition-opacity cursor-pointer">
-              i SHOP <span className="text-secondary">BD</span>
+            <a href="/" className="flex items-center hover:opacity-90 transition-opacity cursor-pointer">
+              <img src="/logo.png" alt="i SHOP BD Logo" className="h-8 md:h-9 object-contain" />
             </a>
             <button
               onClick={() => {
@@ -6384,8 +6469,8 @@ const handleSaveQuickEdit = async () => {
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
           {/* Brand Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <h1
-              className="text-xl md:text-3xl font-extrabold text-primary tracking-tighter cursor-pointer flex flex-col group"
+            <div
+              className="cursor-pointer transition-transform hover:scale-105"
               onClick={() => {
                 setIsProductDetailsOpen(false);
                 setIsAdminOpen(false);
@@ -6398,11 +6483,10 @@ const handleSaveQuickEdit = async () => {
                 setIsNotifOpen(false);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              title="Action"
+              title="i SHOP BD Home"
             >
-              <div className="flex transition-transform group-hover:scale-105">i SHOP <span className="text-secondary ml-1">BD</span></div>
-              <span className="text-[8px] md:text-[10px] font-bold text-gray-500 -mt-1 uppercase tracking-[0.2em]">আই শপ বিডি</span>
-            </h1>
+              <img src="/logo.png" alt="i SHOP BD Logo" className="h-9 md:h-11 object-contain" />
+            </div>
           </div>
           {/* Search Bar - Desktop */}
           <div className="flex-1 max-w-2xl relative hidden md:block">
@@ -6905,7 +6989,7 @@ const handleSaveQuickEdit = async () => {
             </div>
 
             {/* Right Side Static Banners Column (1/4 width) */}
-            <div className="col-span-1 flex flex-col sm:flex-row md:flex-col gap-4">
+            <div className="col-span-1 md:flex hidden flex-col sm:flex-row md:flex-col gap-4">
               {/* Top Banner */}
               <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b1 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
                 {(() => {
@@ -7086,22 +7170,56 @@ const handleSaveQuickEdit = async () => {
                   {t("সব দেখুব", "View All")} "
                 </button>
               </div>
-              <div className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth">
-                <div className="flex gap-2 md:gap-4 pb-4">
-                  {catProducts.slice(0, 8).map((product) => (
-                    <div key={product.id} className="w-[calc(50%-4px)] md:w-[calc(20%-12.8px)] shrink-0">
-                      <ProductCard 
-                        product={product}
-                        openProductDetails={openProductDetails}
-                        t={t}
-                        handleBuyNow={handleBuyNow}
-                        handleLikeProduct={handleLikeProduct}
-                      
-                        isLiked={likedProducts.includes(product.id)}
+              <div className="relative group">
+                {/* Left Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const container = document.getElementById(`scroll-container-${cat.id}`);
+                    if (container) {
+                      container.scrollBy({ left: -350, behavior: "smooth" });
+                    }
+                  }}
+                  className="absolute -left-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                  title="Previous"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <div 
+                  id={`scroll-container-${cat.id}`}
+                  className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth"
+                >
+                  <div className="flex gap-2 md:gap-4 pb-4">
+                    {catProducts.slice(0, 8).map((product) => (
+                      <div key={product.id} className="w-[calc(50%-4px)] md:w-[calc(20%-12.8px)] shrink-0">
+                        <ProductCard 
+                          product={product}
+                          openProductDetails={openProductDetails}
+                          t={t}
+                          handleBuyNow={handleBuyNow}
+                          handleLikeProduct={handleLikeProduct}
+                          isLiked={likedProducts.includes(product.id)}
                         />
-                    </div>
-                  ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Right Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const container = document.getElementById(`scroll-container-${cat.id}`);
+                    if (container) {
+                      container.scrollBy({ left: 350, behavior: "smooth" });
+                    }
+                  }}
+                  className="absolute -right-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                  title="Next"
+                >
+                  <ChevronRight size={20} />
+                </button>
               </div>
             </section>
           );
@@ -7392,7 +7510,7 @@ const handleSaveQuickEdit = async () => {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {isAdminOpen && <AdminPanel {...{ isAdminOpen, ProfitAnalysis, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleDeleteAdmin, handleDeleteBanner, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, toggleBlacklist, togglePublishStatus, userList, userListSearch }} />}
+        {isAdminOpen && <AdminPanel {...{ isAdminOpen, ProfitAnalysis, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleDeleteAdmin, handleDeleteBanner, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
       </AnimatePresence>
       <AnimatePresence>
         {selectedOrderForDetails && (
