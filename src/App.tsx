@@ -1395,6 +1395,38 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     setShowInstallPrompt(false);
   };
 
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "default") {
+        const dismissed = sessionStorage.getItem("push_prompt_dismissed");
+        if (!dismissed) {
+          const timer = setTimeout(() => setShowPushPrompt(true), 2500);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [user]);
+
+  const handleEnablePushNotifications = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    setShowPushPrompt(false);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        if (user?.uid) {
+          await requestPushPermission(user.uid);
+        }
+        toast.success("🔔 নোটিফিকেশন সফলভাবে চালু হয়েছে!");
+      } else {
+        toast("নোটিফিকেশন অনুমতি দেওয়া হয়নি।");
+      }
+    } catch (err) {
+      console.warn("Push error:", err);
+    }
+  };
+
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [showAdminPassword, setShowAdminPassword] = useState(false);
@@ -4550,12 +4582,15 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       setAuthIdentifier("");
       setAuthPassword("");
       setAuthName("");
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        setTimeout(() => setShowPushPrompt(true), 800);
+      }
     } catch (err: any) {
       console.error("Auth failed:", err);
       let msg = "অথেন্টিকেশন ব্যর্থ হয়েছে।";
       if (err.code === "auth/user-not-found") msg = "এই একাউন্টটি পাওয়া যায়নি।";
       else if (err.code === "auth/wrong-password") msg = "ভুল পাসওয়ার্ড।";
-else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফোন ইতিমধ্যে ব্যবহৃত হচ্ছে।";
+      else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফোন ইতিমধ্যে ব্যবহৃত হচ্ছে।";
       else msg = err.message || msg;
       setAuthError(msg);
       alert(msg);
@@ -4572,6 +4607,10 @@ else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফো
       const provider =
         providerType === "google" ? googleProvider : facebookProvider;
       await signInWithPopup(auth, provider);
+      setIsAuthModalOpen(false);
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        setTimeout(() => setShowPushPrompt(true), 800);
+      }
     } catch (err: any) {
       console.error("Login failed:", err);
       let errorMsg = "লগইন করতে সমস্যা হয়েছে।";
@@ -9327,6 +9366,38 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
               className="flex-1 bg-primary text-white text-[11px] font-black py-2.5 rounded-xl shadow-md shadow-primary/20 hover:bg-red-700 transition-all active:scale-95 text-center uppercase tracking-widest"
             >
               ইন্সটল করুন
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Permission Banner */}
+      {showPushPrompt && (
+        <div className="fixed bottom-6 left-6 right-6 md:left-auto md:max-w-sm bg-white/95 backdrop-blur-md rounded-2xl border border-primary/20 shadow-2xl p-5 z-[500] flex flex-col gap-4 animate-in slide-in-from-bottom duration-300">
+          <div className="flex gap-3">
+            <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
+              <Bell className="text-primary animate-bounce" size={24} />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-secondary">অর্ডার ও অফারের নোটিফিকেশন</h4>
+              <p className="text-xs text-gray-500 font-bold mt-1">আপনার অর্ডারের লাইভ আপডেট ও এক্সক্লুসিভ অফার সরাসরি পেতে নোটিফিকেশন চালু করুন।</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setShowPushPrompt(false);
+                sessionStorage.setItem("push_prompt_dismissed", "true");
+              }}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-secondary text-[11px] font-black py-2.5 rounded-xl transition-all active:scale-95 text-center uppercase tracking-widest cursor-pointer"
+            >
+              পরে করুন
+            </button>
+            <button
+              onClick={handleEnablePushNotifications}
+              className="flex-1 bg-primary text-white text-[11px] font-black py-2.5 rounded-xl shadow-md shadow-primary/20 hover:bg-red-700 transition-all active:scale-95 text-center uppercase tracking-widest cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Bell size={14} /> চালু করুন
             </button>
           </div>
         </div>
