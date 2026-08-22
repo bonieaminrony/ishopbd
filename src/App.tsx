@@ -5946,10 +5946,6 @@ const handleSaveQuickEdit = async () => {
         const banglaStatus = statusTextMap[newStatus.toLowerCase()] || newStatus;
 
         if (newStatus === "confirmed") {
-          const confirmedOrder = updated.find((o) => o.id === orderId);
-          if (confirmedOrder) {
-            sendConfirmationSMS(confirmedOrder);
-          }
           if (orderData && orderData.userId && orderData.userId !== "guest") {
             try {
               await addDoc(collection(db, "notifications"), {
