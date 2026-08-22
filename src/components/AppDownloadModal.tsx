@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Smartphone, Laptop, Download, Apple, CheckCircle, ShieldCheck, Zap } from 'lucide-react';
+import { X, Smartphone, Laptop, Download, CheckCircle, ShieldCheck, Zap } from 'lucide-react';
 
 export interface AppDownloadModalProps {
   isOpen: boolean;
   onClose: () => void;
   siteConfig: any;
+  deferredPrompt?: any;
+  handleInstallPWA?: () => void;
 }
 
-export default function AppDownloadModal({ isOpen, onClose, siteConfig }: AppDownloadModalProps) {
+export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferredPrompt, handleInstallPWA }: AppDownloadModalProps) {
   const [deviceOS, setDeviceOS] = useState<string>('Unknown');
   const [downloadUrl, setDownloadUrl] = useState<string>('');
 
@@ -26,21 +28,108 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig }: AppDow
 
       // Set matching download url
       if (os === 'Windows' || os === 'macOS' || os === 'Linux') {
-        setDownloadUrl(siteConfig?.computerAppUrl || '/apps/ishopbd-setup.exe');
+        setDownloadUrl(siteConfig?.computerAppUrl || '');
       } else if (os === 'Android') {
-        setDownloadUrl(siteConfig?.androidAppUrl || '/apps/ishopbd.apk');
+        setDownloadUrl(siteConfig?.androidAppUrl || '');
       } else if (os === 'iOS') {
-        setDownloadUrl(siteConfig?.iphoneAppUrl || '#');
+        setDownloadUrl(siteConfig?.iphoneAppUrl || '');
       } else {
-        setDownloadUrl(siteConfig?.computerAppUrl || '/apps/ishopbd-setup.exe');
+        setDownloadUrl(siteConfig?.computerAppUrl || '');
       }
     }
   }, [siteConfig]);
 
+  const downloadDesktopShortcut = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ishopbd.com';
+    const content = `[InternetShortcut]\r\nURL=${origin}\r\nIconIndex=0\r\nIconFile=${origin}/icon-192x192.png\r\n`;
+    const blob = new Blob([content], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'iShop BD App.url';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSmartDownload = (e: React.MouseEvent) => {
-    if (deviceOS === 'iOS' && (!siteConfig?.iphoneAppUrl || siteConfig.iphoneAppUrl === '#')) {
+    if (deviceOS === 'iOS') {
+      if (!siteConfig?.iphoneAppUrl || siteConfig.iphoneAppUrl === '#' || siteConfig.iphoneAppUrl.trim() === '') {
+        e.preventDefault();
+        alert('আইফোন অ্যাপটি বর্তমানে অ্যাপল অ্যাপ স্টোরে রিভিউতে রয়েছে। খুব শীঘ্রই এটি লাইভ হবে!');
+        return;
+      }
+      return;
+    }
+
+    const currentUrl = (
+      deviceOS === 'Android' 
+        ? siteConfig?.androidAppUrl 
+        : siteConfig?.computerAppUrl
+    )?.trim() || '';
+
+    // If an explicit external download URL is provided (Google Drive, Dropbox, Play Store, Mediafire, etc.)
+    if (currentUrl && currentUrl !== '#' && !currentUrl.startsWith('/apps/')) {
+      return;
+    }
+
+    // 1. If PWA installation is available, trigger native app installation!
+    if (deferredPrompt && handleInstallPWA) {
       e.preventDefault();
-      alert('আইফোন অ্যাপটি বর্তমানে অ্যাপল অ্যাপ স্টোরে রিভিউতে রয়েছে। খুব শীঘ্রই এটি লাইভ হবে!');
+      handleInstallPWA();
+      onClose();
+      return;
+    }
+
+    // 2. If on PC / Windows, download official Desktop App shortcut instantly!
+    if (deviceOS === 'Windows' || deviceOS === 'macOS' || deviceOS === 'Linux' || deviceOS === 'Unknown') {
+      e.preventDefault();
+      downloadDesktopShortcut();
+      onClose();
+      return;
+    }
+
+    // 3. If on Android without PWA event, instruct to install from browser menu
+    if (deviceOS === 'Android') {
+      e.preventDefault();
+      alert('সরাসরি ফোনে ইনস্টল করতে ব্রাউজারের উপরে (⋮) মেনুতে চাপ দিয়ে "Add to Home screen" বা "Install app" চাপুন।');
+      return;
+    }
+  };
+
+  const handlePlatformClick = (platform: 'pc' | 'android' | 'ios', e: React.MouseEvent) => {
+    if (platform === 'ios') {
+      if (!siteConfig?.iphoneAppUrl || siteConfig.iphoneAppUrl === '#' || siteConfig.iphoneAppUrl.trim() === '') {
+        e.preventDefault();
+        alert('আইফোন অ্যাপটি বর্তমানে অ্যাপল অ্যাপ স্টোরে রিভিউতে রয়েছে। খুব শীঘ্রই এটি লাইভ হবে!');
+        return;
+      }
+      return;
+    }
+
+    const currentUrl = (platform === 'android' ? siteConfig?.androidAppUrl : siteConfig?.computerAppUrl)?.trim() || '';
+    if (currentUrl && currentUrl !== '#' && !currentUrl.startsWith('/apps/')) {
+      return;
+    }
+
+    if (deferredPrompt && handleInstallPWA) {
+      e.preventDefault();
+      handleInstallPWA();
+      onClose();
+      return;
+    }
+
+    if (platform === 'pc') {
+      e.preventDefault();
+      downloadDesktopShortcut();
+      onClose();
+      return;
+    }
+
+    if (platform === 'android') {
+      e.preventDefault();
+      alert('সরাসরি ফোনে ইনস্টল করতে ব্রাউজারের উপরে (⋮) মেনুতে চাপ দিয়ে "Add to Home screen" বা "Install app" চাপুন।');
       return;
     }
   };
@@ -65,7 +154,7 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig }: AppDow
       case 'Android':
         return <Smartphone className="text-primary" size={24} />;
       case 'iOS':
-        return <Apple className="text-primary" size={24} />;
+        return <img src="/icon-192x192.png" alt="iOS App" className="w-6 h-6 object-contain" />;
       default:
         return <Smartphone className="text-primary" size={24} />;
     }
@@ -203,9 +292,12 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig }: AppDow
             <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">অন্যান্য প্ল্যাটফর্ম</h5>
             <div className="grid grid-cols-3 gap-2.5">
               <a
-                href={siteConfig?.computerAppUrl || '/apps/ishopbd-setup.exe'}
-                download
-                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 text-center hover:bg-gray-50 ${
+                href={siteConfig?.computerAppUrl || '#'}
+                onClick={(e) => handlePlatformClick('pc', e)}
+                download={!!(siteConfig?.computerAppUrl && !siteConfig.computerAppUrl.startsWith('http'))}
+                target={siteConfig?.computerAppUrl?.startsWith('http') ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 text-center hover:bg-gray-50 cursor-pointer ${
                   deviceOS === 'Windows' || deviceOS === 'macOS' || deviceOS === 'Linux'
                     ? 'border-primary bg-primary/5'
                     : 'border-gray-100'
@@ -216,9 +308,12 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig }: AppDow
               </a>
 
               <a
-                href={siteConfig?.androidAppUrl || '/apps/ishopbd.apk'}
-                download
-                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 text-center hover:bg-gray-50 ${
+                href={siteConfig?.androidAppUrl || '#'}
+                onClick={(e) => handlePlatformClick('android', e)}
+                download={!!(siteConfig?.androidAppUrl && !siteConfig.androidAppUrl.startsWith('http'))}
+                target={siteConfig?.androidAppUrl?.startsWith('http') ? '_blank' : undefined}
+                rel="noopener noreferrer"
+                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 text-center hover:bg-gray-50 cursor-pointer ${
                   deviceOS === 'Android' ? 'border-primary bg-primary/5' : 'border-gray-100'
                 }`}
               >
@@ -228,19 +323,19 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig }: AppDow
 
               <a
                 href={siteConfig?.iphoneAppUrl || '#'}
-                onClick={(e) => {
-                  if (!siteConfig?.iphoneAppUrl || siteConfig.iphoneAppUrl === '#') {
-                    e.preventDefault();
-                    alert('আইফোন অ্যাপটি বর্তমানে অ্যাপল অ্যাপ স্টোরে রিভিউতে রয়েছে। খুব শীঘ্রই এটি লাইভ হবে!');
-                  }
-                }}
+                onClick={(e) => handlePlatformClick('ios', e)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 text-center hover:bg-gray-50 ${
+                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 text-center hover:bg-gray-50 cursor-pointer ${
                   deviceOS === 'iOS' ? 'border-primary bg-primary/5' : 'border-gray-100'
                 }`}
               >
-                <Apple size={18} className={deviceOS === 'iOS' ? 'text-primary' : 'text-gray-400'} />
+                <img 
+                  src="/icon-192x192.png" 
+                  alt="iPhone" 
+                  className={`w-[18px] h-[18px] object-contain ${deviceOS === 'iOS' ? '' : 'opacity-40 grayscale'}`} 
+                  onError={(e: any) => { e.currentTarget.style.display = 'none'; }}
+                />
                 <span className="text-[9px] font-black text-secondary leading-none">iPhone</span>
               </a>
             </div>

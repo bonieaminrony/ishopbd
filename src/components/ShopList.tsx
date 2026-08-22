@@ -161,7 +161,27 @@ export default function ShopList(props: ShopListProps) {
         {selectedCategory === "all" && !searchQuery && !activeCampaign && !isTrendingFilterActive && (
           <div className="space-y-6 mb-6">
             {/* New Arrivals Horizontal Scroll */}
-            {newArrivals.length > 0 && (
+            {isLoading && newArrivals.length === 0 ? (
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Zap className="text-primary" size={24} />
+                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
+                      {t("নতুন পণ্য", "New Arrivals")}
+                    </h3>
+                  </div>
+                </div>
+                <div className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth px-4 md:px-0">
+                  <div className="flex gap-2.5 md:gap-4 pb-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={`na-skel-${i}`} className="w-[160px] sm:w-[175px] md:w-[calc(20%-12.8px)] shrink-0">
+                        <ProductSkeleton />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : newArrivals.length > 0 ? (
               <section>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -180,27 +200,61 @@ export default function ShopList(props: ShopListProps) {
                     {t("সব দেখুন", "View All")} <ChevronRight size={16} />
                   </button>
                 </div>
-                <div className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth px-4 md:px-0">
-                  <div className="flex gap-2 md:gap-4 pb-4">
-                    {newArrivals.map((product) => (
-                      <div key={product.id} className="w-[calc(50%-4px)] md:w-[calc(20%-12.8px)] shrink-0">
-                        <ProductCard 
-                          product={product}
-                          openProductDetails={openProductDetails}
-                          t={t}
-                          handleBuyNow={handleBuyNow}
-                          handleLikeProduct={handleLikeProduct}
-                        
-                          isLiked={likedProducts.includes(product.id)}
+                <div className="relative group">
+                  {/* Left Arrow Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const container = document.getElementById("scroll-container-new-arrivals");
+                      if (container) {
+                        container.scrollBy({ left: -350, behavior: "smooth" });
+                      }
+                    }}
+                    className="absolute -left-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                    title="Previous"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+
+                  <div 
+                    id="scroll-container-new-arrivals"
+                    className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth px-4 md:px-0"
+                  >
+                    <div className="flex gap-2.5 md:gap-4 pb-4">
+                      {newArrivals.map((product) => (
+                        <div key={product.id} className="w-[160px] sm:w-[175px] md:w-[calc(20%-12.8px)] shrink-0">
+                          <ProductCard 
+                            product={product}
+                            openProductDetails={openProductDetails}
+                            t={t}
+                            handleBuyNow={handleBuyNow}
+                            handleLikeProduct={handleLikeProduct}
+                            isLiked={likedProducts.includes(product.id)}
                           />
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+
+                  {/* Right Arrow Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const container = document.getElementById("scroll-container-new-arrivals");
+                      if (container) {
+                        container.scrollBy({ left: 350, behavior: "smooth" });
+                      }
+                    }}
+                    className="absolute -right-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                    title="Next"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
                 </div>
               </section>
-            )}
+            ) : null}
             {/* Featured Products Grid */}
-            {featuredProducts.length > 0 && (
+            {isLoading && featuredProducts.length === 0 ? (
               <section className="mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -210,26 +264,71 @@ export default function ShopList(props: ShopListProps) {
                     </h3>
                   </div>
                 </div>
-                <div 
-                  ref={featuredScrollRef}
-                  onScroll={handleFeaturedScroll}
-                  className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth"
-                >
-                  <div className="flex gap-2 md:gap-4">
-                    {featuredProducts.map((product) => (
-                      <div key={product.id} className="w-[calc(50%-4px)] md:w-[calc(20%-12.8px)] shrink-0">
-                        <ProductCard 
-                          product={product}
-                          openProductDetails={openProductDetails}
-                          t={t}
-                          handleBuyNow={handleBuyNow}
-                          handleLikeProduct={handleLikeProduct}
-                        
-                          isLiked={likedProducts.includes(product.id)}
-                          />
+                <div className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth">
+                  <div className="flex gap-2.5 md:gap-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={`feat-skel-${i}`} className="w-[160px] sm:w-[175px] md:w-[calc(20%-12.8px)] shrink-0">
+                        <ProductSkeleton />
                       </div>
                     ))}
                   </div>
+                </div>
+              </section>
+            ) : featuredProducts.length > 0 ? (
+              <section className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Star className="text-amber-500 fill-amber-500" size={24} />
+                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
+                      {t("সেরা পণ্য", "Featured Products")}
+                    </h3>
+                  </div>
+                </div>
+                <div className="relative group">
+                  {/* Left Arrow Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      featuredScrollRef.current?.scrollBy({ left: -350, behavior: "smooth" });
+                    }}
+                    className="absolute -left-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                    title="Previous"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+
+                  <div 
+                    ref={featuredScrollRef}
+                    onScroll={handleFeaturedScroll}
+                    className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth"
+                  >
+                    <div className="flex gap-2.5 md:gap-4">
+                      {featuredProducts.map((product) => (
+                        <div key={product.id} className="w-[160px] sm:w-[175px] md:w-[calc(20%-12.8px)] shrink-0">
+                          <ProductCard 
+                            product={product}
+                            openProductDetails={openProductDetails}
+                            t={t}
+                            handleBuyNow={handleBuyNow}
+                            handleLikeProduct={handleLikeProduct}
+                            isLiked={likedProducts.includes(product.id)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Right Arrow Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      featuredScrollRef.current?.scrollBy({ left: 350, behavior: "smooth" });
+                    }}
+                    className="absolute -right-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                    title="Next"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
                 </div>
                 {/* Scroll Indicator for Featured Products */}
                 {featuredProducts.length > (window.innerWidth < 768 ? 2 : 4) && (
@@ -252,7 +351,7 @@ export default function ShopList(props: ShopListProps) {
                   </div>
                 )}
               </section>
-            )}
+            ) : null}
           </div>
         )}
         {/* Flash Sale Section */}
@@ -283,21 +382,56 @@ export default function ShopList(props: ShopListProps) {
                 </div>
               </div>
               {/* White Cards Container */}
-              <div className="bg-white p-4 md:p-6 overflow-x-auto no-scrollbar">
-                <div className="flex gap-3 md:gap-4 pb-2">
-                  {flashSaleProducts.slice(0, 10).map((product) => (
-                    <div key={product.id} className="w-[170px] md:w-[210px] shrink-0">
-                      <ProductCard 
-                        product={product}
-                        openProductDetails={openProductDetails}
-                        t={t}
-                        handleBuyNow={handleBuyNow}
-                        handleLikeProduct={handleLikeProduct}
-                        isLiked={likedProducts.includes(product.id)}
-                      />
-                    </div>
-                  ))}
+              <div className="bg-white p-4 md:p-6 relative group">
+                {/* Left Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const container = document.getElementById("scroll-container-flash-sale");
+                    if (container) {
+                      container.scrollBy({ left: -350, behavior: "smooth" });
+                    }
+                  }}
+                  className="absolute left-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                  title="Previous"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <div 
+                  id="scroll-container-flash-sale"
+                  className="overflow-x-auto no-scrollbar"
+                >
+                  <div className="flex gap-3 md:gap-4 pb-2">
+                    {flashSaleProducts.slice(0, 10).map((product) => (
+                      <div key={product.id} className="w-[170px] md:w-[210px] shrink-0">
+                        <ProductCard 
+                          product={product}
+                          openProductDetails={openProductDetails}
+                          t={t}
+                          handleBuyNow={handleBuyNow}
+                          handleLikeProduct={handleLikeProduct}
+                          isLiked={likedProducts.includes(product.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Right Arrow Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const container = document.getElementById("scroll-container-flash-sale");
+                    if (container) {
+                      container.scrollBy({ left: 350, behavior: "smooth" });
+                    }
+                  }}
+                  className="absolute right-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
+                  title="Next"
+                >
+                  <ChevronRight size={20} />
+                </button>
               </div>
             </div>
           </section>
@@ -309,7 +443,15 @@ export default function ShopList(props: ShopListProps) {
               <h3 className="text-xl md:text-2xl font-bold border-l-4 border-primary pl-3 text-secondary">
                 {isTrendingFilterActive 
                   ? t("ট্রেন্ডিং প্রোডাক্টস", "Trending Products")
-                  : (activeCampaign ? activeCampaign.name : t("পপুলার", "Popular"))}
+                  : activeCampaign 
+                    ? activeCampaign.name 
+                    : selectedCategory !== "all" 
+                      ? selectedCategory
+                      : selectedBrand !== "all"
+                        ? selectedBrand
+                        : searchQuery
+                          ? t("সার্চ রেজাল্ট", "Search Results")
+                          : t("সকল গ্যাজেট", "All Gadgets")}
               </h3>
               {(isTrendingFilterActive || selectedCategory !== "all" || searchQuery || selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
                 <button 
@@ -364,8 +506,8 @@ export default function ShopList(props: ShopListProps) {
           <AnimatePresence>
             {isFilterMenuOpen && <FilterMenuModal {...{ t, minPrice, setMinPrice, maxPrice, setMaxPrice, brands, setSelectedBrand, selectedBrand, setIsFilterMenuOpen, isFilterMenuOpen }} />}
           </AnimatePresence>
-          {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-1 md:gap-4 px-1">
+          {isLoading && filteredProducts.length === 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3 md:gap-4 px-1 sm:px-2 md:px-0">
               {Array.from({ length: productsPerPage }).map((_, i) => <ProductSkeleton key={`skeleton-${i}`} />)}
             </div>
           ) : filteredProducts.length === 0 ? (
@@ -374,7 +516,7 @@ export default function ShopList(props: ShopListProps) {
                <p className="text-xl text-gray-500 font-bold">{t("কোনো পণ্য পাওয়া যায়নি", "No products found")}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-1 md:gap-4 px-1">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3 md:gap-4 px-1 sm:px-2 md:px-0">
               {filteredProducts.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage).map((product) => (
                 <ProductCard 
                 key={product.id}

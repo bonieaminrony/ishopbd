@@ -84,6 +84,86 @@ export default function TrackingModal(props: TrackingModalProps) {
                 </div>
                 {trackingResult && (
                   <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-5">
+                    {/* Horizontal Visual Timeline */}
+                    {trackingResult.status !== 'cancelled' && trackingResult.status !== 'returned' && (
+                      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 relative overflow-hidden">
+                        <div className="relative flex justify-between items-center w-full min-h-[64px]">
+                          {/* Background connecting line */}
+                          <div className="absolute top-5 left-[12.5%] right-[12.5%] h-1 bg-gray-100 -z-0" />
+                          
+                          {/* Active progress connecting line */}
+                          {(() => {
+                            const statusList = ['pending', 'confirmed', 'shipped', 'delivered'];
+                            let currentStatusStatus = trackingResult.status === 'processing' ? 'confirmed' : trackingResult.status;
+                            let currentStatusIdx = statusList.indexOf(currentStatusStatus);
+
+                            if (trackingResult.steadfastStatus) {
+                              const st = trackingResult.steadfastStatus.toLowerCase();
+                              if (st.includes('delivered')) currentStatusIdx = 3;
+                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatched') || st.includes('picked_up')) currentStatusIdx = 2;
+                              else if (st.includes('cancelled')) currentStatusIdx = -1;
+                            } else if (trackingResult.pathaoStatus) {
+                              const st = trackingResult.pathaoStatus.toLowerCase();
+                              if (st.includes('delivered')) currentStatusIdx = 3;
+                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatch') || st.includes('pickup')) currentStatusIdx = 2;
+                              else if (st.includes('cancel') || st.includes('return')) currentStatusIdx = -1;
+                            }
+                            
+                            const percent = currentStatusIdx >= 0 ? (currentStatusIdx / 3) * 75 : 0;
+                            return (
+                              <div 
+                                className="absolute top-5 left-[12.5%] h-1 bg-orange-500 transition-all duration-500 -z-0" 
+                                style={{ width: `${percent}%` }}
+                              />
+                            );
+                          })()}
+                          
+                          {[
+                            { key: 'pending', label: 'অর্ডার রিসিভড', icon: ShoppingBag },
+                            { key: 'confirmed', label: 'প্যাকিং ও কনফার্মড', icon: CheckCircle2 },
+                            { key: 'shipped', label: 'কুরিয়ারে পাঠানো হয়েছে', icon: Truck },
+                            { key: 'delivered', label: 'ডেলিভারি সম্পন্ন', icon: Home }
+                          ].map((step, index) => {
+                            const statusList = ['pending', 'confirmed', 'shipped', 'delivered'];
+                            let currentStatusStatus = trackingResult.status === 'processing' ? 'confirmed' : trackingResult.status;
+                            let currentStatusIdx = statusList.indexOf(currentStatusStatus);
+
+                            if (trackingResult.steadfastStatus) {
+                              const st = trackingResult.steadfastStatus.toLowerCase();
+                              if (st.includes('delivered')) currentStatusIdx = 3;
+                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatched') || st.includes('picked_up')) currentStatusIdx = 2;
+                              else if (st.includes('cancelled')) currentStatusIdx = -1;
+                            } else if (trackingResult.pathaoStatus) {
+                              const st = trackingResult.pathaoStatus.toLowerCase();
+                              if (st.includes('delivered')) currentStatusIdx = 3;
+                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatch') || st.includes('pickup')) currentStatusIdx = 2;
+                              else if (st.includes('cancel') || st.includes('return')) currentStatusIdx = -1;
+                            }
+
+                            const isCompleted = currentStatusIdx >= index;
+                            const isCurrent = currentStatusIdx === index;
+                            const StepIcon = step.icon;
+                            
+                            return (
+                              <div key={step.key} className="flex flex-col items-center flex-1 relative z-10">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all ${
+                                  isCompleted 
+                                    ? 'bg-orange-500 border-orange-500 text-white shadow-md shadow-orange-500/20' 
+                                    : 'bg-white border-gray-200 text-gray-400'
+                                } ${isCurrent ? 'ring-4 ring-orange-100 animate-pulse' : ''}`}>
+                                  <StepIcon size={18} />
+                                </div>
+                                <span className={`text-[9px] md:text-[10px] font-black mt-2 text-center whitespace-nowrap block ${
+                                  isCompleted ? 'text-secondary font-black' : 'text-gray-400 font-bold'
+                                }`}>
+                                  {step.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-xs text-gray-500 font-bold mb-1">অর্ডার আইডি</p>
@@ -280,9 +360,9 @@ export default function TrackingModal(props: TrackingModalProps) {
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">অর্ডার প্রসেসিং টাইমলাইন</h4>
                       <div className="relative pl-8 border-l-2 border-gray-200 space-y-6 ml-3">
                         {[
-                          { key: 'pending', label: 'অর্ডার প্লেস করা হয়েছে', icon: ShoppingBag },
-                          { key: 'confirmed', label: 'অর্ডারটি কনফার্ম করা হয়েছে', icon: CheckCircle2 },
-                          { key: 'shipped', label: 'শিপমেন্ট করা হয়েছে', icon: Truck },
+                          { key: 'pending', label: 'অর্ডার রিসিভড', icon: ShoppingBag },
+                          { key: 'confirmed', label: 'প্যাকিং ও কনফার্মড', icon: CheckCircle2 },
+                          { key: 'shipped', label: 'কুরিয়ারে পাঠানো হয়েছে', icon: Truck },
                           { key: 'delivered', label: 'ডেলিভারি সম্পন্ন', icon: Home }
                         ].map((step, index) => {
                           let isCompleted = false;

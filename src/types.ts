@@ -59,9 +59,11 @@ export interface Product {
   minOrderQty?: number;
   modelName?: string;
   warranty?: string;
+  shortDescription?: string;
+  metaDescription?: string;
   features?: string;
   inTheBox?: string;
-  specifications?: { key: string; value: string }[];
+  specifications?: { key?: string; name?: string; value: string }[];
   subcategory?: string;
   createdAt?: any;
   updatedAt?: any;

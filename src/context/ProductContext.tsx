@@ -46,6 +46,35 @@ type ProductContextType = {
   brands: any;
   selectedSubcategory: any;
   setSelectedSubcategory: any;
+  aiSearchProductIds: string[] | null;
+  setAiSearchProductIds: any;
+  isAiSearching: boolean;
+  setIsAiSearching: any;
+};
+
+export const normalizeProduct = (p: any): Product => {
+  if (!p) return p;
+  let stock = Number(p.stock !== undefined && p.stock !== null ? p.stock : 0);
+  if (Array.isArray(p.variants) && p.variants.length > 0) {
+    const hasVariantStocks = p.variants.some((v: any) => v && v.stock !== undefined && v.stock !== null);
+    if (hasVariantStocks) {
+      const sum = p.variants.reduce((acc: number, v: any) => acc + (Number(v?.stock) || 0), 0);
+      stock = Math.max(0, sum);
+    } else {
+      stock = Math.max(0, stock);
+    }
+  } else {
+    stock = Math.max(0, stock);
+  }
+  return {
+    ...p,
+    stock
+  };
+};
+
+export const normalizeProducts = (prods: any[]): Product[] => {
+  if (!Array.isArray(prods)) return [];
+  return prods.map(normalizeProduct);
 };
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -65,14 +94,24 @@ const [categories, setCategories] = useState<Category[]>(() => {
     }
   });
 
-const [products, setProducts] = useState<Product[]>(() => {
+const [productsRaw, setProductsRaw] = useState<Product[]>(() => {
     try {
       const cached = localStorage.getItem("cached_products");
-      return cached ? JSON.parse(cached) : [];
+      return cached ? normalizeProducts(JSON.parse(cached)) : [];
     } catch {
       return [];
     }
   });
+
+  const setProducts = React.useCallback((updater: any) => {
+    if (typeof updater === 'function') {
+      setProductsRaw(prev => normalizeProducts(updater(prev)));
+    } else {
+      setProductsRaw(normalizeProducts(updater));
+    }
+  }, []);
+
+  const products = productsRaw;
 
 const [searchQuery, setSearchQuery] = useState("");
 
@@ -88,6 +127,8 @@ useEffect(() => {
 const [isTrendingFilterActive, setIsTrendingFilterActive] = useState(false);
 
 const [selectedBrand, setSelectedBrand] = useState("all");
+  const [aiSearchProductIds, setAiSearchProductIds] = useState<string[] | null>(null);
+  const [isAiSearching, setIsAiSearching] = useState(false);
 
 const [minPrice, setMinPrice] = useState<number | "">("");
 
@@ -153,11 +194,14 @@ const filteredProducts = useMemo(() => {
         const category = p.category || "";
         const code = p.code || "";
         const brand = p.brand || "";
-        const matchesSearch =
-          name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = aiSearchProductIds !== null
+          ? aiSearchProductIds.includes(p.id)
+          : (
+            name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase())
+          );
         const matchesCategory =
           selectedCategory === "all" || category === selectedCategory;
         const matchesSubcategory =
@@ -179,11 +223,14 @@ const filteredProducts = useMemo(() => {
         const category = p.category || "";
         const code = p.code || "";
         const brand = p.brand || "";
-        const matchesSearch =
-          name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = aiSearchProductIds !== null
+          ? aiSearchProductIds.includes(p.id)
+          : (
+            name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase())
+          );
         const matchesCategory =
           selectedCategory === "all" || category === selectedCategory;
         const matchesSubcategory =
@@ -215,7 +262,7 @@ const filteredProducts = useMemo(() => {
       const dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0) : 0;
       return dateB - dateA;
     });
-  }, [products, searchQuery, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, activeCampaign, isTrendingFilterActive, minPrice, maxPrice, sortBy]);
+  }, [products, searchQuery, selectedCategory, selectedSubcategory, selectedBrand, selectedColor, activeCampaign, isTrendingFilterActive, minPrice, maxPrice, sortBy, aiSearchProductIds]);
 
 const featuredProducts = useMemo(() => {
     return products.filter(p => !p.deleted && p.isTrending && p.isPublished !== false).slice(0, 10);
@@ -283,6 +330,10 @@ const brands = useMemo(() => {
     brands,
     selectedSubcategory,
     setSelectedSubcategory,
+    aiSearchProductIds,
+    setAiSearchProductIds,
+    isAiSearching,
+    setIsAiSearching,
   };
 
   return <ProductContext.Provider value={value}>{children}</ProductContext.Provider>;

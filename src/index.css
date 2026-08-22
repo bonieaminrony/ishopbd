@@ -18,8 +18,16 @@
 }
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-cream text-secondary font-sans;
+    @apply bg-cream text-secondary font-sans antialiased selection:bg-primary/20 selection:text-primary;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
   }
   
   h1, h2, h3, h4, h5, h6 {

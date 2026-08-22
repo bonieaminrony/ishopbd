@@ -22,7 +22,8 @@ export default defineConfig(({ mode }) => {
             'react-vendor': ['react', 'react-dom'],
             'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
             'lucide-icons': ['lucide-react'],
-            'ui-vendor': ['motion', 'react-hot-toast']
+            'ui-vendor': ['motion', 'react-hot-toast'],
+            'utils-vendor': ['axios', 'browser-image-compression', 'html-to-image', 'react-helmet-async']
           }
         }
       }

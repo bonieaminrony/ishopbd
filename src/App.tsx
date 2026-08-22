@@ -221,7 +221,8 @@ function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const { isQuotaExceeded, setIsQuotaExceeded, adminReplyingTo, setAdminReplyingTo, chatReplyingTo, setChatReplyingTo, isProfileOpen, setIsProfileOpen, profileTab, setProfileTab, activePolicy, setActivePolicy } = useUIContext();
     const { showToast, setShowToast, cartItems, setCartItems, cartCount, checkoutItems, setCheckoutItems, isCheckoutOpen, setIsCheckoutOpen, checkoutName, setCheckoutName, checkoutPhone, setCheckoutPhone, checkoutPhoneFocused, setCheckoutPhoneFocused, checkoutDistrict, setCheckoutDistrict, checkoutAddress, setCheckoutAddress, checkoutNote, setCheckoutNote, paymentMethod, setPaymentMethod, availableRewardPoints, setAvailableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, checkoutDistrictSearch, setCheckoutDistrictSearch, isCheckoutDistrictOpen, setIsCheckoutDistrictOpen, appliedCoupon, setAppliedCoupon, deliveryArea, setDeliveryArea, addToCartInternal, addToCart, updateQuantity, setQuantityDirect, removeItem, getProductPrice, getDeliveryCharge, calculateTotal, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail } = useCartContext();
-    const { activeCampaign, setActiveCampaign, campaigns, setCampaigns, selectedColor, setSelectedColor, categories, setCategories, products, setProducts, searchQuery, setSearchQuery, searchInput, setSearchInput, selectedCategory, setSelectedCategory, isTrendingFilterActive, setIsTrendingFilterActive, selectedBrand, setSelectedBrand, minPrice, setMinPrice, maxPrice, setMaxPrice, sortBy, setSortBy, trendingIndices, setTrendingIndices, activeTrendingSlot, setActiveTrendingSlot, selectedProduct, setSelectedProduct, isProductDetailsOpen, setIsProductDetailsOpen, flashSaleProducts, relatedProducts, filteredProducts, featuredProducts, newArrivals, brands, selectedSubcategory, setSelectedSubcategory } = useProductContext();
+        const { activeCampaign, setActiveCampaign, campaigns, setCampaigns, selectedColor, setSelectedColor, categories, setCategories, products, setProducts, searchQuery, setSearchQuery, searchInput, setSearchInput, selectedCategory, setSelectedCategory, isTrendingFilterActive, setIsTrendingFilterActive, selectedBrand, setSelectedBrand, minPrice, setMinPrice, maxPrice, setMaxPrice, sortBy, setSortBy, trendingIndices, setTrendingIndices, activeTrendingSlot, setActiveTrendingSlot, selectedProduct, setSelectedProduct, isProductDetailsOpen, setIsProductDetailsOpen, flashSaleProducts, relatedProducts, filteredProducts, featuredProducts, newArrivals, brands, selectedSubcategory, setSelectedSubcategory, aiSearchProductIds, setAiSearchProductIds, isAiSearching, setIsAiSearching } = useProductContext();
+
     const [inlineOrderDistrict, setInlineOrderDistrict] = useState("");
 
     const [inlineOrderThana, setInlineOrderThana] = useState("");
@@ -366,11 +367,11 @@ function App() {
           return;
         }
 
-        const customerPhone = checkoutPhone.trim();
-        const address = checkoutAddress.trim();
-        const firstName = checkoutFirstName.trim();
-        const thana = checkoutThana.trim();
-        const email = checkoutEmail.trim();
+        const customerPhone = (checkoutPhone || "").trim();
+        const address = (checkoutAddress || "").trim();
+        const firstName = (checkoutFirstName || checkoutName || "").trim();
+        const thana = (checkoutThana || "").trim();
+        const email = (checkoutEmail || "").trim();
 
         if (!firstName) {
           toast.error("Name is required!");
@@ -390,10 +391,6 @@ function App() {
         }
         if (!customerPhone || customerPhone.length < 11) {
           toast.error("Please enter a valid mobile number (at least 11 digits)!");
-          return;
-        }
-        if (!email) {
-          toast.error("Email is required!");
           return;
         }
 
@@ -460,10 +457,28 @@ function App() {
           const stockPromises = checkoutItems.map((item) => {
             const pId = item.product.id;
             const reqQty = Number(item.quantity) || 1;
-            return updateDoc(doc(db, "products", pId), {
-              stock: increment(-reqQty),
+            const currentProd = products.find(p => p.id === pId) || item.product;
+            const updatePayload: any = {
               salesCount: increment(reqQty)
-            });
+            };
+
+            if (currentProd?.variants && Array.isArray(currentProd.variants) && currentProd.variants.length > 0) {
+              const updatedVariants = currentProd.variants.map((v: any) => {
+                const isMatch = (!item.color || v.name === item.color) && (!item.size || v.size === item.size);
+                if (isMatch) {
+                  return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - reqQty) };
+                }
+                return v;
+              });
+              const newTotalStock = updatedVariants.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+              updatePayload.variants = updatedVariants;
+              updatePayload.stock = Math.max(0, newTotalStock);
+            } else {
+              const currentStock = Math.max(0, Number(currentProd?.stock) || 0);
+              updatePayload.stock = Math.max(0, currentStock - reqQty);
+            }
+
+            return updateDoc(doc(db, "products", pId), updatePayload);
           });
 
           await Promise.all([
@@ -645,13 +660,31 @@ function App() {
           const item = orderData.items[0];
           const pId = item.product.id;
           const reqQty = Number(item.quantity) || 1;
+          const currentProd = products.find(p => p.id === pId) || item.product;
+
+          const updatePayload: any = {
+            salesCount: increment(reqQty)
+          };
+
+          if (currentProd?.variants && Array.isArray(currentProd.variants) && currentProd.variants.length > 0) {
+            const updatedVariants = currentProd.variants.map((v: any) => {
+              const isMatch = (!item.color || v.name === item.color) && (!item.size || v.size === item.size);
+              if (isMatch) {
+                return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - reqQty) };
+              }
+              return v;
+            });
+            const newTotalStock = updatedVariants.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+            updatePayload.variants = updatedVariants;
+            updatePayload.stock = Math.max(0, newTotalStock);
+          } else {
+            const currentStock = Math.max(0, Number(currentProd?.stock) || 0);
+            updatePayload.stock = Math.max(0, currentStock - reqQty);
+          }
 
           await Promise.all([
             setDoc(doc(db, "orders", orderData.orderId), orderData),
-            updateDoc(doc(db, "products", pId), {
-              stock: increment(-reqQty),
-              salesCount: increment(reqQty)
-            })
+            updateDoc(doc(db, "products", pId), updatePayload)
           ]);
           
           // Send confirmation email via PHP endpoint
@@ -1060,6 +1093,16 @@ function App() {
       setCheckingRewardPoints(false);
     }
   };
+
+  const [savedProfiles, setSavedProfiles] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("ishopbd_saved_profiles");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       calculateRewardPoints(checkoutPhone);
@@ -1081,26 +1124,68 @@ function App() {
         localStorage.setItem("ishopbd_session_id", sessionId);
       }
       if (cartItems.length > 0) {
+        const totalAmt = cartItems.reduce((sum: number, item: any) => sum + (getProductPrice(item.product, item.quantity) * item.quantity), 0);
+        
+        // Auto-resolve best available phone number
+        const resolvedPhone = (
+          checkoutPhone?.trim() || 
+          userProfile?.phone?.trim() || 
+          user?.phoneNumber?.trim() || 
+          (savedProfiles?.[0]?.phone ? savedProfiles[0].phone.trim() : "") || 
+          ""
+        ).trim();
+
+        // Auto-resolve best available customer name
+        const resolvedName = (
+          checkoutName?.trim() || 
+          userProfile?.displayName?.trim() || 
+          userProfile?.name?.trim() || 
+          user?.displayName?.trim() || 
+          (savedProfiles?.[0]?.name ? savedProfiles[0].name.trim() : "") || 
+          (user?.email ? user.email.split("@")[0] : "") || 
+          ""
+        ).trim();
+
+        // Auto-resolve best available address
+        const resolvedAddress = (
+          checkoutAddress?.trim() || 
+          userProfile?.address?.trim() || 
+          (savedProfiles?.[0]?.address ? savedProfiles[0].address.trim() : "") || 
+          ""
+        ).trim();
+
+        const resolvedDistrict = checkoutDistrict || userProfile?.district || savedProfiles?.[0]?.district || "";
+        const resolvedThana = checkoutThana || userProfile?.thana || savedProfiles?.[0]?.thana || "";
+        const hasPhone = resolvedPhone.length >= 6;
+
         setDoc(doc(db, "incomplete_orders", sessionId), {
-          phone: checkoutPhone && checkoutPhone.trim().length > 0 ? checkoutPhone.trim() : "কার্টে আছে (Cart)",
-          name: checkoutName && checkoutName.trim().length > 0 ? checkoutName.trim() : "অজ্ঞাত কাস্টমার",
-          items: cartItems.map(item => ({
+          phone: hasPhone ? resolvedPhone : (resolvedPhone || "কার্টে পণ্য আছে (ফোন নম্বর দেয়নি)"),
+          name: resolvedName || "অজ্ঞাত ক্রেতা",
+          address: resolvedAddress,
+          district: resolvedDistrict,
+          thana: resolvedThana,
+          items: cartItems.map((item: any) => ({
             id: item.product.id,
             name: item.product.name,
             price: getProductPrice(item.product, item.quantity),
             quantity: item.quantity,
+            color: item.color || null,
+            size: item.size || null,
             image: item.product.image || item.product.images?.[0] || ""
           })),
+          totalAmount: totalAmt,
           updatedAt: serverTimestamp(),
+          date: new Date().toLocaleString("bn-BD"),
           type: "cart_checkout",
-          sessionId: sessionId
-        }).catch(console.error);
+          sessionId: sessionId,
+          smsSent: false
+        }, { merge: true }).catch(console.error);
       } else {
         deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
       }
-    }, 2000);
+    }, 200);
     return () => clearTimeout(timeoutId);
-  }, [cartItems, checkoutPhone, checkoutName]);
+  }, [cartItems, checkoutPhone, checkoutName, checkoutAddress, checkoutDistrict, checkoutThana, userProfile, user, savedProfiles]);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -1183,6 +1268,9 @@ function App() {
     smsTemplateEnd?: string;
     isSmsConfirmEnabled?: boolean;
     isAiEnabled?: boolean;
+    promoPopupEnabled?: boolean;
+    promoPopupImage?: string;
+    promoPopupLink?: string;
   } | null>(null);
   // Sync Site Config
   useEffect(() => {
@@ -1218,6 +1306,9 @@ checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarni
           computerAppUrl: data.computerAppUrl || "",
           androidAppUrl: data.androidAppUrl || "",
           iphoneAppUrl: data.iphoneAppUrl || "",
+          promoPopupEnabled: data.promoPopupEnabled || false,
+          promoPopupImage: data.promoPopupImage || "",
+          promoPopupLink: data.promoPopupLink || "",
         });
       } else {
         const defaultConfig = {
@@ -1248,6 +1339,9 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
           computerAppUrl: "",
           androidAppUrl: "",
           iphoneAppUrl: "",
+          promoPopupEnabled: false,
+          promoPopupImage: "",
+          promoPopupLink: "",
         } as any;
         setSiteConfig(defaultConfig);
       }
@@ -1259,6 +1353,24 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     return () => unsub();
   }, [isQuotaExceeded]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  const [showPromoPopup, setShowPromoPopup] = useState(false);
+
+
+
+
+  useEffect(() => {
+    if (siteConfig?.promoPopupEnabled && siteConfig?.promoPopupImage) {
+      const hasShown = sessionStorage.getItem('promo_popup_shown');
+      if (!hasShown) {
+        const timer = setTimeout(() => {
+          setShowPromoPopup(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [siteConfig]);
+
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   useEffect(() => {
@@ -1613,61 +1725,129 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   const [tempSelectedSize, setTempSelectedSize] = useState<string | null>(null);
   const [colorValError, setColorValError] = useState(false);
   const [sizeValError, setSizeValError] = useState(false);
-  const [savedProfiles, setSavedProfiles] = useState<any[]>(() => {
-    try {
-      const saved = localStorage.getItem("ishopbd_saved_profiles");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
   useEffect(() => {
-    if (userProfile?.address) {
-      setCheckoutAddress(userProfile.address);
+    if (userProfile) {
+      if (userProfile.phone && !checkoutPhone) setCheckoutPhone(userProfile.phone);
+      if ((userProfile.displayName || userProfile.name) && !checkoutName) setCheckoutName(userProfile.displayName || userProfile.name);
+      if (userProfile.address && !checkoutAddress) setCheckoutAddress(userProfile.address);
+      if (userProfile.district && !checkoutDistrict) setCheckoutDistrict(userProfile.district);
+      if (userProfile.thana && !checkoutThana) setCheckoutThana(userProfile.thana);
+      if (userProfile.phone && !inlineOrderPhone) setInlineOrderPhone(userProfile.phone);
+      if ((userProfile.displayName || userProfile.name) && !inlineOrderName) setInlineOrderName(userProfile.displayName || userProfile.name);
+      if (userProfile.address && !inlineOrderAddress) setInlineOrderAddress(userProfile.address);
+    } else if (savedProfiles && savedProfiles.length > 0) {
+      const p = savedProfiles[0];
+      if (p.phone && !checkoutPhone) setCheckoutPhone(p.phone);
+      if (p.name && !checkoutName) setCheckoutName(p.name);
+      if (p.address && !checkoutAddress) setCheckoutAddress(p.address);
+      if (p.district && !checkoutDistrict) setCheckoutDistrict(p.district);
+      if (p.thana && !checkoutThana) setCheckoutThana(p.thana);
+      if (p.phone && !inlineOrderPhone) setInlineOrderPhone(p.phone);
+      if (p.name && !inlineOrderName) setInlineOrderName(p.name);
+      if (p.address && !inlineOrderAddress) setInlineOrderAddress(p.address);
     }
-  }, [userProfile]);
+  }, [userProfile, savedProfiles]);
+
   const [tempSelectedQty, setTempSelectedQty] = useState(1);
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (inlineOrderPhone && inlineOrderPhone.trim().length >= 11 && selectedProduct) {
-        setDoc(doc(db, "incomplete_orders", inlineOrderPhone.trim()), {
-          phone: inlineOrderPhone.trim(),
-          name: inlineOrderName,
-          items: [{
-            name: selectedProduct.name,
-            price: getProductPrice(selectedProduct, tempSelectedQty),
-            quantity: tempSelectedQty,
-            image: selectedProduct.image || ""
-          }],
-          updatedAt: serverTimestamp(),
-          type: "inline_checkout",
-          smsSent: false
-        }, { merge: true }).catch(console.error);
+      if (selectedProduct) {
+        let inlineSessionId = localStorage.getItem("ishopbd_inline_session_id");
+        if (!inlineSessionId) {
+          inlineSessionId = "inline_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
+          localStorage.setItem("ishopbd_inline_session_id", inlineSessionId);
+        }
+
+        const resolvedPhone = (
+          inlineOrderPhone?.trim() || 
+          userProfile?.phone?.trim() || 
+          user?.phoneNumber?.trim() || 
+          (savedProfiles?.[0]?.phone ? savedProfiles[0].phone.trim() : "") || 
+          ""
+        ).trim();
+
+        const resolvedName = (
+          inlineOrderName?.trim() || 
+          userProfile?.displayName?.trim() || 
+          userProfile?.name?.trim() || 
+          user?.displayName?.trim() || 
+          (savedProfiles?.[0]?.name ? savedProfiles[0].name.trim() : "") || 
+          ""
+        ).trim();
+
+        const resolvedAddress = (
+          inlineOrderAddress?.trim() || 
+          userProfile?.address?.trim() || 
+          (savedProfiles?.[0]?.address ? savedProfiles[0].address.trim() : "") || 
+          ""
+        ).trim();
+
+        const resolvedDistrict = inlineOrderDistrict || userProfile?.district || savedProfiles?.[0]?.district || "";
+        const resolvedThana = inlineOrderThana || userProfile?.thana || savedProfiles?.[0]?.thana || "";
+
+        if (resolvedPhone.length >= 4) {
+          const itemPrice = getProductPrice(selectedProduct, tempSelectedQty);
+          setDoc(doc(db, "incomplete_orders", inlineSessionId), {
+            phone: resolvedPhone,
+            name: resolvedName || "অজ্ঞাত ক্রেতা",
+            address: resolvedAddress,
+            district: resolvedDistrict,
+            thana: resolvedThana,
+            items: [{
+              id: selectedProduct.id,
+              name: selectedProduct.name,
+              price: itemPrice,
+              quantity: tempSelectedQty,
+              color: tempSelectedColor || null,
+              size: tempSelectedSize || null,
+              image: selectedProduct.image || selectedProduct.images?.[0] || ""
+            }],
+            totalAmount: itemPrice * tempSelectedQty,
+            updatedAt: serverTimestamp(),
+            date: new Date().toLocaleString("bn-BD"),
+            type: "inline_checkout",
+            sessionId: inlineSessionId,
+            smsSent: false
+          }, { merge: true }).catch(console.error);
+        }
       }
-    }, 2000);
+    }, 400);
     return () => clearTimeout(timeoutId);
-  }, [inlineOrderPhone, inlineOrderName, selectedProduct, tempSelectedQty]);
-  // Main Cart Abandoned Tracker
+  }, [inlineOrderPhone, inlineOrderName, inlineOrderAddress, inlineOrderDistrict, inlineOrderThana, selectedProduct, tempSelectedQty, tempSelectedColor, tempSelectedSize, userProfile, user, savedProfiles]);
+
+  // Landing Page Order Tracker
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (checkoutPhone && checkoutPhone.trim().length >= 11 && cartItems.length > 0) {
-        setDoc(doc(db, "incomplete_orders", checkoutPhone.trim()), {
-          phone: checkoutPhone.trim(),
-          name: checkoutName,
-          items: cartItems.map(item => ({
-            name: item.product.name,
-            price: getProductPrice(item.product, item.quantity),
-            quantity: item.quantity,
-            image: item.product.image || ""
-          })),
+      if (landingProduct && landingPhone && landingPhone.trim().length >= 4) {
+        let landingSessionId = localStorage.getItem("ishopbd_landing_session_id");
+        if (!landingSessionId) {
+          landingSessionId = "landing_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
+          localStorage.setItem("ishopbd_landing_session_id", landingSessionId);
+        }
+        setDoc(doc(db, "incomplete_orders", landingSessionId), {
+          phone: landingPhone.trim(),
+          name: landingName && landingName.trim().length > 0 ? landingName.trim() : "অজ্ঞাত ক্রেতা",
+          address: landingAddress && landingAddress.trim().length > 0 ? landingAddress.trim() : "",
+          district: landingDistrict || "",
+          thana: landingThana || "",
+          items: [{
+            id: landingProduct.id,
+            name: landingProduct.name,
+            price: landingProduct.price || 0,
+            quantity: 1,
+            image: landingProduct.image || ""
+          }],
+          totalAmount: landingProduct.price || 0,
           updatedAt: serverTimestamp(),
-          type: "main_checkout",
+          date: new Date().toLocaleString("bn-BD"),
+          type: "landing_checkout",
+          sessionId: landingSessionId,
           smsSent: false
         }, { merge: true }).catch(console.error);
       }
-    }, 2000);
+    }, 800);
     return () => clearTimeout(timeoutId);
-  }, [checkoutPhone, checkoutName, cartItems]);
+  }, [landingPhone, landingName, landingAddress, landingDistrict, landingThana, landingProduct]);
   const [wholesaleSizeQty, setWholesaleSizeQty] = useState<Record<string, number>>({});
   const [isDeliveryInfoOpen, setIsDeliveryInfoOpen] = useState(false);
   const [modalDisplayImage, setModalDisplayImage] = useState<string | null>(
@@ -1931,6 +2111,139 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       isMounted = false;
     };
   }, [isAdminVerified]);
+  // Trigger AI Image Search
+  const triggerImageSearch = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file && adminKeys?.geminiApiKey) {
+        try {
+          toast.loading("ছবি স্ক্যান করা হচ্ছে (AI)...");
+          
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = async () => {
+            try {
+              const base64 = (reader.result as string).split(',')[1];
+              
+              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${adminKeys.geminiApiKey}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [
+                      { inlineData: { mimeType: file.type, data: base64 } },
+                      { text: "What product is this? Return 3-5 search keywords in English that best describe this item for an e-commerce search bar. Do not write full sentences." }
+                    ]
+                  }]
+                })
+              });
+              
+              const data = await response.json();
+              const keywords = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              
+              toast.dismiss();
+              if (keywords.trim()) {
+                setSearchInput(keywords.trim());
+                toast.success("পণ্যটি সনাক্ত করা হয়েছে!");
+              } else {
+                toast.error("ছবি সনাক্ত করা যায়নি।");
+              }
+            } catch (err) {
+              toast.dismiss();
+              toast.error("সার্ভার এরর।");
+            }
+          };
+        } catch (err) {
+          toast.dismiss();
+          toast.error("ছবি প্রসেস করতে সমস্যা হয়েছে।");
+        }
+      }
+    };
+    input.click();
+  };
+
+  // Run AI Natural Search
+  useEffect(() => {
+    if (!siteConfig?.isAiEnabled || !adminKeys?.geminiApiKey || !searchQuery.trim() || products.length === 0) {
+      setAiSearchProductIds(null);
+      return;
+    }
+
+    const runAiNaturalSearch = async () => {
+      // Check if standard search yields 0 items
+      const standardMatches = products.filter(p => {
+        if (p.deleted || p.isPublished === false) return false;
+        const name = p.name || "";
+        const category = p.category || "";
+        const code = p.code || "";
+        return (
+          name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          code.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      });
+
+      const isNatural = searchQuery.split(' ').length > 2 || 
+                        /দাম|টাকা|কম|ভালো|লাল|কালো|সাদা|নীল|সাইজ|উপযুক্ত|বাচ্চা|মহিলা|পুরুষ/i.test(searchQuery);
+
+      if (standardMatches.length === 0 || isNatural) {
+        setIsAiSearching(true);
+        try {
+          const productList = products.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            category: p.category,
+            brand: p.brand || "",
+            description: p.description || ""
+          }));
+
+          const prompt = `Based on these e-commerce products:
+${JSON.stringify(productList)}
+
+Filter and return the products matching this customer query: "${searchQuery}".
+Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"]. Return an empty array [] if no items match. Do not write explanations or markdown coding fence.`;
+
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${adminKeys.geminiApiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{
+                role: "user",
+                parts: [{ text: prompt }]
+              }]
+            })
+          });
+          const data = await response.json();
+          const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+          const cleanedText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+          const ids = JSON.parse(cleanedText);
+          if (Array.isArray(ids)) {
+            setAiSearchProductIds(ids);
+          } else {
+            setAiSearchProductIds(null);
+          }
+        } catch (err) {
+          console.error("AI Natural Search Error:", err);
+          setAiSearchProductIds(null);
+        } finally {
+          setIsAiSearching(false);
+        }
+      } else {
+        setAiSearchProductIds(null);
+      }
+    };
+
+    const delayDebounceFn = setTimeout(() => {
+      runAiNaturalSearch();
+    }, 800);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, products, siteConfig?.isAiEnabled, adminKeys?.geminiApiKey]);
+
   // SEO: Dynamic URL, Meta Tags, Open Graph, Schema.org
   useEffect(() => {
     const SITE_NAME = "i SHOP BD";
@@ -2853,13 +3166,29 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     });
     let unsubIncompleteOrders = () => {};
     if (isAdmin) {
-      const incOrdersQuery = query(collection(db, "incomplete_orders"), orderBy("updatedAt", "desc"), limit(100));
+      const incOrdersQuery = query(collection(db, "incomplete_orders"), limit(150));
       unsubIncompleteOrders = onSnapshot(incOrdersQuery, (snapshot) => {
-        setIncompleteOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        const list = snapshot.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            ...data,
+            phone: data.phone || data.customerPhone || "কার্টে আছে (Cart)",
+            name: data.name || data.customerName || "অজ্ঞাত ক্রেতা",
+            date: data.date || (data.updatedAt?.seconds ? new Date(data.updatedAt.seconds * 1000).toLocaleString("bn-BD") : "কিছুক্ষণ আগে")
+          };
+        });
+        list.sort((a: any, b: any) => {
+          const aTime = a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+          const bTime = b.updatedAt?.seconds ? b.updatedAt.seconds * 1000 : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+          return bTime - aTime;
+        });
+        setIncompleteOrders(list);
       }, (err) => {
         if (err.code === "resource-exhausted" || err.message === "QUOTA_EXCEEDED") {
           setIsQuotaExceeded(true);
         }
+        console.warn("Incomplete orders listener error:", err);
       });
     }
     return () => {
@@ -3083,6 +3412,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         computerAppUrl: config.computerAppUrl || "",
         androidAppUrl: config.androidAppUrl || "",
         iphoneAppUrl: config.iphoneAppUrl || "",
+        promoPopupEnabled: config.promoPopupEnabled !== undefined ? config.promoPopupEnabled : false,
+        promoPopupImage: config.promoPopupImage || "",
+        promoPopupLink: config.promoPopupLink || "",
         updatedAt: new Date().toISOString(),
         geminiApiKey: "",
         steadfastApiKey: "",
@@ -3509,7 +3841,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         unit: editingProduct.unit || "piece",
         smsName: editingProduct.smsName || "",
         colors: editingProduct.colors || [],
-        stock: Number(editingProduct.stock || 0),
+        stock: editingProduct.variants && editingProduct.variants.length > 0 && editingProduct.variants.some((v: any) => v && v.stock !== undefined && v.stock !== null)
+          ? Math.max(0, editingProduct.variants.reduce((sum: number, v: any) => sum + (Number(v?.stock) || 0), 0))
+          : Math.max(0, Number(editingProduct.stock || 0)),
         isTrending: !!editingProduct.isTrending,
         isFreeDelivery: !!editingProduct.isFreeDelivery,
         isComingSoon: !!editingProduct.isComingSoon,
@@ -5199,11 +5533,13 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     }
     return true;
   };
-  const deleteOrder = async (id: any) => {
+  const deleteOrder = async (orderOrId: any) => {
+    const id = typeof orderOrId === "object" ? (orderOrId?.id || orderOrId?._id) : orderOrId;
     if (!id) return;
     const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি রিসাইকেল বিনে পাঠাতে চান?");
     if (!conf) return;
     try {
+      setOrderHistory((prev) => prev.map((o) => String(o.id) === String(id) ? { ...o, deleted: true, deletedAt: new Date().toISOString() } : o));
       await updateDoc(doc(db, "orders", String(id)), {
         deleted: true,
         deletedAt: new Date().toISOString()
@@ -5214,10 +5550,12 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     }
   };
 
-  const restoreOrder = async (order: any) => {
-    if (!order || !order.id) return;
+  const restoreOrder = async (orderOrId: any) => {
+    const id = typeof orderOrId === "object" ? (orderOrId?.id || orderOrId?._id) : orderOrId;
+    if (!id) return;
     try {
-      await updateDoc(doc(db, "orders", String(order.id)), {
+      setOrderHistory((prev) => prev.map((o) => String(o.id) === String(id) ? { ...o, deleted: false, deletedAt: null } : o));
+      await updateDoc(doc(db, "orders", String(id)), {
         deleted: false,
         deletedAt: null
       });
@@ -5227,11 +5565,13 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     }
   };
 
-  const permanentDeleteOrder = async (id: any) => {
+  const permanentDeleteOrder = async (orderOrId: any) => {
+    const id = typeof orderOrId === "object" ? (orderOrId?.id || orderOrId?._id) : orderOrId;
     if (!id) return;
     const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি চিরতরে ডিলিট করতে চান? এই কাজ আর ফেরত নেওয়া যাবে না।");
     if (!conf) return;
     try {
+      setOrderHistory((prev) => prev.filter((o) => String(o.id) !== String(id)));
       await deleteDoc(doc(db, "orders", String(id)));
       toast.success("অর্ডারটি চিরতরে ডিলিট করা হয়েছে।");
     } catch (err: any) {
@@ -6494,14 +6834,31 @@ const handleSaveQuickEdit = async () => {
               <input
                 type="text"
                 placeholder={t("আপনার কাঙ্ক্ষিত পণ্য খুঁজুন...", "Search your desired products...")}
-                className="w-full bg-transparent border-none py-2.5 pl-6 pr-16 outline-none text-sm text-secondary"
+                className="w-full bg-transparent border-none py-2.5 pl-6 pr-24 outline-none text-sm text-secondary font-sans"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
               />
+              {siteConfig?.isAiEnabled && adminKeys?.geminiApiKey && (
+                <button
+                  type="button"
+                  onClick={() => triggerImageSearch()}
+                  className="absolute right-14 top-0 bottom-0 px-2 text-gray-400 hover:text-primary transition-all flex items-center justify-center"
+                  title="Search with Image (AI)"
+                >
+                  <Camera size={18} />
+                </button>
+              )}
               <button className="cursor-pointer absolute right-0 top-0 bottom-0 px-6 bg-primary text-white hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center">
                 <Search size={18} />
               </button>
             </form>
+            {isAiSearching && (
+              <div className="absolute right-24 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-full z-10 border border-indigo-100 animate-pulse">
+                <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" />
+                <span className="text-[8px] font-bold text-indigo-600">AI Searching...</span>
+              </div>
+            )}
+
 
             {/* Desktop Search Preview Dropdown */}
             {liveSearchResults.length > 0 && (
@@ -6685,7 +7042,7 @@ const handleSaveQuickEdit = async () => {
                   type="text"
                   autoFocus
                   placeholder={t("আপনার পছন্দের পণ্য খুঁজুন...", "Search your favorite items...")}
-                  className="w-full bg-[#f1f4f6] border border-primary rounded-lg py-2.5 px-4 pr-12 shadow-sm outline-none text-sm font-medium text-secondary"
+                  className="w-full bg-[#f1f4f6] border border-primary rounded-lg py-2.5 px-4 pr-24 shadow-sm outline-none text-sm font-medium text-secondary font-sans"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onBlur={() => {
@@ -6694,6 +7051,16 @@ const handleSaveQuickEdit = async () => {
                     }, 200);
                   }}
                 />
+                {siteConfig?.isAiEnabled && adminKeys?.geminiApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => triggerImageSearch()}
+                    className="absolute right-10 text-gray-400 p-1 hover:text-primary"
+                    title="Search with Image (AI)"
+                  >
+                    <Camera size={18} />
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setSearchInput("");
@@ -6703,6 +7070,7 @@ const handleSaveQuickEdit = async () => {
                 >
                   <X size={18} />
                 </button>
+
 
                 {/* Mobile Search Preview Dropdown */}
                 {liveSearchResults.length > 0 && (
@@ -7103,7 +7471,7 @@ const handleSaveQuickEdit = async () => {
             <p className="text-sm font-bold text-gray-500 animate-pulse font-sans">ক্যাম্পেইন লোড হচ্ছে, দয়া করে অপেক্ষা করুন...</p>
           </div>
         ) : isCheckoutOpen ? (
-          <CheckoutModal {...{ ALL_DISTRICTS, availableRewardPoints, calculateTotal, checkoutAddress, checkoutDistrict, checkoutDistrictSearch, checkoutItems, checkoutName, checkoutNote, checkoutPhone, checkoutPhoneFocused, getProductPrice, handleConfirmOrder, isApplyingRewardPoints, isCheckoutDistrictOpen, isOrderProcessing, isOrderSuccess, openProductDetails, paymentMethod, setPaymentMethod, removeItem, savedProfiles, setCheckoutAddress, setCheckoutDistrict, setCheckoutDistrictSearch, setCheckoutName, setCheckoutNote, setCheckoutPhone, setCheckoutPhoneFocused, setIsApplyingRewardPoints, setIsCheckoutDistrictOpen, setIsCheckoutOpen, t, toBengaliNumber, updateQuantity, isCheckoutOpen, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail, districtThanaMap, couponCode, setCouponCode, couponError, handleApplyCoupon, appliedCoupon, setAppliedCoupon }} />
+          <CheckoutModal {...{ ALL_DISTRICTS, availableRewardPoints, calculateTotal, checkoutAddress, checkoutDistrict, checkoutDistrictSearch, checkoutItems, checkoutName, checkoutNote, checkoutPhone, checkoutPhoneFocused, getProductPrice, handleConfirmOrder, isApplyingRewardPoints, isCheckoutDistrictOpen, isOrderProcessing, isOrderSuccess, openProductDetails, paymentMethod, setPaymentMethod, removeItem, savedProfiles, setCheckoutAddress, setCheckoutDistrict, setCheckoutDistrictSearch, setCheckoutName, setCheckoutNote, setCheckoutPhone, setCheckoutPhoneFocused, setIsApplyingRewardPoints, setIsCheckoutDistrictOpen, setIsCheckoutOpen, t, toBengaliNumber, updateQuantity, isCheckoutOpen, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail, districtThanaMap, couponCode, setCouponCode, couponError, handleApplyCoupon, appliedCoupon, setAppliedCoupon, getDeliveryCharge, deliveryArea, setDeliveryArea, siteConfig }} />
         ) : isProductDetailsOpen && selectedProduct ? (
           <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
         ) : (
@@ -7939,28 +8307,47 @@ const handleSaveQuickEdit = async () => {
       <AnimatePresence>
         {isCourierHistoryModalOpen && <CourierHistoryModal {...{ isCourierHistoryModalOpen, setIsCourierHistoryModalOpen, courierModalPhone, setCourierModalPhone, checkCourierReport, loadingCourierReports, courierReports, AlertTriangle }} />}
       </AnimatePresence>
-      {/* Floating Admin/Support Buttons */}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3">
+      {/* Floating Admin/Support & POS Buttons */}
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3">
         {isAdmin && (
-          <button
-            onClick={() => {
-              setAdminViewMode("support_only");
-              setAdminTab("orders");
-              setIsAdminOpen(true);
-            }}
-            className="w-14 h-14 bg-indigo-600 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20"
-            title="Action"
-          >
-            <Headset size={28} strokeWidth={2.5} />
-            {(supportChats.filter(c => c.unreadByAdmin).length > 0 || orderHistory.filter(o => o.status === "pending").length > 0) && (
-              <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white animate-bounce">
-                {(supportChats.filter(c => c.unreadByAdmin).length + orderHistory.filter(o => o.status === "pending").length)}
+          <>
+            <button
+              onClick={() => {
+                setAdminTab("pos");
+                setShowOnlyPreOrders(false);
+                setIsAdminOpen(true);
+              }}
+              className="w-12 h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group border-2 border-white/20 cursor-pointer"
+              title="POS (Outlet Order)"
+            >
+              <ShoppingBag size={22} strokeWidth={2.2} />
+              <span className="absolute right-full mr-3 bg-purple-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                POS (আউটলেট অর্ডার)
               </span>
-            )}
-            <span className="absolute right-full mr-4 bg-indigo-600 text-white px-3 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              সাপোর্ট ও অর্ডার
-            </span>
-          </button>
+            </button>
+
+            <button
+              onClick={() => {
+                if (!isMasterAdmin) {
+                  setAdminViewMode("support_only");
+                }
+                setAdminTab("orders");
+                setIsAdminOpen(true);
+              }}
+              className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
+              title="Support & Orders"
+            >
+              <Headset size={28} strokeWidth={2.5} />
+              {(supportChats.filter(c => c.unreadByAdmin).length > 0 || orderHistory.filter(o => o.status === "pending").length > 0) && (
+                <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white animate-bounce">
+                  {(supportChats.filter(c => c.unreadByAdmin).length + orderHistory.filter(o => o.status === "pending").length)}
+                </span>
+              )}
+              <span className="absolute right-full mr-3 bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                সাপোর্ট ও অর্ডার
+              </span>
+            </button>
+          </>
         )}
       </div>
       {/* Toast Notification */}
@@ -8731,6 +9118,8 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
             isOpen={isAppDownloadModalOpen}
             onClose={() => setIsAppDownloadModalOpen(false)}
             siteConfig={siteConfig}
+            deferredPrompt={deferredPrompt}
+            handleInstallPWA={handleInstallPWA}
           />
         )}
       </AnimatePresence>
@@ -9533,6 +9922,51 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Dynamic Promo Popup Banner */}
+      <AnimatePresence>
+        {showPromoPopup && siteConfig?.promoPopupImage && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="bg-white rounded-3xl overflow-hidden shadow-2xl w-full max-w-md relative"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowPromoPopup(false);
+                  sessionStorage.setItem('promo_popup_shown', 'true');
+                }}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all z-10 hover:scale-105 active:scale-95 animate-pulse"
+              >
+                <X size={18} />
+              </button>
+
+              {/* Banner Image */}
+              <div 
+                className="relative w-full aspect-[4/5] cursor-pointer"
+                onClick={() => {
+                  if (siteConfig?.promoPopupLink) {
+                    window.location.href = siteConfig.promoPopupLink;
+                  }
+                  setShowPromoPopup(false);
+                  sessionStorage.setItem('promo_popup_shown', 'true');
+                }}
+              >
+                <img 
+                  src={siteConfig.promoPopupImage} 
+                  alt="Special Offer" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

@@ -55,6 +55,9 @@ export interface CheckoutModalProps {
   appliedCoupon?: string | null;
   setAppliedCoupon?: any;
   siteConfig?: any;
+  deliveryArea?: any;
+  setDeliveryArea?: any;
+  getDeliveryCharge?: any;
 }
 
 export default function CheckoutModal(props: CheckoutModalProps) {
@@ -111,9 +114,24 @@ export default function CheckoutModal(props: CheckoutModalProps) {
     appliedCoupon,
     setAppliedCoupon,
     siteConfig,
+    deliveryArea,
+    setDeliveryArea,
+    getDeliveryCharge,
   } = props;
 
   if (!isCheckoutOpen) return null;
+
+  const safeGetDeliveryCharge = (items: any[], area: string, coupon: any) => {
+    if (typeof getDeliveryCharge === 'function') {
+      return getDeliveryCharge(items, area, coupon);
+    }
+    if (coupon === "FREEDEL" || coupon === "FREE") return 0;
+    if (items && items.length > 0) {
+      const allFree = items.every((i: any) => i.product?.freeDelivery);
+      if (allFree) return 0;
+    }
+    return area === "inside" ? 60 : 120;
+  };
 
   const [activePromoTab, setActivePromoTab] = React.useState<"coupon" | "voucher">("coupon");
   const [isDistDropdownOpen, setIsDistDropdownOpen] = React.useState(false);
@@ -414,39 +432,69 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                 
                 <form id="checkout-form" onSubmit={handleConfirmOrder} className="space-y-4">
                   
-                  {/* First Name & Last Name */}
+                  {/* Name & Mobile (Single Name field followed immediately by Mobile Number) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-secondary mb-1.5">First Name</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">আপনার নাম (Full Name)</label>
                       <input
                         required
                         type="text"
-                        placeholder="First Name*"
-                        value={checkoutFirstName}
-                        onChange={(e) => setCheckoutFirstName(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
+                        placeholder="আপনার সম্পূর্ণ নাম লিখুন *"
+                        value={checkoutName || checkoutFirstName}
+                        onChange={(e) => {
+                          setCheckoutName(e.target.value);
+                          setCheckoutFirstName(e.target.value);
+                        }}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-medium"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Last Name</label>
+                    <div className="relative w-full">
+                      <label className="block text-xs font-bold text-secondary mb-1.5">মোবাইল নাম্বার (Mobile Number)</label>
                       <input
                         required
-                        type="text"
-                        placeholder="Last Name*"
-                        value={checkoutLastName}
-                        onChange={(e) => setCheckoutLastName(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
+                        type="tel"
+                        placeholder="01XXXXXXXXX *"
+                        value={checkoutPhone}
+                        onChange={(e) => setCheckoutPhone(e.target.value)}
+                        onFocus={() => setCheckoutPhoneFocused(true)}
+                        onBlur={() => setTimeout(() => setCheckoutPhoneFocused(false), 250)}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-medium"
                       />
+                      {checkoutPhoneFocused && savedProfiles.filter(p => p.phone.includes(checkoutPhone)).length > 0 && (
+                        <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
+                          {savedProfiles.filter(p => p.phone.includes(checkoutPhone)).map((profile, index) => (
+                            <div
+                              key={index}
+                              onMouseDown={() => {
+                                setCheckoutPhone(profile.phone);
+                                setCheckoutName(profile.name || "");
+                                setCheckoutFirstName(profile.name || "");
+                                if (profile.district) {
+                                  setCheckoutDistrict(profile.district);
+                                  const area = ((profile.district.includes("ঢাকা") && profile.district !== "ঢাকা জেলা (বাইরে)") || profile.district === "Dhaka") ? "inside" : "outside";
+                                  setDeliveryArea(area);
+                                }
+                                if (profile.thana) setCheckoutThana(profile.thana);
+                                if (profile.address) setCheckoutAddress(profile.address);
+                              }}
+                              className="px-3.5 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs flex flex-col gap-0.5 border-b border-gray-50 last:border-none text-left"
+                            >
+                              <span className="font-bold text-secondary">{profile.phone}</span>
+                              {profile.name && <span className="text-gray-400 text-[10px]">{profile.name} - {profile.address}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Address */}
                   <div>
-                    <label className="block text-xs font-bold text-secondary mb-1.5">Address</label>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">সম্পূর্ণ ঠিকানা (Full Address)</label>
                     <input
                       required
                       type="text"
-                      placeholder="Address*"
+                      placeholder="আপনার বিস্তারিত ঠিকানা (বাসা/রোড/এলাকা) লিখুন *"
                       value={checkoutAddress}
                       onChange={(e) => setCheckoutAddress(e.target.value)}
                       className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
@@ -456,12 +504,11 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   {/* District & Upazila/Thana (Searchable custom combo-boxes) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div ref={distRef} className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">District</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">জেলা (District)</label>
                       <div className="relative">
                         <input
                           type="text"
                           required
-                          readOnly={!isDistDropdownOpen}
                           placeholder="Select District"
                           value={isDistDropdownOpen ? distSearchQuery : (checkoutDistrict || "")}
                           onChange={(e) => setDistSearchQuery(e.target.value)}
@@ -484,9 +531,12 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                                 key={idx}
                                 onMouseDown={() => {
                                   setCheckoutDistrict(dist);
+                                  const area = ((dist.includes("ঢাকা") && dist !== "ঢাকা জেলা (বাইরে)") || dist === "Dhaka") ? "inside" : "outside";
+                                  setDeliveryArea(area);
                                   setCheckoutThana("");
                                   setIsDistDropdownOpen(false);
                                   setDistSearchQuery("");
+                                  (document.activeElement as HTMLElement)?.blur();
                                 }}
                                 className="px-3.5 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs border-b border-gray-50 last:border-none text-left font-semibold text-secondary"
                               >
@@ -501,13 +551,12 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     </div>
 
                     <div ref={thanaRef} className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Upazila/Thana</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">থানা / উপজেলা (Upazila/Thana)</label>
                       <div className="relative">
                         <input
                           type="text"
                           required
                           disabled={!checkoutDistrict}
-                          readOnly={!isThanaDropdownOpen}
                           placeholder={checkoutDistrict ? "Select Upazila/Thana" : "Select District First"}
                           value={isThanaDropdownOpen ? thanaSearchQuery : (checkoutThana || "")}
                           onChange={(e) => setThanaSearchQuery(e.target.value)}
@@ -534,6 +583,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                                   setCheckoutThana(thana);
                                   setIsThanaDropdownOpen(false);
                                   setThanaSearchQuery("");
+                                  (document.activeElement as HTMLElement)?.blur();
                                 }}
                                 className="px-3.5 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs border-b border-gray-50 last:border-none text-left font-semibold text-secondary"
                               >
@@ -548,59 +598,16 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     </div>
                   </div>
 
-                  {/* Mobile & Email */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Mobile</label>
-                      <input
-                        required
-                        type="tel"
-                        placeholder="Telephone*"
-                        value={checkoutPhone}
-                        onChange={(e) => setCheckoutPhone(e.target.value)}
-                        onFocus={() => setCheckoutPhoneFocused(true)}
-                        onBlur={() => setTimeout(() => setCheckoutPhoneFocused(false), 250)}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
-                      />
-                      {checkoutPhoneFocused && savedProfiles.filter(p => p.phone.includes(checkoutPhone)).length > 0 && (
-                        <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
-                          {savedProfiles.filter(p => p.phone.includes(checkoutPhone)).map((profile, index) => (
-                            <div
-                              key={index}
-                              onMouseDown={() => {
-                                setCheckoutPhone(profile.phone);
-                                const nameParts = (profile.name || "").trim().split(/\s+/);
-                                if (nameParts.length > 1) {
-                                  setCheckoutFirstName(nameParts[0]);
-                                  setCheckoutLastName(nameParts.slice(1).join(" "));
-                                } else {
-                                  setCheckoutFirstName(profile.name || "");
-                                  setCheckoutLastName("");
-                                }
-                                if (profile.district) setCheckoutDistrict(profile.district);
-                                if (profile.thana) setCheckoutThana(profile.thana);
-                                if (profile.address) setCheckoutAddress(profile.address);
-                              }}
-                              className="px-3.5 py-2 hover:bg-red-50 hover:text-primary cursor-pointer text-xs flex flex-col gap-0.5 border-b border-gray-50 last:border-none text-left"
-                            >
-                              <span className="font-bold text-secondary">{profile.phone}</span>
-                              {profile.name && <span className="text-gray-400 text-[10px]">{profile.name} - {profile.address}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Email</label>
-                      <input
-                        required
-                        type="email"
-                        placeholder="E-Mail*"
-                        value={checkoutEmail}
-                        onChange={(e) => setCheckoutEmail(e.target.value)}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
-                      />
-                    </div>
+                  {/* Email (Optional) */}
+                  <div>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">ইমেইল (Email - ঐচ্ছিক)</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. yourname@gmail.com (Optional)"
+                      value={checkoutEmail}
+                      onChange={(e) => setCheckoutEmail(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
+                    />
                   </div>
 
                   {/* Comment */}
@@ -807,7 +814,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                       {appliedCoupon ? (
                          "৳0 (Free)"
                       ) : (
-                        `৳${(checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "double-district") ? 50 : checkoutDistrict ? 110 : 0}`
+                         `৳${checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon) : 0}`
                       )}
                     </span>
                   </div>
@@ -820,13 +827,13 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   {appliedCoupon && (
                     <div className="flex justify-between text-xs md:text-sm font-medium text-green-600">
                       <span>Coupon Discount</span>
-                      <span>-৳{(checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "double-district") ? 50 : checkoutDistrict ? 110 : 0}</span>
+                      <span>-৳{checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, null) : 0}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-xs md:text-sm font-bold text-secondary pt-2.5 border-t border-gray-100">
                     <span>সর্বমোট (Total)</span>
                     <span className="text-primary text-base font-extrabold">
-                      ৳{checkoutItems.reduce((acc, curr) => acc + getProductPrice(curr.product, curr.quantity) * curr.quantity, 0) + (appliedCoupon ? 0 : ((checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "double-district") ? 50 : checkoutDistrict ? 110 : 0)) - (isApplyingRewardPoints ? Math.floor(availableRewardPoints / 10) : 0)}
+                      ৳{checkoutItems.reduce((acc: number, curr: any) => acc + (getProductPrice(curr.product, curr.quantity) || 0) * curr.quantity, 0) + (appliedCoupon ? 0 : (checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon) : 0)) - (isApplyingRewardPoints ? Math.floor(availableRewardPoints / 10) : 0)}
                     </span>
                   </div>
                 </div>

@@ -19,6 +19,9 @@
   RewriteRule ^api/verify-admin$ api/verify-admin.php [L]
   RewriteRule ^api/product-image/(.*)$ api/product-image.php?id=$1 [L,QSA]
 
+  # Route Firebase Auth endpoints to PHP proxy
+  RewriteRule ^__/auth/(.*)$ api/auth-proxy.php?path=$1 [L,QSA]
+
   RewriteCond %{REQUEST_URI} !^/api [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
@@ -88,7 +91,7 @@
 </FilesMatch>
 
 # Allow only the specific API PHP files
-<FilesMatch "^(index|app|send-sms|send-push|confirm-order|send-email|product-image|chat|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns)\.php$">
+<FilesMatch "^(index|app|send-sms|send-push|confirm-order|send-email|product-image|chat|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy)\.php$">
   <IfModule mod_authz_core.c>
     Require all granted
   </IfModule>

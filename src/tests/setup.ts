@@ -1,7 +1,4 @@
-/**
- * Vitest Global Test Setup
- * এই ফাইলটি প্রতিটি test এর আগে run হয়।
- */
+// @testing-library/jest-dom — toBeInTheDocument, toBeDisabled, etc.
 import '@testing-library/jest-dom';
 
 // Firebase mock — tests-এ real Firebase connection দরকার নেই

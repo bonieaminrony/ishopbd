@@ -34,7 +34,7 @@ if ($productId) {
                 $description = mb_substr($description, 0, 147) . "...";
             }
             if (empty($description)) {
-                $description = "$name - Buy gadgets & electronics online at i SHOP BD.";
+                $description = "$name - Buy gadgets & lifestyle accessories online at i SHOP BD.";
             }
             
             $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";

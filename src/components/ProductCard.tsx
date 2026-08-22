@@ -23,8 +23,8 @@ export const ProductCard = React.memo(({
   const isOutOfStock =
     !product.isComingSoon &&
     (product.variants && product.variants.length > 0
-      ? product.variants.every((v) => (v.stock || 0) <= 0)
-      : (product.stock || 0) <= 0);
+      ? product.variants.every((v) => (Number(v.stock) || 0) <= 0)
+      : (product.stock !== undefined && product.stock !== null ? Number(product.stock) <= 0 : false));
 
   return (
     <motion.div
@@ -38,11 +38,15 @@ export const ProductCard = React.memo(({
         onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
       >
         <img
-          src={product.image}
+          src={product.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop"}
           alt={product.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop";
+          }}
         />
         
         {/* Badges - Even larger for visibility */}
@@ -73,28 +77,23 @@ export const ProductCard = React.memo(({
           )}
         </button>
       </a>
-      <div className="p-2 md:p-3 flex flex-col flex-1">
-        {(product.brand || product.code) && (
-          <span className="text-[8px] md:text-[10px] font-bold text-gray-400 mb-1 px-0.5 uppercase tracking-wide">
-            {product.brand || product.code}
-          </span>
-        )}
+      <div className="p-2.5 md:p-3 flex flex-col flex-1">
         <a 
           href={`?product=${product.id}`}
           onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
           className="block"
         >
-          <h4 className="text-base md:text-lg font-medium text-gray-800 line-clamp-2 mb-1.5 px-0.5 min-h-[44px] group-hover:text-primary transition-colors cursor-pointer leading-tight">
+          <h4 className="text-xs sm:text-sm md:text-base font-bold text-gray-800 line-clamp-2 mb-1.5 min-h-[32px] sm:min-h-[38px] group-hover:text-primary transition-colors cursor-pointer leading-snug">
             {product.name}
           </h4>
         </a>
-        <div className="mt-auto px-0.5">
-          <div className="flex items-baseline justify-between gap-1">
-            <span className="text-red-600 font-bold text-xl md:text-2xl tracking-tight">
+        <div className="mt-auto pt-1">
+          <div className="flex items-baseline justify-between gap-1 mb-2">
+            <span className="text-primary font-black text-base sm:text-lg md:text-xl tracking-tight">
               ৳{product.price}
             </span>
             {product.originalPrice > product.price && (
-              <span className="text-[10px] md:text-[12px] text-gray-400 line-through">
+              <span className="text-[10px] sm:text-xs text-gray-400 line-through font-medium">
                 ৳{product.originalPrice}
               </span>
             )}
@@ -103,15 +102,19 @@ export const ProductCard = React.memo(({
           <div className="relative">
             <motion.button
               disabled={isOutOfStock}
-              whileTap={isOutOfStock ? {} : { scale: 0.98 }}
+              whileTap={isOutOfStock ? {} : { scale: 0.96 }}
               onClick={(e) => {
                 e.stopPropagation();
                 openProductDetails(product);
               }}
-              className="w-full relative overflow-hidden bg-gradient-to-br from-primary to-red-600 text-white text-sm md:text-base font-bold py-2 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group/btn active:scale-95 flex items-center justify-center gap-2"
+              className="w-full relative overflow-hidden bg-gradient-to-r from-primary to-red-600 hover:from-red-600 hover:to-primary text-white text-xs sm:text-sm font-bold py-2 md:py-2.5 rounded-xl transition-all shadow-md shadow-primary/20 hover:shadow-lg disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group/btn active:scale-95 flex items-center justify-center gap-1.5"
             >
-              {isOutOfStock ? t("স্টক আউট", "Stock Out") : t("অর্ডার দিন", "Order Now")}
-              {!isOutOfStock && <ArrowRight size={14} />}
+              {isOutOfStock ? t("স্টক আউট", "Stock Out") : (
+                <>
+                  <span>{t("অর্ডার দিন", "Order Now")}</span>
+                  <ArrowRight size={13} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                </>
+              )}
             </motion.button>
           </div>
         </div>

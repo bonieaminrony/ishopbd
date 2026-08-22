@@ -3,7 +3,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging-comp
 
 const firebaseConfig = {
   apiKey: "AIzaSyClPZu-7eztcpTyOT0vVWX-znIwouTg7I8",
-  authDomain: "i-shop-bd.firebaseapp.com",
+  authDomain: "ishopbd.com",
   projectId: "i-shop-bd",
   storageBucket: "i-shop-bd.firebasestorage.app",
   messagingSenderId: "858962925513",

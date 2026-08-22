@@ -2,12 +2,35 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, addDoc, increment, runTransaction, orderBy, getDocFromServer, arrayUnion, arrayRemove, limit, DocumentReference } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import rawFirebaseConfig from '../../firebase-applet-config.json';
 
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '0.0.0.0'
+);
+
+export const firebaseConfig = {
+  ...rawFirebaseConfig,
+  authDomain: isLocalhost ? `${rawFirebaseConfig.projectId}.firebaseapp.com` : (rawFirebaseConfig.authDomain || `${rawFirebaseConfig.projectId}.firebaseapp.com`)
+};
+
+import { getStorage } from 'firebase/storage';
 const app = initializeApp(firebaseConfig);
+export const storage = getStorage(app);
 export const auth = getAuth(app);
+import { memoryLocalCache } from 'firebase/firestore';
+
+const isProblematicBrowser = typeof window !== 'undefined' && (
+  navigator.userAgent.includes("FBAV") || 
+  navigator.userAgent.includes("FBAN") ||
+  navigator.userAgent.includes("Instagram")
+);
+
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}),
+  localCache: isProblematicBrowser 
+    ? memoryLocalCache() 
+    : persistentLocalCache({tabManager: persistentMultipleTabManager()}),
   ignoreUndefinedProperties: true
 }, (firebaseConfig as any).firestoreDatabaseId);
 

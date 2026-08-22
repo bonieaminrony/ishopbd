@@ -18,6 +18,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [isDownloadDropdownOpen, setIsDownloadDropdownOpen] = useState(false);
   const downloadDropdownRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'expenses'>('dashboard');
 
   useEffect(() => {
     const handleClickOutside = (event: any) => {
@@ -96,7 +97,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
       }
     };
 
-    const validOrders = (orderHistory || []).filter(o => o.status === 'delivered');
+    const validOrders = (orderHistory || []).filter(o => !o.deleted && o.status === 'delivered');
     validOrders.forEach(order => extractDateInfo(order.date, order.createdAt?.seconds));
     (expenses || []).forEach(exp => extractDateInfo(exp.date, null));
 
@@ -114,7 +115,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
 
     const data: any[] = [];
 
-    const validOrders = (orderHistory || []).filter(o => o.status === 'delivered');
+    const validOrders = (orderHistory || []).filter(o => !o.deleted && o.status === 'delivered');
     let filteredOrders = validOrders;
     let filteredExpenses = expenses || [];
 
@@ -219,6 +220,61 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
       summary: { totalSales, totalCost, grossProfit, totalItemsSold, totalExpenses, netProfit } 
     };
   }, [orderHistory, products, expenses, selectedPeriod]);
+
+  const chartData = useMemo(() => {
+    const groups = {};
+    
+    const getRowDate = (rawOrder) => {
+      if (rawOrder.createdAt?.seconds) {
+        return new Date(rawOrder.createdAt.seconds * 1000);
+      }
+      if (rawOrder.date) {
+        const d = new Date(rawOrder.date);
+        if (!isNaN(d.getTime())) return d;
+      }
+      return new Date();
+    };
+
+    tableData.forEach(row => {
+      const d = getRowDate(row.rawOrder);
+      let groupKey = "";
+      let label = "";
+      
+      if (selectedPeriod !== 'all' && !selectedPeriod.startsWith('year-')) {
+        // Daily group YYYY-MM-DD
+        groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        label = d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+      } else {
+        // Monthly group YYYY-MM
+        groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        label = d.toLocaleDateString('bn-BD', { month: 'short', year: 'numeric' });
+      }
+      
+      if (!groups[groupKey]) {
+        groups[groupKey] = { key: groupKey, dateObj: d, label, sales: 0, profit: 0 };
+      }
+      
+      groups[groupKey].sales += row.sellPrice * row.quantity;
+      groups[groupKey].profit += row.profit;
+    });
+    
+    return (Object.values(groups) as any[]).sort((a: any, b: any) => a.key.localeCompare(b.key));
+  }, [tableData, selectedPeriod]);
+
+  const productMetrics = useMemo(() => {
+    const map: Record<string, { id: string; name: string; profit: number; revenue: number; qtySold: number }> = {};
+    tableData.forEach((row: any) => {
+      const name = row.productName || 'Unknown Product';
+      if (!map[name]) {
+        map[name] = { id: name, name, profit: 0, revenue: 0, qtySold: 0 };
+      }
+      map[name].profit += row.profit || 0;
+      map[name].revenue += (row.sellPrice * row.quantity) || 0;
+      map[name].qtySold += row.quantity || 0;
+    });
+    return Object.values(map).sort((a, b) => b.profit - a.profit);
+  }, [tableData]);
+
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -614,8 +670,257 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           </div>
         </div>
 
+        {/* Tabs Navigation */}
+        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 my-6">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'dashboard' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+          >
+            <Activity size={18} /> গ্রাফিক্যাল ড্যাশবোর্ড
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'orders' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+          >
+            <Package size={18} /> অর্ডার ও লাভ তালিকা
+          </button>
+          <button
+            onClick={() => setActiveTab('expenses')}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'expenses' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+          >
+            <Receipt size={18} /> খরচ ও অফলাইন সেলস
+          </button>
+        </div>
+
+
+        {/* Dashboard Tab Content */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 font-sans">
+            {/* Sales and Profit Trend Chart */}
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <TrendingUp className="text-indigo-600" size={20} /> Sales & Profit Trend (বিক্রয় ও লাভ গ্রাফ)
+              </h3>
+              
+              {chartData.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-gray-400 font-bold">
+                  No data available for the selected period
+                </div>
+              ) : (
+                <div className="w-full overflow-x-auto">
+                  <div className="min-w-[600px] h-[320px] relative mt-4">
+                    <svg viewBox="0 0 800 300" className="w-full h-full overflow-visible">
+                      {/* Grid lines */}
+                      {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+                        const y = 30 + ratio * 200;
+                        const maxVal = Math.max(...chartData.map(d => d.sales), 1000);
+                        const val = Math.round(maxVal * (1 - ratio));
+                        return (
+                          <g key={idx} className="opacity-30">
+                            <line x1="60" y1={y} x2="760" y2={y} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="4 4" />
+                            <text x="50" y={y + 4} textAnchor="end" className="text-[10px] font-bold fill-gray-500">
+                              ৳{val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val}
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      {/* X Axis Labels */}
+                      {chartData.map((d, idx) => {
+                        const x = 80 + (idx * (680 / Math.max(chartData.length - 1, 1)));
+                        return (
+                          <text key={idx} x={x} y="260" textAnchor="middle" className="text-[10px] font-bold fill-gray-400">
+                            {d.label}
+                          </text>
+                        );
+                      })}
+
+                      {/* Sales Bar Chart */}
+                      {chartData.map((d, idx) => {
+                        const maxVal = Math.max(...chartData.map(d => d.sales), 1000);
+                        const x = 80 + (idx * (680 / Math.max(chartData.length - 1, 1)));
+                        const barHeight = (d.sales / maxVal) * 200;
+                        const y = 230 - barHeight;
+                        
+                        return (
+                          <g key={`sales-${idx}`} className="group cursor-pointer">
+                            <rect 
+                              x={x - 12} 
+                              y={y} 
+                              width="10" 
+                              height={barHeight} 
+                              fill="#818cf8" 
+                              rx="2"
+                              className="transition-all duration-300 hover:fill-indigo-600" 
+                            />
+                            <title>Sales: ৳{d.sales.toLocaleString()}</title>
+                          </g>
+                        );
+                      })}
+
+                      {/* Profit Bar Chart */}
+                      {chartData.map((d, idx) => {
+                        const maxVal = Math.max(...chartData.map(d => d.sales), 1000);
+                        const x = 80 + (idx * (680 / Math.max(chartData.length - 1, 1)));
+                        const barHeight = (d.profit / maxVal) * 200;
+                        const y = 230 - barHeight;
+                        
+                        return (
+                          <g key={`profit-${idx}`} className="group cursor-pointer">
+                            <rect 
+                              x={x + 2} 
+                              y={y} 
+                              width="10" 
+                              height={Math.max(barHeight, 0)} 
+                              fill="#34d399" 
+                              rx="2"
+                              className="transition-all duration-300 hover:fill-green-600" 
+                            />
+                            <title>Profit: ৳{d.profit.toLocaleString()}</title>
+                          </g>
+                        );
+                      })}
+
+                      {/* Connecting Line Chart for Profit */}
+                      {(() => {
+                        const maxVal = Math.max(...chartData.map(d => d.sales), 1000);
+                        const points = chartData.map((d, idx) => {
+                          const x = 80 + (idx * (680 / Math.max(chartData.length - 1, 1)));
+                          const y = 230 - (d.profit / maxVal) * 200;
+                          return `${x},${y}`;
+                        }).join(' ');
+
+                        return (
+                          <polyline 
+                            fill="none" 
+                            stroke="#059669" 
+                            strokeWidth="2.5" 
+                            points={points} 
+                            className="drop-shadow-sm"
+                          />
+                        );
+                      })()}
+
+                      {/* Markers on Profit Line */}
+                      {chartData.map((d, idx) => {
+                        const maxVal = Math.max(...chartData.map(d => d.sales), 1000);
+                        const x = 80 + (idx * (680 / Math.max(chartData.length - 1, 1)));
+                        const y = 230 - (d.profit / maxVal) * 200;
+                        
+                        return (
+                          <g key={`marker-${idx}`} className="group cursor-pointer">
+                            <circle 
+                              cx={x} 
+                              cy={y} 
+                              r="4" 
+                              fill="#059669" 
+                              stroke="#ffffff" 
+                              strokeWidth="1.5"
+                              className="transition-all duration-300 hover:r-6" 
+                            />
+                            <title>Profit: ৳{d.profit.toLocaleString()}</title>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    
+                    {/* Legend */}
+                    <div className="flex justify-center items-center gap-6 mt-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-indigo-400 rounded-md"></div>
+                        <span className="text-xs font-bold text-gray-600">Total Sales (মোট বিক্রি)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-green-400 rounded-md"></div>
+                        <span className="text-xs font-bold text-gray-600">Gross Profit (মোট লাভ)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Top Products Analytics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <TrendingUp className="text-green-600" /> Top Selling Products by Profit (সেরা লাভজনক পণ্যসমূহ)
+                </h3>
+                
+                {productMetrics.length === 0 ? (
+                  <div className="h-64 flex items-center justify-center text-gray-400 font-bold">
+                    No sales data available
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {productMetrics.slice(0, 5).map((p, idx) => {
+                      const maxProfit = Math.max(...productMetrics.map(x => x.profit), 1);
+                      const widthPercent = (p.profit / maxProfit) * 100;
+                      
+                      return (
+                        <div key={p.id || idx} className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold">
+                            <span className="text-gray-800 truncate max-w-[200px]">{idx + 1}. {p.name}</span>
+                            <span className="text-green-600 font-black">৳{p.profit.toLocaleString()} Profit</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${widthPercent}%` }} />
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-bold whitespace-nowrap shrink-0">
+                              {p.qtySold} sold
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Package className="text-blue-600" /> Sales Share by Product (বিক্রয় রেভিনিউ শেয়ার)
+                </h3>
+                
+                {productMetrics.length === 0 ? (
+                  <div className="h-64 flex items-center justify-center text-gray-400 font-bold">
+                    No sales data available
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {productMetrics.slice(0, 5).map((p, idx) => {
+                      const maxRevenue = Math.max(...productMetrics.map(x => x.revenue), 1);
+                      const widthPercent = (p.revenue / maxRevenue) * 100;
+                      
+                      return (
+                        <div key={p.id || idx} className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold">
+                            <span className="text-gray-800 truncate max-w-[200px]">{idx + 1}. {p.name}</span>
+                            <span className="text-indigo-600 font-black">৳{p.revenue.toLocaleString()} Sales</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${widthPercent}%` }} />
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-bold whitespace-nowrap shrink-0">
+                              ৳{p.revenue.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+
         {/* Expenses & Offline Sales Section */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {activeTab === 'expenses' && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Receipt className="text-red-500" size={20} /> খরচ যুক্ত করুন
@@ -748,9 +1053,11 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
             </div>
           </div>
         </div>
+        )}
 
         {/* Excel-like Table for Sales */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {activeTab === 'orders' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 bg-indigo-50 flex items-center justify-between">
             <h3 className="font-bold text-indigo-900 flex items-center gap-2">
               <Package size={18} /> অর্ডার ও প্রফিট তালিকা
@@ -845,6 +1152,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
             </table>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

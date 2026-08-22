@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle, Settings, Package, RotateCcw } from 'lucide-react';
+import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, MessageCircle, MapPin, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle, Settings, Package, RotateCcw, Activity, DollarSign, ArrowUpRight, Percent, Filter, Layers, BarChart2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import POS from './POS';
 import { db } from '../lib/firebase';
 import { collection, doc, getDocs, updateDoc, deleteDoc, query, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
 
@@ -174,6 +175,10 @@ export interface AdminPanelProps {
   togglePublishStatus: any;
   userList: any;
   userListSearch: any;
+  isSavingProduct?: any;
+  deletedOrders?: any;
+  restoreOrder?: any;
+  permanentDeleteOrder?: any;
 }
 
 // Ensure ProfitAnalysis is imported if needed, wait, ProfitAnalysis is an icon? No, it's a component.
@@ -358,10 +363,29 @@ export default function AdminPanel(props: AdminPanelProps) {
     togglePublishStatus,
     userList,
     userListSearch,
+    isSavingProduct,
+    deletedOrders,
+    restoreOrder,
+    permanentDeleteOrder,
   } = props;
 
   const [settingsTab, setSettingsTab] = React.useState("general");
   const [newSubcategoryInputs, setNewSubcategoryInputs] = React.useState<Record<string, string>>({});
+  const [reportProductSearch, setReportProductSearch] = React.useState("");
+  const [selectedReportProductId, setSelectedReportProductId] = React.useState<string | null>(null);
+  const [reportProductPeriod, setReportProductPeriod] = React.useState<"all" | "this_month" | "last_month" | "this_year">("all");
+
+  const getEffectiveStock = React.useCallback((p: any): number => {
+    if (!p) return 0;
+    if (Array.isArray(p.variants) && p.variants.length > 0) {
+      const hasVariantStocks = p.variants.some((v: any) => v && v.stock !== undefined && v.stock !== null);
+      if (hasVariantStocks) {
+        const sum = p.variants.reduce((acc: number, v: any) => acc + (Number(v?.stock) || 0), 0);
+        return Math.max(0, sum);
+      }
+    }
+    return Math.max(0, Number(p.stock) || 0);
+  }, []);
 
   return (
     <>
@@ -408,6 +432,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && !showOnlyPreOrders ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
                       <History size={18} /> Orders ({orderHistory.filter(o => {
+                        if (o.deleted) return false;
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return !isPreOrder;
                       }).length})
@@ -422,6 +447,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     >
                       <Clock size={18} />
                       Pre Order ({orderHistory.filter(o => {
+                        if (o.deleted) return false;
                         const isPreOrder = (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending";
                         return isPreOrder;
                       }).length})
@@ -444,6 +470,24 @@ export default function AdminPanel(props: AdminPanelProps) {
                     >
                       <Headset size={18} /> Support ({supportChats.filter(c => c.unreadByAdmin).length})
                     </button>
+                    <button
+                      onClick={() => {
+                        setAdminTab("pos");
+                        setShowOnlyPreOrders(false);
+                      }}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "pos" ? "bg-purple-600 text-white shadow-md shadow-purple-600/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                    >
+                      <ShoppingBag size={18} /> POS (Outlet)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAdminTab("deleted_orders");
+                        setShowOnlyPreOrders(false);
+                      }}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "deleted_orders" ? "bg-red-700 text-white shadow-md shadow-red-700/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                    >
+                      <Trash2 size={18} /> Recycle Bin ({deletedOrders?.length || 0})
+                    </button>
                     {adminViewMode === "full" && (
                       <>
                         <button
@@ -463,6 +507,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                           className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "refunds" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
                           <RotateCcw size={18} /> Refunds ({refundRequests.filter(r => r.status === "pending").length})
+                        </button>
+                        <button
+                          onClick={() => setAdminTab("reports")}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "reports" ? "bg-orange-500 text-white shadow-md shadow-orange-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                        >
+                          <Activity size={18} /> Reports
+                        </button>
+                        <button
+                          onClick={() => setAdminTab("low_stock")}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "low_stock" ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                        >
+                          <AlertCircle size={18} /> Low Stock ({products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length})
                         </button>
                         <button
                           onClick={() => setAdminTab("users")}
@@ -513,17 +569,23 @@ export default function AdminPanel(props: AdminPanelProps) {
               <div className="md:hidden border-b bg-white overflow-x-auto scroll-smooth pb-1 shrink-0">
                 <div className="flex p-2 gap-2 min-w-max">
                   {([
-                        { id: "orders", icon: History, label: `অর্ডার (${orderHistory.filter(o => !((o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending")).length})` },
-                        { id: "preorder", icon: CircleDot, label: `Pre Order (${orderHistory.filter(o => (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending").length})` },
+                        { id: "orders", icon: History, label: `অর্ডার (${orderHistory.filter(o => !o.deleted && !((o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending")).length})` },
+                        { id: "preorder", icon: CircleDot, label: `Pre Order (${orderHistory.filter(o => !o.deleted && (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending").length})` },
                         { id: "support", icon: Headset, label: "Support" },
+                        { id: "pos", icon: ShoppingBag, label: "POS (Outlet)" },
+                        { id: "deleted_orders", icon: Trash2, label: `Recycle Bin (${deletedOrders?.length || 0})` },
                         ...(adminViewMode === "full" ? [
                           { id: "products", icon: PlusCircle, label: "Products" },
                           { id: "categories", icon: LayoutGrid, label: "Categories" },
                           { id: "refunds", icon: RefreshCcw, label: "Refunds" },
+                          { id: "reports", icon: Activity, label: "Reports" },
+                          { id: "low_stock", icon: AlertCircle, label: `Low Stock (${products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length})` },
                           { id: "users", icon: Users, label: "Users" },
                           { id: "campaigns", icon: Gift, label: "Campaigns" },
                           { id: "bulk_sms", icon: MessageSquare, label: "Bulk SMS" },
-                          ...(isMasterAdmin ? [{ id: "profit_analysis", icon: TrendingUp, label: "Accounts" }] : []),
+                          ...(isMasterAdmin ? [
+                            { id: "profit_analysis", icon: TrendingUp, label: "Accounts" },
+                          ] : []),
                           { id: "settings", icon: ShieldCheck, label: "Settings" },
                         ] : [])
                       ]).map((tab) => (
@@ -584,25 +646,26 @@ export default function AdminPanel(props: AdminPanelProps) {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
                       {(() => {
-                        let filteredForAnalytics = orderHistory;
+                        const activeOrders = orderHistory.filter((o: any) => !o.deleted);
+                        let filteredForAnalytics = activeOrders;
                         const now = new Date();
                         if (reportTimeframe === "28d") {
                           const cutoff = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
-                          filteredForAnalytics = orderHistory.filter(o => {
+                          filteredForAnalytics = activeOrders.filter((o: any) => {
                             if (!o.createdAt) return false;
                             const t = typeof o.createdAt === 'string' ? new Date(o.createdAt).getTime() : (o.createdAt.seconds ? o.createdAt.seconds * 1000 : 0);
                             return t >= cutoff.getTime();
                           });
                         } else if (reportTimeframe === "1y") {
                           const cutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-                          filteredForAnalytics = orderHistory.filter(o => {
+                          filteredForAnalytics = activeOrders.filter((o: any) => {
                             if (!o.createdAt) return false;
                             const t = typeof o.createdAt === 'string' ? new Date(o.createdAt).getTime() : (o.createdAt.seconds ? o.createdAt.seconds * 1000 : 0);
                             return t >= cutoff.getTime();
                           });
                         } else if (reportTimeframe === "3y") {
                           const cutoff = new Date(now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
-                          filteredForAnalytics = orderHistory.filter(o => {
+                          filteredForAnalytics = activeOrders.filter((o: any) => {
                             if (!o.createdAt) return false;
                             const t = typeof o.createdAt === 'string' ? new Date(o.createdAt).getTime() : (o.createdAt.seconds ? o.createdAt.seconds * 1000 : 0);
                             return t >= cutoff.getTime();
@@ -611,7 +674,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           const parts = reportTimeframe.split("_");
                           const targetMonth = parseInt(parts[1]);
                           const targetYear = parseInt(parts[2]);
-                          filteredForAnalytics = orderHistory.filter(o => {
+                          filteredForAnalytics = activeOrders.filter((o: any) => {
                             if (!o.createdAt) return false;
                             const d = new Date(typeof o.createdAt === 'string' ? o.createdAt : (o.createdAt.seconds ? o.createdAt.seconds * 1000 : 0));
                             return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
@@ -1547,126 +1610,231 @@ export default function AdminPanel(props: AdminPanelProps) {
                 )}
                 {adminTab === "incomplete_orders" && (
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-<h2 className="text-xl font-bold text-gray-800">Incomplete Orders</h2>
-                      <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100 flex items-center gap-2">
-                        <span className="text-sm text-gray-500 font-bold">Total:</span>
-                        <span className="text-lg font-bold text-primary">{incompleteOrders.length}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                          <ShoppingCart className="text-red-500" size={24} /> ইনকমপ্লিট অর্ডার (অসমাপ্ত অর্ডার)
+                        </h2>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">
+                          কাস্টমার কার্টে পণ্য যোগ করেছেন বা ফোন নম্বর লিখে অর্ডার সম্পন্ন না করে চলে গেছেন
+                        </p>
+                      </div>
+                      <div className="bg-white px-4 py-2 rounded-xl shadow-xs border border-gray-200 flex items-center gap-2 self-start sm:self-auto">
+                        <span className="text-xs text-gray-500 font-bold">মোট ইনকমপ্লিট:</span>
+                        <span className="text-lg font-black text-red-600">{incompleteOrders.length} টি</span>
                       </div>
                     </div>
                     
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden">
                       {incompleteOrders.length === 0 ? (
-                        <div className="p-12 text-center">
-                          <ShoppingCart className="mx-auto text-gray-300 mb-4" size={48} />
-<h3 className="text-lg font-bold text-gray-400">No incomplete orders</h3>
+                        <div className="p-16 text-center text-gray-400">
+                          <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                            <ShoppingCart className="text-gray-300" size={32} />
+                          </div>
+                          <h3 className="text-base font-bold text-gray-600">কোনো ইনকমপ্লিট অর্ডার নেই</h3>
+                          <p className="text-xs text-gray-400 mt-1">কেউ কার্টে পণ্য যোগ করলে বা ফোন নম্বর দিলে এখানে সাথে সাথে দেখা যাবে</p>
                         </div>
                       ) : (
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse">
+                          <table className="w-full text-left border-collapse text-xs">
                             <thead>
-                              <tr className="bg-gray-50 border-b border-gray-100">
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Customer</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Products</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Step</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
+                              <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
+                                <th className="p-4">গ্রাহক ও মোবাইল</th>
+                                <th className="p-4">কার্টের পণ্যসমূহ</th>
+                                <th className="p-4">উৎস (Step)</th>
+                                <th className="p-4 text-right">মোট মূল্য</th>
+                                <th className="p-4">তারিখ ও সময়</th>
+                                <th className="p-4 text-center">যোগাযোগ ও অ্যাকশন</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {incompleteOrders.map((order: any) => (
-                                <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
-                                  <td className="p-4">
-                                    <div className="flex flex-col">
-                                      <span className="font-bold text-gray-800">{order.name || "N/A"}</span>
-                                      <span className="text-sm text-gray-500">{order.phone}</span>
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <div className="flex flex-col gap-1">
-                                      {order.items?.map((item: any, idx: number) => (
-                                        <div key={idx} className="flex items-center gap-2">
-                                          {item.image && <img loading="lazy" src={item.image} alt={item.name} className="w-8 h-8 rounded-lg object-cover" />}
-                                          <span className="text-xs font-bold text-gray-700">{item.name} <span className="text-primary">(x{item.quantity})</span></span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="p-4">
-                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${order.type === 'cart_checkout' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
-                                      {order.type === 'cart_checkout' ? 'Cart Order' : 'Direct Order'}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-center">
-                                    <span className="font-bold text-primary">{order.totalAmount}</span>
-                                  </td>
-                                  <td className="p-4">
-                                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                      <div className="relative">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setIndividualSmsOrder(individualSmsOrder?.id === order.id ? null : order);
-                                            setIndividualSmsMessage("");
-                                          }}
-                                          className={`inline-flex items-center justify-center gap-2 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm ${individualSmsOrder?.id === order.id ? 'bg-primary shadow-primary/20' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
-                                        >
-                                          <MessageSquare size={14} /> SMS
-                                        </button>
-                                        
-                                        <AnimatePresence>
-                                          {individualSmsOrder?.id === order.id && (
-                                            <motion.div
-                                              initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                                              exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                              className="absolute top-[130%] right-0 bg-white rounded-2xl w-72 shadow-[0_15px_40px_-10px_rgba(0,0,0,0.3)] border border-gray-100 z-[200] origin-top-right cursor-default text-left"
-                                              onClick={(e) => e.stopPropagation()}
+                            <tbody className="divide-y divide-gray-100 font-medium">
+                              {incompleteOrders.map((order: any) => {
+                                const rawPhone = (order.phone || order.customerPhone || "").trim();
+                                const hasRealPhone = rawPhone && !rawPhone.includes("কার্টে") && !rawPhone.includes("Cart") && rawPhone.length >= 6;
+                                const cleanDigits = rawPhone.replace(/\D/g, '');
+                                const waPhone = cleanDigits.startsWith('88') ? cleanDigits : (cleanDigits.startsWith('01') ? '88' + cleanDigits : cleanDigits);
+                                const totalAmt = order.totalAmount || order.items?.reduce((sum: number, it: any) => sum + ((it.price || 0) * (it.quantity || 1)), 0) || 0;
+
+                                return (
+                                  <tr key={order.id} className="hover:bg-red-50/20 transition-colors">
+                                    <td className="p-4">
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="font-bold text-gray-900 text-sm">
+                                          {order.name && order.name !== "অজ্ঞাত কাস্টমার" && order.name !== "অজ্ঞাত ক্রেতা" ? order.name : (hasRealPhone ? "গ্রাহক (নাম অনির্দিষ্ট)" : "অজ্ঞাত ক্রেতা")}
+                                        </span>
+                                        {hasRealPhone ? (
+                                          <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span className="text-emerald-700 font-mono font-black text-sm bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 select-all">
+                                              {rawPhone}
+                                            </span>
+                                            <button
+                                              onClick={() => {
+                                                navigator.clipboard.writeText(rawPhone);
+                                                toast.success("নম্বর কপি করা হয়েছে!");
+                                              }}
+                                              className="p-1 text-gray-400 hover:text-gray-700 rounded hover:bg-gray-100"
+                                              title="নম্বর কপি করুন"
                                             >
-                                              <div className="absolute -top-2 right-8 w-4 h-4 bg-white border-t border-l border-gray-100 transform rotate-45"></div>
-                                              <div className="relative p-4 bg-white rounded-2xl z-10">
-                                                <div className="flex justify-between items-center mb-2">
-                                                  <p className="text-[10px] text-gray-500">Recipient: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
-                                                  <button onClick={() => setIndividualSmsOrder(null)} className="text-gray-400 hover:text-red-500">
-                                                    <X size={14} />
-                                                  </button>
-                                                </div>
-                                                <textarea
-                                                  value={individualSmsMessage}
-                                                  onChange={(e) => setIndividualSmsMessage(e.target.value)}
-                                                  placeholder="Write your comment..."
-                                                  className="w-full h-24 p-2 border rounded-xl text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none mb-3"
-                                                ></textarea>
-                                                <div className="flex justify-center">
-                                                  <button
-                                                    onClick={handleSendIndividualSms}
-                                                    disabled={isSendingIndividualSms || !individualSmsMessage.trim()}
-                                                    className="bg-green-500 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-600 disabled:opacity-50 transition-all active:scale-95 w-full shadow-sm shadow-green-500/20"
-                                                  >
-                                                    {isSendingIndividualSms ? (
-                                                      "Sending..."
-                                                    ) : (
-                                                      <>
-                                                        <MessageSquare size={14} /> SMS পাঠান
-                                                      </>
-                                                    )}
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            </motion.div>
-                                          )}
-                                        </AnimatePresence>
+                                              <Copy size={13} />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <span className="text-gray-400 text-xs italic">
+                                            কার্টে পণ্য আছে (ফোন নম্বর দেয়নি)
+                                          </span>
+                                        )}
+                                        {(order.district || order.thana || order.address) && (
+                                          <span className="text-[11px] text-gray-500 mt-1 max-w-xs truncate">
+                                            📍 {[order.address, order.thana, order.district].filter(Boolean).join(", ")}
+                                          </span>
+                                        )}
                                       </div>
-                                      <a 
-                                        href={`tel:${order.customerPhone || order.phone}`}
-                                        className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-green-600 transition-colors shadow-sm shadow-green-500/20"
-                                      >
-                                        <Phone size={14} />  
-                                      </a>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
+                                    </td>
+                                    <td className="p-4 max-w-xs">
+                                      <div className="space-y-1.5">
+                                        {order.items?.map((item: any, idx: number) => (
+                                          <div key={idx} className="flex items-center gap-2.5 bg-gray-50/80 p-1.5 rounded-xl border border-gray-100">
+                                            {item.image ? (
+                                              <img loading="lazy" src={item.image} alt={item.name} className="w-9 h-9 rounded-lg object-cover bg-white shrink-0 border border-gray-200" />
+                                            ) : (
+                                              <div className="w-9 h-9 rounded-lg bg-gray-200 flex items-center justify-center shrink-0">
+                                                <Package size={16} className="text-gray-400" />
+                                              </div>
+                                            )}
+                                            <div className="min-w-0">
+                                              <p className="text-xs font-bold text-gray-800 truncate">{item.name}</p>
+                                              <p className="text-[11px] text-gray-500">
+                                                <span className="text-purple-700 font-bold">৳{item.price}</span> × {item.quantity || 1}
+                                                {(item.color || item.size) && (
+                                                  <span className="text-gray-400 ml-1">({[item.color, item.size].filter(Boolean).join(", ")})</span>
+                                                )}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                        order.type === 'cart_checkout' 
+                                          ? 'bg-blue-100 text-blue-700' 
+                                          : order.type === 'inline_checkout'
+                                          ? 'bg-purple-100 text-purple-700'
+                                          : 'bg-emerald-100 text-emerald-700'
+                                      }`}>
+                                        {order.type === 'cart_checkout' ? 'কার্ট চেকআউট' : order.type === 'inline_checkout' ? 'প্রোডাক্ট পেজ' : 'ল্যান্ডিং পেজ'}
+                                      </span>
+                                    </td>
+                                    <td className="p-4 text-right">
+                                      <span className="font-black text-sm text-gray-900">
+                                        ৳{Number(totalAmt).toLocaleString()}
+                                      </span>
+                                    </td>
+                                    <td className="p-4 text-gray-500 whitespace-nowrap">
+                                      {order.date || (order.updatedAt?.seconds ? new Date(order.updatedAt.seconds * 1000).toLocaleString("bn-BD") : "কিছুক্ষণ আগে")}
+                                    </td>
+                                    <td className="p-4">
+                                      <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                        {hasRealPhone ? (
+                                          <>
+                                            {/* Direct Phone Call Button */}
+                                            <a 
+                                              href={`tel:${cleanDigits}`}
+                                              className="inline-flex items-center justify-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-xs shadow-emerald-600/20 active:scale-95"
+                                              title="সরাসরি কল করুন"
+                                            >
+                                              <Phone size={13} /> কল
+                                            </a>
+
+                                            {/* WhatsApp Chat Button */}
+                                            <a 
+                                              href={`https://wa.me/${waPhone}?text=${encodeURIComponent(`আসসালামু আলাইকুম ${order.name && order.name !== "অজ্ঞাত ক্রেতা" ? order.name : ""}! আপনি iShop BD তে পণ্য কার্টে যোগ করেছিলেন। অর্ডারটি কনফার্ম করতে আমরা কি আপনাকে সহযোগিতা করতে পারি?`)}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center justify-center gap-1 bg-green-500 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-green-600 transition-all shadow-xs shadow-green-500/20 active:scale-95"
+                                              title="WhatsApp এ মেসেজ দিন"
+                                            >
+                                              <MessageSquare size={13} /> WA
+                                            </a>
+
+                                            {/* SMS Dropdown */}
+                                            <div className="relative">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setIndividualSmsOrder(individualSmsOrder?.id === order.id ? null : order);
+                                                  setIndividualSmsMessage(`প্রিয় গ্রাহক, আপনার কার্টে থাকা পণ্যটি এখনো অপেক্ষা করছে! এখনই অর্ডার সম্পন্ন করুন: https://www.ishopbd.com ধন্যবাদ!`);
+                                                }}
+                                                className={`inline-flex items-center justify-center gap-1 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${individualSmsOrder?.id === order.id ? 'bg-purple-600 shadow-purple-600/20' : 'bg-purple-500 hover:bg-purple-600 shadow-purple-500/20'}`}
+                                                title="SMS পাঠান"
+                                              >
+                                                <Send size={13} /> SMS
+                                              </button>
+                                              
+                                              <AnimatePresence>
+                                                {individualSmsOrder?.id === order.id && (
+                                                  <motion.div
+                                                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                                    className="absolute top-[120%] right-0 bg-white rounded-2xl w-80 shadow-2xl border border-gray-200 z-[200] origin-top-right cursor-default text-left p-4"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100">
+                                                      <p className="text-xs text-gray-500 font-medium">প্রাপক: <span className="font-bold text-gray-800 font-mono">{rawPhone}</span></p>
+                                                      <button onClick={() => setIndividualSmsOrder(null)} className="text-gray-400 hover:text-red-500 p-1">
+                                                        <X size={15} />
+                                                      </button>
+                                                    </div>
+                                                    <textarea
+                                                      value={individualSmsMessage}
+                                                      onChange={(e) => setIndividualSmsMessage(e.target.value)}
+                                                      placeholder="SMS মেসেজ লিখুন..."
+                                                      rows={3}
+                                                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none mb-3 font-medium outline-none"
+                                                    />
+                                                    <button
+                                                      onClick={handleSendIndividualSms}
+                                                      disabled={isSendingIndividualSms || !individualSmsMessage.trim()}
+                                                      className="bg-purple-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 w-full shadow-md shadow-purple-600/20"
+                                                    >
+                                                      {isSendingIndividualSms ? "পাঠানো হচ্ছে..." : (
+                                                        <>
+                                                          <Send size={13} /> SMS পাঠিয়ে দিন
+                                                        </>
+                                                      )}
+                                                    </button>
+                                                  </motion.div>
+                                                )}
+                                              </AnimatePresence>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <span className="text-[11px] text-gray-400 italic">নম্বর নেই</span>
+                                        )}
+
+                                        {/* Delete from Incomplete List */}
+                                        <button
+                                          onClick={async () => {
+                                            if (window.confirm("আপনি কি এই রেকর্ডটি মুছে ফেলতে চান?")) {
+                                              try {
+                                                await deleteDoc(doc(db, "incomplete_orders", order.id));
+                                                toast.success("ইনকমপ্লিট অর্ডারটি মুছে ফেলা হয়েছে।");
+                                              } catch (err: any) {
+                                                toast.error("মুছতে সমস্যা হয়েছে: " + err.message);
+                                              }
+                                            }
+                                          }}
+                                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-1"
+                                          title="রেকর্ডটি মুছুন"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -2072,7 +2240,50 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </div>
                               </div>
                               <div>
-                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">বিবরণ (Description)</label>
+                                <div className="flex justify-between items-center mb-1">
+                                  <label className="block text-[11px] font-bold text-gray-500 uppercase">বিবরণ (Description)</label>
+                                  {adminKeys?.geminiApiKey && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const name = editingProduct?.name;
+                                        if (!name) {
+                                          toast.error("অনুগ্রহ করে প্রথমে প্রোডাক্টের নাম লিখুন!");
+                                          return;
+                                        }
+                                        try {
+                                          toast.loading("AI বিবরণ জেনারেট হচ্ছে...");
+                                          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${adminKeys.geminiApiKey}`, {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                              contents: [{
+                                                role: "user",
+                                                parts: [{ text: `Write an engaging product description and a short social media post in Bengali for a product named "${name}". Highlight its features and make it appealing. Format nicely. Respond with only the Bengali text.` }]
+                                              }]
+                                            })
+                                          });
+                                          const data = await response.json();
+                                          const desc = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                                          if (desc) {
+                                            setEditingProduct((prev) => prev ? { ...prev, description: desc } : null);
+                                            toast.dismiss();
+                                            toast.success("বিবরণ সফলভাবে তৈরি হয়েছে!");
+                                          } else {
+                                            toast.dismiss();
+                                            toast.error("বিবরণ তৈরি করতে পারেনি জেমিনি।");
+                                          }
+                                        } catch (err) {
+                                          toast.dismiss();
+                                          toast.error("সার্ভার রেসপন্স করছে না।");
+                                        }
+                                      }}
+                                      className="text-[9px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold px-2 py-0.5 rounded-md transition-all flex items-center gap-1 active:scale-95 border border-indigo-100 font-sans"
+                                    >
+                                      <Activity size={10} /> AI বিবরণ জেনারেট
+                                    </button>
+                                  )}
+                                </div>
                                 <textarea value={editingProduct?.description || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), description: e.target.value }))} rows={3} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-medium no-scrollbar transition-all resize-none" placeholder="প্রোডাক্ট সম্পর্কে বিস্তারিত লিখুন..." />
                               </div>
                               <div>
@@ -2223,21 +2434,26 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 </td>
                                 <td className="px-6 py-4">
                                   {p.variants && p.variants.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                      {p.variants.map((v, i) => (
-                                        <span
-                                          key={i}
-                                          className={`text-[9px] px-1.5 py-[2px] rounded-full font-bold border ${v.stock <= 5 ? "bg-red-50 text-red-600 border-red-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}
-                                        >
-                                          {v.name}: {v.stock}
-                                        </span>
-                                      ))}
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex flex-wrap gap-1">
+                                        {p.variants.map((v, i) => (
+                                          <span
+                                            key={i}
+                                            className={`text-[9px] px-1.5 py-[2px] rounded-full font-bold border ${Number(v.stock || 0) <= 5 ? "bg-red-50 text-red-600 border-red-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}
+                                          >
+                                            {v.name}: {v.stock || 0}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <span className="text-[10px] font-extrabold text-emerald-700">
+                                        Total: {getEffectiveStock(p)}
+                                      </span>
                                     </div>
                                   ) : (
                                     <span
-                                      className={`text-[9px] px-1.5 py-[2px] rounded-full font-bold border ${((p as any).stock || 0) <= 5 ? "bg-red-50 text-red-600 border-red-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}
+                                      className={`text-[9px] px-1.5 py-[2px] rounded-full font-bold border ${getEffectiveStock(p) <= 5 ? "bg-red-50 text-red-600 border-red-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}
                                     >
-                                      স্টক: {(p as any).stock || 0}
+                                      Stock: {getEffectiveStock(p)}
                                     </span>
                                   )}
                                 </td>
@@ -3232,6 +3448,834 @@ export default function AdminPanel(props: AdminPanelProps) {
                 )}
                 {adminTab === "profit_analysis" && isMasterAdmin && (
                   <ProfitAnalysis orderHistory={orderHistory} products={products} expenses={expenses} />
+                )}
+
+                {/* ── Reports Tab (Comprehensive Store & Product Analytics) ── */}
+                {adminTab === "reports" && (() => {
+                  // 1. Timeframe Filtered Active Orders
+                  const activeOrders = (orderHistory || []).filter((o: any) => !o.deleted);
+                  const filteredOrders = activeOrders.filter((o: any) => {
+                    if (reportProductPeriod === "all") return true;
+                    const dateVal = o.createdAt?.seconds ? o.createdAt.seconds * 1000 : (o.date || o.createdAt);
+                    if (!dateVal) return false;
+                    const d = new Date(dateVal);
+                    if (isNaN(d.getTime())) return true;
+                    const now = new Date();
+                    if (reportProductPeriod === "this_month") {
+                      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                    } else if (reportProductPeriod === "last_month") {
+                      const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+                      const lastYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+                      return d.getMonth() === lastMonth && d.getFullYear() === lastYear;
+                    } else if (reportProductPeriod === "this_year") {
+                      return d.getFullYear() === now.getFullYear();
+                    }
+                    return true;
+                  });
+
+                  // 2. Global Store Metrics
+                  const totalOrdersCount = filteredOrders.length;
+                  const deliveredOrders = filteredOrders.filter((o: any) => o.status === "delivered");
+                  const deliveredOrdersCount = deliveredOrders.length;
+                  const pendingOrdersCount = filteredOrders.filter((o: any) => o.status === "pending" || o.status === "processing" || o.status === "confirmed" || o.status === "shipped").length;
+                  const cancelledOrdersCount = filteredOrders.filter((o: any) => o.status === "cancelled" || o.status === "returned").length;
+                  const totalRevenue = deliveredOrders.reduce((sum: number, o: any) => sum + (Number(o.total) || 0), 0);
+
+                  // 3. Compute Product Metrics
+                  const allProductMetrics = (products || []).filter((p: any) => !p.deleted).map((p: any) => {
+                    const buyingPrice = Number(p.buyingPrice || 0);
+                    const sellingPrice = Number(p.price || 0);
+                    const currentStock = getEffectiveStock(p);
+
+                    let soldUnits = 0;
+                    let revenue = 0;
+                    let cost = 0;
+                    let pendingUnits = 0;
+                    let cancelledUnits = 0;
+                    const matchingOrders: any[] = [];
+
+                    filteredOrders.forEach((o: any) => {
+                      let matchedInOrder = false;
+                      let orderItemQty = 0;
+                      let orderItemPrice = 0;
+
+                      (o.items || []).forEach((item: any) => {
+                        const isMatch = item.id === p.id || item.product?.id === p.id || item.name === p.name || item.product?.name === p.name;
+                        if (isMatch) {
+                          matchedInOrder = true;
+                          const qty = Number(item.quantity || item.qty || 1);
+                          const itemSellPrice = Number(item.price || item.product?.price || sellingPrice || 0);
+                          const itemBuyPrice = Number(item.buyingPrice || item.product?.buyingPrice || buyingPrice || 0);
+                          
+                          orderItemQty += qty;
+                          orderItemPrice = itemSellPrice;
+
+                          if (o.status === "delivered") {
+                            soldUnits += qty;
+                            revenue += (itemSellPrice * qty);
+                            cost += (itemBuyPrice * qty);
+                          } else if (o.status === "pending" || o.status === "processing" || o.status === "confirmed" || o.status === "shipped") {
+                            pendingUnits += qty;
+                          } else if (o.status === "cancelled" || o.status === "returned") {
+                            cancelledUnits += qty;
+                          }
+                        }
+                      });
+
+                      if (matchedInOrder) {
+                        matchingOrders.push({
+                          ...o,
+                          productQty: orderItemQty,
+                          productPrice: orderItemPrice
+                        });
+                      }
+                    });
+
+                    const profit = revenue - cost;
+                    const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+                    const inventoryCost = currentStock * buyingPrice;
+                    const inventoryValue = currentStock * sellingPrice;
+
+                    return {
+                      product: p,
+                      id: p.id,
+                      name: p.name,
+                      image: p.image || p.images?.[0] || "",
+                      category: p.category || "General",
+                      sellingPrice,
+                      buyingPrice,
+                      stock: currentStock,
+                      soldUnits,
+                      revenue,
+                      cost,
+                      profit,
+                      margin,
+                      pendingUnits,
+                      cancelledUnits,
+                      inventoryCost,
+                      inventoryValue,
+                      matchingOrders: matchingOrders.sort((a, b) => {
+                        const aT = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : (a.date ? new Date(a.date).getTime() : 0);
+                        const bT = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : (b.date ? new Date(b.date).getTime() : 0);
+                        return bT - aT;
+                      })
+                    };
+                  });
+
+                  // 4. Selected Product
+                  const selectedProduct = selectedReportProductId 
+                    ? allProductMetrics.find(p => p.id === selectedReportProductId) 
+                    : null;
+
+                  // 5. Search Results for Product Picker
+                  const searchResults = reportProductSearch.trim()
+                    ? allProductMetrics.filter(p => 
+                        p.name.toLowerCase().includes(reportProductSearch.toLowerCase()) || 
+                        p.category.toLowerCase().includes(reportProductSearch.toLowerCase()) ||
+                        (p.id && p.id.toLowerCase().includes(reportProductSearch.toLowerCase()))
+                      )
+                    : [];
+
+                  return (
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/40 font-sans">
+                      <div className="max-w-6xl mx-auto space-y-6">
+                        
+                        {/* Header & Timeframe Switcher */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-xs">
+                          <div className="flex items-center gap-3">
+                            <div className="p-3 bg-orange-500 text-white rounded-2xl shadow-md shadow-orange-500/20">
+                              <Activity size={24} />
+                            </div>
+                            <div>
+                              <h3 className="text-xl font-black text-gray-900">Reports & Analytics</h3>
+                              <p className="text-xs text-gray-500 font-bold">Product-wise Revenue, Cost, Profit & Stock Analytics</p>
+                            </div>
+                          </div>
+
+                          {/* Timeframe Filter Buttons */}
+                          <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1 self-start md:self-auto overflow-x-auto max-w-full">
+                            {[
+                              { id: "all", label: "All Time" },
+                              { id: "this_month", label: "This Month" },
+                              { id: "last_month", label: "Last Month" },
+                              { id: "this_year", label: "This Year" }
+                            ].map((tab) => (
+                              <button
+                                key={tab.id}
+                                onClick={() => setReportProductPeriod(tab.id as any)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                  reportProductPeriod === tab.id
+                                    ? "bg-white text-gray-900 shadow-xs"
+                                    : "text-gray-500 hover:text-gray-900"
+                                }`}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Top Store Overview Summary Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex flex-col justify-between gap-1 shadow-xs">
+                            <span className="text-xs font-bold text-blue-600">Total Orders</span>
+                            <span className="text-2xl font-black text-blue-900">{totalOrdersCount}</span>
+                          </div>
+                          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex flex-col justify-between gap-1 shadow-xs">
+                            <span className="text-xs font-bold text-emerald-600">Delivered Orders</span>
+                            <span className="text-2xl font-black text-emerald-900">{deliveredOrdersCount}</span>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex flex-col justify-between gap-1 shadow-xs">
+                            <span className="text-xs font-bold text-amber-600">Pending / Processing</span>
+                            <span className="text-2xl font-black text-amber-900">{pendingOrdersCount}</span>
+                          </div>
+                          <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 flex flex-col justify-between gap-1 shadow-xs">
+                            <span className="text-xs font-bold text-purple-600">Total Revenue</span>
+                            <span className="text-2xl font-black text-purple-900">৳{totalRevenue.toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        {/* ───────────────────────────────────────────────────────────── */}
+                        {/* 🔍 PRODUCT SEARCH & SELECTOR SECTION */}
+                        {/* ───────────────────────────────────────────────────────────── */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <h4 className="text-base font-black text-gray-900 flex items-center gap-2">
+                                <Search className="text-primary" size={18} /> Search Product & View Profit/Loss Report
+                              </h4>
+                              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                Search and select any product to inspect its individual revenue, buying cost, net profit, and stock
+                              </p>
+                            </div>
+                            {selectedProduct && (
+                              <button
+                                onClick={() => {
+                                  setSelectedReportProductId(null);
+                                  setReportProductSearch("");
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors self-start sm:self-auto"
+                              >
+                                <X size={14} /> Clear Filter
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Search Input Box */}
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <input
+                              type="text"
+                              value={reportProductSearch}
+                              onChange={(e) => setReportProductSearch(e.target.value)}
+                              placeholder="Search product by name, category or SKU (e.g. Handheld Fan, Power Bank)..."
+                              className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary focus:bg-white focus:border-transparent outline-none transition-all"
+                            />
+                            {reportProductSearch && (
+                              <button
+                                onClick={() => setReportProductSearch("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Search Results Dropdown List */}
+                          {reportProductSearch.trim() && (
+                            <div className="border border-gray-100 rounded-xl bg-gray-50/60 p-2 max-h-60 overflow-y-auto divide-y divide-gray-100">
+                              {searchResults.length === 0 ? (
+                                <p className="text-center py-4 text-xs text-gray-400 font-bold">No matching products found</p>
+                              ) : (
+                                searchResults.map((p) => (
+                                  <div
+                                    key={p.id}
+                                    onClick={() => {
+                                      setSelectedReportProductId(p.id);
+                                      setReportProductSearch("");
+                                    }}
+                                    className={`p-2.5 rounded-lg flex items-center justify-between gap-3 hover:bg-white cursor-pointer transition-all ${
+                                      selectedReportProductId === p.id ? "bg-white ring-1 ring-primary shadow-xs" : ""
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      {p.image ? (
+                                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover bg-white border border-gray-200 shrink-0" />
+                                      ) : (
+                                        <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center shrink-0">
+                                          <Package size={16} className="text-gray-400" />
+                                        </div>
+                                      )}
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-gray-900 truncate">{p.name}</p>
+                                        <p className="text-[11px] text-gray-500">
+                                          Sell: <span className="font-bold text-gray-800">৳{p.sellingPrice}</span> | 
+                                          Buy: <span className="font-bold text-gray-800">৳{p.buyingPrice}</span> | 
+                                          Stock: <span className={`font-black ${p.stock <= 5 ? "text-red-500" : "text-emerald-600"}`}>{p.stock} Units</span>
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button className="px-3 py-1 bg-primary text-white rounded-lg text-xs font-bold shrink-0">
+                                      Select
+                                    </button>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ───────────────────────────────────────────────────────────── */}
+                        {/* 🎯 SELECTED PRODUCT DEEP REPORT & FINANCIAL BREAKDOWN */}
+                        {/* ───────────────────────────────────────────────────────────── */}
+                        {selectedProduct ? (
+                          <div className="space-y-6">
+                            
+                            {/* Product Header Profile Card */}
+                            <div className="bg-white rounded-2xl border-2 border-primary/20 p-6 shadow-sm">
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 min-w-0">
+                                  {selectedProduct.image ? (
+                                    <img src={selectedProduct.image} alt={selectedProduct.name} className="w-16 h-16 rounded-2xl object-cover bg-gray-50 border border-gray-200 shrink-0" />
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center shrink-0">
+                                      <Package size={24} className="text-gray-400" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase bg-primary/10 text-primary">
+                                        {selectedProduct.category}
+                                      </span>
+                                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                                        selectedProduct.stock === 0
+                                          ? "bg-red-100 text-red-600"
+                                          : selectedProduct.stock <= 5
+                                          ? "bg-amber-100 text-amber-700"
+                                          : "bg-emerald-100 text-emerald-700"
+                                      }`}>
+                                        {selectedProduct.stock === 0 ? "🔴 Out of Stock" : selectedProduct.stock <= 5 ? `🟡 Low Stock (${selectedProduct.stock} Left)` : `🟢 In Stock (${selectedProduct.stock} Units)`}
+                                      </span>
+                                    </div>
+                                    <h4 className="text-lg font-black text-gray-900 mt-1 truncate">{selectedProduct.name}</h4>
+                                    <p className="text-xs text-gray-500 font-medium">
+                                      Selling Price: <span className="font-bold text-gray-900">৳{selectedProduct.sellingPrice.toLocaleString()}</span> | 
+                                      Buying Price: <span className="font-bold text-gray-900">৳{selectedProduct.buyingPrice.toLocaleString()}</span> | 
+                                      Est. Profit/Unit: <span className="font-bold text-emerald-600">৳{(selectedProduct.sellingPrice - selectedProduct.buyingPrice).toLocaleString()}</span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() => setSelectedReportProductId(null)}
+                                  className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs transition-colors shrink-0"
+                                >
+                                  Change Product
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 4 Major Financial Metric Cards (Income - Expense & Profit) */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              
+                              {/* 1. Revenue */}
+                              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col justify-between gap-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-gray-500">Total Sales Revenue</span>
+                                  <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><DollarSign size={16} /></div>
+                                </div>
+                                <div>
+                                  <p className="text-2xl font-black text-blue-600">৳{selectedProduct.revenue.toLocaleString()}</p>
+                                  <p className="text-[11px] text-gray-400 font-bold mt-0.5">From {selectedProduct.soldUnits} sold units</p>
+                                </div>
+                              </div>
+
+                              {/* 2. Buying Cost */}
+                              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col justify-between gap-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-gray-500">Total Buying Cost (COGS)</span>
+                                  <div className="p-2 bg-amber-50 text-amber-600 rounded-xl"><Tag size={16} /></div>
+                                </div>
+                                <div>
+                                  <p className="text-2xl font-black text-amber-600">৳{selectedProduct.cost.toLocaleString()}</p>
+                                  <p className="text-[11px] text-gray-400 font-bold mt-0.5">Cost of sold inventory</p>
+                                </div>
+                              </div>
+
+                              {/* 3. Gross Profit */}
+                              <div className="bg-white rounded-2xl border-2 border-emerald-500/30 bg-emerald-50/20 p-5 shadow-xs flex flex-col justify-between gap-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-black text-emerald-800">Gross Profit (Net Gain)</span>
+                                  <div className="p-2 bg-emerald-500 text-white rounded-xl shadow-xs"><TrendingUp size={16} /></div>
+                                </div>
+                                <div>
+                                  <p className="text-2xl font-black text-emerald-600">৳{selectedProduct.profit.toLocaleString()}</p>
+                                  <p className="text-[11px] text-emerald-700 font-bold mt-0.5">Profit Margin: {selectedProduct.margin}%</p>
+                                </div>
+                              </div>
+
+                              {/* 4. Current Stock & Inventory Cost */}
+                              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs flex flex-col justify-between gap-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-gray-500">Stock Remaining & Asset Value</span>
+                                  <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Package size={16} /></div>
+                                </div>
+                                <div>
+                                  <p className="text-2xl font-black text-purple-600">{selectedProduct.stock} Units Left</p>
+                                  <p className="text-[11px] text-gray-500 font-bold mt-0.5">Inventory Cost: ৳{selectedProduct.inventoryCost.toLocaleString()}</p>
+                                </div>
+                              </div>
+
+                            </div>
+
+                            {/* 4 Order Status Distribution Cards */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-gray-200">
+                              <div className="p-3 bg-gray-50 rounded-xl">
+                                <p className="text-[11px] text-gray-500 font-bold">✅ Delivered Units</p>
+                                <p className="text-lg font-black text-gray-900 mt-0.5">{selectedProduct.soldUnits} Units</p>
+                              </div>
+                              <div className="p-3 bg-gray-50 rounded-xl">
+                                <p className="text-[11px] text-gray-500 font-bold">⏳ Pending / Processing</p>
+                                <p className="text-lg font-black text-amber-600 mt-0.5">{selectedProduct.pendingUnits} Units</p>
+                              </div>
+                              <div className="p-3 bg-gray-50 rounded-xl">
+                                <p className="text-[11px] text-gray-500 font-bold">❌ Cancelled / Returned</p>
+                                <p className="text-lg font-black text-red-600 mt-0.5">{selectedProduct.cancelledUnits} Units</p>
+                              </div>
+                              <div className="p-3 bg-gray-50 rounded-xl">
+                                <p className="text-[11px] text-gray-500 font-bold">🏢 Potential Stock Revenue</p>
+                                <p className="text-lg font-black text-primary mt-0.5">৳{selectedProduct.inventoryValue.toLocaleString()}</p>
+                              </div>
+                            </div>
+
+                            {/* Recent Customer Orders for this Product */}
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                                <div>
+                                  <h4 className="text-sm font-bold text-gray-900">Recent Customer Orders for this Product</h4>
+                                  <p className="text-xs text-gray-400 font-medium">List of customer orders containing this specific product</p>
+                                </div>
+                                <span className="text-xs font-bold bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                                  {selectedProduct.matchingOrders.length} Total Orders
+                                </span>
+                              </div>
+
+                              {selectedProduct.matchingOrders.length === 0 ? (
+                                <div className="p-10 text-center text-gray-400 text-xs font-bold">
+                                  No orders recorded for this product in selected timeframe
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-left text-xs">
+                                    <thead>
+                                      <tr className="bg-gray-50 text-gray-500 font-bold border-b border-gray-100">
+                                        <th className="p-3.5">Order ID</th>
+                                        <th className="p-3.5">Customer Name & Phone</th>
+                                        <th className="p-3.5">Date</th>
+                                        <th className="p-3.5 text-center">Quantity</th>
+                                        <th className="p-3.5 text-right">Amount</th>
+                                        <th className="p-3.5 text-center">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 font-medium">
+                                      {selectedProduct.matchingOrders.slice(0, 15).map((o: any) => (
+                                        <tr key={o.id} className="hover:bg-gray-50/60 transition-colors">
+                                          <td className="p-3.5 font-mono font-bold text-primary">
+                                            #{String(o.id).slice(-6).toUpperCase()}
+                                          </td>
+                                          <td className="p-3.5">
+                                            <div className="flex flex-col">
+                                              <span className="font-bold text-gray-800">{o.customerName || "Customer"}</span>
+                                              <span className="text-gray-400 font-mono">{o.customerPhone || o.phone || "-"}</span>
+                                            </div>
+                                          </td>
+                                          <td className="p-3.5 text-gray-500 whitespace-nowrap">
+                                            {o.date || (o.createdAt?.seconds ? new Date(o.createdAt.seconds * 1000).toLocaleDateString() : "-")}
+                                          </td>
+                                          <td className="p-3.5 text-center font-bold text-gray-800">
+                                            {o.productQty || 1}
+                                          </td>
+                                          <td className="p-3.5 text-right font-black text-gray-900">
+                                            ৳{((o.productPrice || selectedProduct.sellingPrice) * (o.productQty || 1)).toLocaleString()}
+                                          </td>
+                                          <td className="p-3.5 text-center">
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                              o.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                              o.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                              o.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                              o.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                              'bg-gray-100 text-gray-700'
+                                            }`}>
+                                              {o.status}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+
+                          </div>
+                        ) : null}
+
+                        {/* ───────────────────────────────────────────────────────────── */}
+                        {/* 📊 ALL PRODUCTS PERFORMANCE SUMMARY TABLE */}
+                        {/* ───────────────────────────────────────────────────────────── */}
+                        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                          <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <h4 className="text-base font-black text-gray-900 flex items-center gap-2">
+                                <Layers className="text-orange-500" size={18} /> All Products Financial & Stock Summary
+                              </h4>
+                              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                Click 'View Report' on any product to see complete profit, cost, and order breakdown
+                              </p>
+                            </div>
+                            <span className="text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1 rounded-xl self-start sm:self-auto">
+                              {allProductMetrics.length} Total Products
+                            </span>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-gray-50/80 text-gray-500 font-bold border-b border-gray-200 uppercase tracking-wider">
+                                  <th className="p-3.5">Product</th>
+                                  <th className="p-3.5 text-right">Buying Price</th>
+                                  <th className="p-3.5 text-right">Selling Price</th>
+                                  <th className="p-3.5 text-center">Current Stock</th>
+                                  <th className="p-3.5 text-center">Sold Units</th>
+                                  <th className="p-3.5 text-right">Total Revenue</th>
+                                  <th className="p-3.5 text-right">Total Cost</th>
+                                  <th className="p-3.5 text-right">Net Profit</th>
+                                  <th className="p-3.5 text-center">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 font-medium">
+                                {allProductMetrics
+                                  .sort((a, b) => b.soldUnits - a.soldUnits || b.profit - a.profit)
+                                  .map((p) => (
+                                    <tr 
+                                      key={p.id} 
+                                      className={`hover:bg-orange-50/30 transition-colors ${selectedReportProductId === p.id ? "bg-orange-50/50" : ""}`}
+                                    >
+                                      <td className="p-3.5">
+                                        <div className="flex items-center gap-3 min-w-[200px] max-w-xs">
+                                          {p.image ? (
+                                            <img src={p.image} alt={p.name} className="w-10 h-10 rounded-xl object-cover bg-white border border-gray-200 shrink-0" />
+                                          ) : (
+                                            <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                                              <Package size={16} className="text-gray-400" />
+                                            </div>
+                                          )}
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-gray-900 text-xs truncate">{p.name}</p>
+                                            <p className="text-[10px] text-gray-400">{p.category}</p>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="p-3.5 text-right font-bold text-gray-700">
+                                        ৳{p.buyingPrice.toLocaleString()}
+                                      </td>
+                                      <td className="p-3.5 text-right font-bold text-gray-900">
+                                        ৳{p.sellingPrice.toLocaleString()}
+                                      </td>
+                                      <td className="p-3.5 text-center">
+                                        <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                                          p.stock === 0 
+                                            ? "bg-red-100 text-red-700" 
+                                            : p.stock <= 5 
+                                            ? "bg-amber-100 text-amber-700" 
+                                            : "bg-emerald-100 text-emerald-700"
+                                        }`}>
+                                          {p.stock === 0 ? "0 Units" : `${p.stock} Units`}
+                                        </span>
+                                      </td>
+                                      <td className="p-3.5 text-center font-black text-gray-900">
+                                        {p.soldUnits}
+                                      </td>
+                                      <td className="p-3.5 text-right font-bold text-blue-700">
+                                        ৳{p.revenue.toLocaleString()}
+                                      </td>
+                                      <td className="p-3.5 text-right font-bold text-amber-700">
+                                        ৳{p.cost.toLocaleString()}
+                                      </td>
+                                      <td className="p-3.5 text-right">
+                                        <span className={`font-black ${p.profit > 0 ? "text-emerald-600" : p.profit < 0 ? "text-red-600" : "text-gray-400"}`}>
+                                          ৳{p.profit.toLocaleString()}
+                                        </span>
+                                      </td>
+                                      <td className="p-3.5 text-center">
+                                        <button
+                                          onClick={() => {
+                                            setSelectedReportProductId(p.id);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                          }}
+                                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                                            selectedReportProductId === p.id
+                                              ? "bg-orange-500 text-white shadow-orange-500/20"
+                                              : "bg-gray-100 hover:bg-orange-500 hover:text-white text-gray-700"
+                                          }`}
+                                        >
+                                          {selectedReportProductId === p.id ? "Selected" : "View Report"}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── Low Stock Tab ── */}
+                {adminTab === "low_stock" && (
+                  <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/30 font-sans">
+                    <div className="max-w-4xl mx-auto">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-yellow-100 text-yellow-600 rounded-xl"><AlertCircle size={22} /></div>
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">Low Stock Products</h3>
+                          <p className="text-xs text-gray-400 font-bold">Products with total stock ≤ 5 units</p>
+                        </div>
+                      </div>
+                      {products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length === 0 ? (
+                        <div className="text-center py-20 text-gray-400 font-bold">
+                          <CheckCircle size={48} className="mx-auto mb-4 opacity-20 text-green-500" />
+                          <p>All products have sufficient stock</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {products
+                            .filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5)
+                            .sort((a: any, b: any) => getEffectiveStock(a) - getEffectiveStock(b))
+                            .map((p: any) => {
+                              const effStock = getEffectiveStock(p);
+                              return (
+                                <div key={p.id} className="bg-white rounded-2xl border border-yellow-100 p-4 flex items-center gap-4 shadow-sm">
+                                  {p.image && <img src={p.image} alt={p.name} className="w-12 h-12 rounded-xl object-cover shrink-0" />}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-gray-900 text-sm truncate">{p.name}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <p className="text-xs text-gray-400">{p.category}</p>
+                                      {p.variants && p.variants.length > 0 && (
+                                        <span className="text-[10px] text-gray-500 font-medium">
+                                          ({p.variants.map((v: any) => `${v.name || 'Variant'}: ${v.stock || 0}`).join(", ")})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className={`shrink-0 px-3 py-1.5 rounded-xl text-sm font-black ${effStock === 0 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>
+                                    {effStock === 0 ? "Out of Stock" : `${effStock} Left`}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── POS Tab ── */}
+                {adminTab === "pos" && (
+                  <div className="flex-1 overflow-y-auto bg-gray-50/40">
+                    <POS
+                      products={products}
+                      categories={categories}
+                      siteConfig={siteConfig}
+                      orderHistory={orderHistory}
+                      handlePrintInvoice={handlePrintInvoice}
+                      smsTemplateStart={siteConfig?.smsTemplateStart}
+                      smsTemplateEnd={siteConfig?.smsTemplateEnd}
+                      isSmsConfirmEnabled={siteConfig?.isSmsConfirmEnabled}
+                    />
+                  </div>
+                )}
+                {adminTab === "deleted_orders" && (
+                  <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/30 font-sans">
+                    <div className="w-full">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-red-100 text-red-600 rounded-xl"><Trash2 size={20} /></div>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900">Deleted Orders (মুছে যাওয়া অর্ডারসমূহ)</h3>
+                            <p className="text-xs text-gray-400 font-medium">Deleted Orders — restore or permanently delete ({deletedOrders?.length || 0})</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {(!deletedOrders || deletedOrders.length === 0) ? (
+                        <div className="text-center py-16 text-gray-400 font-bold bg-white rounded-2xl border border-gray-100 p-8 shadow-xs">
+                          <Trash2 size={40} className="mx-auto mb-3 opacity-20 text-red-500" />
+                          <p>No deleted orders found</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {deletedOrders.map((order: any) => {
+                            const customerName = order.customerName || order.name || order.customer?.name || "Customer";
+                            const customerPhone = (order.customerPhone || order.phone || order.customer?.phone || "").trim();
+                            const address = order.customerAddress || order.address || "";
+                            const orderIdShort = String(order.id || "").slice(-6).toUpperCase();
+                            const dateStr = order.date || (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' }) : "");
+                            const items = Array.isArray(order.items) ? order.items : [];
+
+                            return (
+                              <div
+                                key={order.id}
+                                className="bg-white rounded-xl border border-red-100/80 p-2.5 sm:p-3 shadow-xs hover:border-red-200 hover:shadow-sm transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                              >
+                                {/* Left Info: ID, Date, Customer & Phone */}
+                                <div className="flex flex-wrap items-center gap-3 min-w-0 lg:w-[40%]">
+                                  {/* ID & Date */}
+                                  <div className="shrink-0 flex items-center gap-1.5">
+                                    <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      <Trash2 size={11} /> DELETED
+                                    </span>
+                                    <span className="text-xs font-black text-gray-800 tracking-wide">#{orderIdShort}</span>
+                                  </div>
+
+                                  {/* Customer Name & Phone */}
+                                  <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                                    <div className="flex items-center gap-1 text-gray-900 font-bold text-xs truncate max-w-[140px]">
+                                      <User size={13} className="text-gray-400 shrink-0" />
+                                      <span className="truncate" title={customerName}>{customerName}</span>
+                                    </div>
+
+                                    {customerPhone && (
+                                      <div className="flex items-center gap-1">
+                                        <a
+                                          href={`tel:${customerPhone}`}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md text-[11px] font-bold tracking-tight transition-colors"
+                                          title="Call Customer"
+                                        >
+                                          <Phone size={10} /> {customerPhone}
+                                        </a>
+                                        <a
+                                          href={`https://wa.me/880${customerPhone.startsWith('0') ? customerPhone.substring(1) : customerPhone}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                                          title="WhatsApp"
+                                        >
+                                          <MessageCircle size={13} />
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(customerPhone);
+                                            toast.success("Phone copied");
+                                          }}
+                                          className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                          title="Copy Phone"
+                                        >
+                                          <Copy size={11} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Address snippet */}
+                                  {address && (
+                                    <div className="w-full text-[11px] text-gray-500 truncate flex items-center gap-1">
+                                      <MapPin size={11} className="text-gray-400 shrink-0" />
+                                      <span className="truncate" title={address}>{address}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Middle: Product Thumbnails & Summary */}
+                                <div className="flex items-center gap-2 min-w-0 lg:w-[35%] overflow-x-auto no-scrollbar py-0.5">
+                                  {items.length === 0 ? (
+                                    <span className="text-[11px] text-gray-400 italic">No products</span>
+                                  ) : (
+                                    items.map((item: any, idx: number) => {
+                                      const matchedProd = products.find((p: any) => p.id === item.product?.id || p.id === item.id || p.name === (item.product?.name || item.name));
+                                      const itemImg = item.product?.image || item.image || matchedProd?.image || "";
+                                      const itemName = item.product?.name || item.name || "Product";
+                                      const itemQty = Number(item.quantity) || 1;
+                                      const itemPrice = Number(item.price || item.product?.price || 0);
+
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center gap-2 bg-gray-50/80 border border-gray-200/70 rounded-lg px-2 py-1 shrink-0 max-w-[240px]"
+                                          title={`${itemName} (Qty: ${itemQty})`}
+                                        >
+                                          {itemImg ? (
+                                            <img
+                                              src={itemImg}
+                                              alt={itemName}
+                                              className="w-8 h-8 object-cover rounded bg-white border border-gray-200 shrink-0"
+                                            />
+                                          ) : (
+                                            <div className="w-8 h-8 rounded bg-gray-200 flex items-center justify-center text-gray-400 shrink-0">
+                                              <Package size={14} />
+                                            </div>
+                                          )}
+                                          <div className="min-w-0">
+                                            <p className="text-[11px] font-bold text-gray-800 truncate">{itemName}</p>
+                                            <div className="flex items-center gap-1.5 text-[10px]">
+                                              <span className="font-bold text-primary">৳{itemPrice}</span>
+                                              <span className="text-gray-500 font-bold">×{itemQty}</span>
+                                              {(item.color || item.size) && (
+                                                <span className="text-gray-400 truncate">
+                                                  ({[item.color, item.size].filter(Boolean).join("/")})
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+
+                                {/* Right: Total Amount & Action Buttons */}
+                                <div className="flex items-center justify-between lg:justify-end gap-3 shrink-0 lg:w-[22%] pt-1 lg:pt-0 border-t lg:border-t-0 border-gray-100">
+                                  <div className="text-left lg:text-right">
+                                    <div className="text-sm font-black text-gray-900 leading-tight">
+                                      ৳{(Number(order.total) || 0).toLocaleString()}
+                                    </div>
+                                    {dateStr && <div className="text-[10px] text-gray-400">{dateStr}</div>}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => restoreOrder?.(order.id || order)}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-2xs cursor-pointer"
+                                      title="Restore Order"
+                                    >
+                                      <RotateCcw size={12} /> <span>Restore</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (window.confirm("এই অর্ডারটি স্থায়ীভাবে মুছে ফেলবেন? এটি আর ফিরিয়ে আনা যাবে না।")) {
+                                          permanentDeleteOrder?.(order.id);
+                                        }
+                                      }}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-2xs cursor-pointer"
+                                      title="Permanent Delete"
+                                    >
+                                      <Trash2 size={12} /> <span className="hidden xl:inline">Permanent Delete</span><span className="xl:hidden">Delete</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
                 {adminTab === "settings" && (
                   <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
@@ -4307,6 +5351,112 @@ export default function AdminPanel(props: AdminPanelProps) {
                             ))}
                           </div>
                         </div>
+
+                      {/* Promo Popup Banner Management */}
+                      <div className="mt-8 pt-8 border-t border-gray-100">
+                        <h5 className="font-bold text-secondary text-base mb-6 flex items-center gap-2">
+                          <ImageIcon size={20} className="text-primary" /> প্রমোশনাল পপআপ ব্যানার (Promo Popup Banner)
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="space-y-5">
+                            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${siteConfig?.promoPopupEnabled ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                  <Eye size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-gray-900">পপআপ ব্যানার অন/অফ</p>
+                                  <p className="text-[10px] text-gray-400 font-bold">হোমপেজে পপআপ অফার শো করতে এটি অন রাখুন</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSiteConfig(prev => prev ? {...prev, promoPopupEnabled: !prev.promoPopupEnabled} : null)}
+                                className={`w-12 h-6 rounded-full transition-all relative ${siteConfig?.promoPopupEnabled ? 'bg-primary' : 'bg-gray-400'}`}
+                              >
+                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${siteConfig?.promoPopupEnabled ? 'left-7' : 'left-1'}`} />
+                              </button>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
+                                পপআপ ইমেজ URL (Promo Image URL)
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={siteConfig?.promoPopupImage || ""}
+                                  onChange={(e) => setSiteConfig(prev => prev ? {...prev, promoPopupImage: e.target.value} : null)}
+                                  className="flex-1 bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                                  placeholder="e.g. https://example.com/banner.jpg"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.createElement('input');
+                                    input.type = 'file';
+                                    input.accept = 'image/*';
+                                    input.onchange = async (e: any) => {
+                                      const file = (e.target as HTMLInputElement)?.files?.[0];
+                                      if (file) {
+                                        try {
+                                          toast.loading("ছবি আপলোড হচ্ছে...");
+                                          const url = await handleAdminImageUpload(file);
+                                          setSiteConfig(prev => prev ? {...prev, promoPopupImage: url} : null);
+                                          toast.dismiss();
+                                          toast.success("ছবি সফলভাবে আপলোড হয়েছে!");
+                                        } catch (err) {
+                                          toast.dismiss();
+                                          toast.error("আপলোড ব্যর্থ হয়েছে।");
+                                        }
+                                      }
+                                    };
+                                    input.click();
+                                  }}
+                                  className="bg-primary/10 text-primary font-bold px-4 rounded-xl hover:bg-primary/20 transition-all text-xs whitespace-nowrap"
+                                >
+                                  আপলোড করুন
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 tracking-widest">
+                                রিডাইরেক্ট লিংক (Redirect Link - ঐচ্ছিক)
+                              </label>
+                              <input
+                                type="text"
+                                value={siteConfig?.promoPopupLink || ""}
+                                onChange={(e) => setSiteConfig(prev => prev ? {...prev, promoPopupLink: e.target.value} : null)}
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary text-sm font-bold"
+                                placeholder="e.g. /product/product-id-here"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSaveSiteConfig(siteConfig)}
+                              className="w-full bg-secondary hover:bg-black text-white font-bold py-4 px-6 rounded-xl transition-all active:scale-95 text-xs uppercase"
+                            >
+                              পপআপ কনফিগারেশন সেভ করুন
+                            </button>
+                          </div>
+
+                          {/* Preview container */}
+                          <div className="flex flex-col items-center justify-center border border-dashed border-gray-200 rounded-3xl p-6 bg-gray-50/50">
+                            <h6 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-4">পপআপ প্রিভিউ (Popup Preview)</h6>
+                            {siteConfig?.promoPopupImage ? (
+                              <div className="relative w-full max-w-[200px] aspect-[4/5] bg-white rounded-2xl shadow-md overflow-hidden border border-gray-100">
+                                <img src={siteConfig.promoPopupImage} className="w-full h-full object-cover" />
+                                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/40 text-white flex items-center justify-center text-[10px] pointer-events-none">✕</div>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-400 font-bold">ছবি আপলোড করার পর এখানে প্রিভিউ দেখা যাবে</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       </div>
                     </div>
                     )}

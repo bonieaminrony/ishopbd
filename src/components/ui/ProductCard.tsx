@@ -23,8 +23,8 @@ const ProductCard = React.memo(({
   const isOutOfStock =
     !product.isComingSoon &&
     (product.variants && product.variants.length > 0
-      ? product.variants.every((v) => (v.stock || 0) <= 0)
-      : (product.stock || 0) <= 0);
+      ? product.variants.every((v) => (Number(v.stock) || 0) <= 0)
+      : (product.stock !== undefined && product.stock !== null ? Number(product.stock) <= 0 : false));
 
   return (
     <motion.div
@@ -37,11 +37,15 @@ const ProductCard = React.memo(({
         onClick={() => openProductDetails(product)}
       >
         <img
-          src={product.image}
+          src={product.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop"}
           alt={product.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop";
+          }}
         />
 
         {/* Discount Badge */}

@@ -40,12 +40,16 @@ async function generateSitemap() {
       const p = doc.data();
       if (!p.name) return;
       const slug = slugify(p.name);
+      let imgUrl = p.image || null;
+      if (imgUrl && imgUrl.startsWith('data:')) {
+        imgUrl = null;
+      }
       urls.push({
-        loc: `${SITE_URL}/?p=${doc.id}&slug=${slug}`,
+        loc: `${SITE_URL}/?p=${doc.id}&amp;slug=${slug}`,
         changefreq: 'weekly',
         priority: '0.9',
         lastmod: TODAY,
-        image: p.image || null,
+        image: imgUrl,
         imageName: p.name || null
       });
     });
@@ -88,8 +92,9 @@ async function generateSitemap() {
     xmlLines.push(`    <changefreq>${u.changefreq}</changefreq>`);
     xmlLines.push(`    <priority>${u.priority}</priority>`);
     if (u.image) {
+      const safeImageUrl = u.image.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       xmlLines.push('    <image:image>');
-      xmlLines.push(`      <image:loc>${u.image}</image:loc>`);
+      xmlLines.push(`      <image:loc>${safeImageUrl}</image:loc>`);
       if (u.imageName) xmlLines.push(`      <image:title>${u.imageName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</image:title>`);
       xmlLines.push('    </image:image>');
     }

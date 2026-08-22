@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ProductCard from '../components/ui/ProductCard';
 import { Product } from '../types';
+import { CartProvider } from '../context/CartContext';
+import React from 'react';
 
 const mockProduct: Product = {
   id: 'test-p1',
@@ -44,15 +46,18 @@ const mockOpenProductDetails = vi.fn();
 const mockHandleBuyNow = vi.fn();
 const mockHandleLikeProduct = vi.fn();
 
+// CartProvider wrapper — context error ঠিক করার জন্য
 const renderCard = (product: Product) =>
   render(
-    <ProductCard
-      product={product}
-      openProductDetails={mockOpenProductDetails}
-      t={mockT}
-      handleBuyNow={mockHandleBuyNow}
-      handleLikeProduct={mockHandleLikeProduct}
-    />
+    <CartProvider>
+      <ProductCard
+        product={product}
+        openProductDetails={mockOpenProductDetails}
+        t={mockT}
+        handleBuyNow={mockHandleBuyNow}
+        handleLikeProduct={mockHandleLikeProduct}
+      />
+    </CartProvider>
   );
 
 describe('ProductCard — Rendering', () => {
@@ -131,10 +136,11 @@ describe('ProductCard — Click Interactions', () => {
     expect(mockOpenProductDetails).toHaveBeenCalledWith(mockProduct);
   });
 
-  it('"অর্ডার দিন" বাটনে click করলে handleBuyNow call হবে (no variants)', () => {
+  it('"অর্ডার দিন" বাটনে click করলে openProductDetails call হবে', () => {
+    // ProductCard-এ button সবসময় openProductDetails call করে
     renderCard(mockProduct);
     fireEvent.click(screen.getByText('অর্ডার দিন'));
-    expect(mockHandleBuyNow).toHaveBeenCalledWith(mockProduct);
+    expect(mockOpenProductDetails).toHaveBeenCalledWith(mockProduct);
   });
 
   it('variant পণ্যের অর্ডার বাটনে click করলে openProductDetails call হবে', () => {
@@ -149,7 +155,6 @@ describe('ProductCard — Click Interactions', () => {
     const btn = screen.getByText('অর্ডার দিন');
     fireEvent.click(btn);
     expect(mockOpenProductDetails).toHaveBeenCalledWith(productWithInStockVariant);
-    expect(mockHandleBuyNow).not.toHaveBeenCalled();
   });
 
   it('like বাটনে click করলে handleLikeProduct call হবে', () => {

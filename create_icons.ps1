@@ -1,4 +1,4 @@
-﻿Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Drawing
  = [System.Drawing.Image]::FromFile('public/logo.png')
  = [Math]::Max(.Width, .Height)
 
@@ -25,5 +25,9 @@ function Save-SquareIcon(, ) {
 
 Save-SquareIcon 'public/icon-512x512.png' 512
 Save-SquareIcon 'public/icon-192x192.png' 192
+Save-SquareIcon 'public/icon-144x144.png' 144
+Save-SquareIcon 'public/icon-96x96.png' 96
+Save-SquareIcon 'public/icon-48x48.png' 48
+Save-SquareIcon 'public/favicon.ico' 48
 
 .Dispose()
