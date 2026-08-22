@@ -518,7 +518,7 @@ function App() {
             console.warn("API call failed:", e);
           }
           try {
-            const productNames = newOrder.items.map((i: any) => i.product.smsName || i.product.name).join(', ');
+            const productNames = newOrder.items.map((i: any) => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
             const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${newOrder.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
             fetch("/api/send-sms", {
               method: "POST",
@@ -696,7 +696,7 @@ function App() {
           } catch(e) {}
           
           try {
-            const productNames = orderData.items.map((i: any) => i.product.smsName || i.product.name).join(', ');
+            const productNames = orderData.items.map((i: any) => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
             const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderData.orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${orderData.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
             fetch("/api/send-sms", {
               method: "POST",

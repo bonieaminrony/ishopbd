@@ -596,7 +596,7 @@ export default function POS({
       const cleanPhone = customerPhone.replace(/\D/g, '');
       if (isSmsConfirmEnabled !== false && cleanPhone.length >= 11 && !cleanPhone.startsWith('01000000000')) {
         try {
-          const productNames = itemsForDb.map(i => i.product.smsName || i.product.name).join(', ');
+          const productNames = itemsForDb.map(i => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
           const start = (smsTemplateStart || '').trim() || 'প্রিয় গ্রাহক, আপনার কেনাকাটা সম্পন্ন হয়েছে';
           const end = (smsTemplateEnd || '').trim() || 'iShop BD থেকে কেনাকাটার জন্য ধন্যবাদ!';
           const message = `${start}\n${productNames}\nঅর্ডার নাম্বার: #${shortId}\nমোট বিল: ৳${total}\n${end}`;
