@@ -177,3 +177,45 @@ export const findProductBySlugOrId = (products: any[], slugOrId: string): any =>
 
   return null;
 };
+
+export const getCategorySlug = (category: any): string => {
+  const name = typeof category === 'string' ? category : (category?.name || '');
+  return slugify(name);
+};
+
+export const getCategoryPath = (category: any): string => {
+  const slug = getCategorySlug(category);
+  return slug ? `/category/${slug}` : '/';
+};
+
+export const findCategoryBySlug = (categories: any[], slug: string): any => {
+  if (!categories || !Array.isArray(categories) || !slug) return null;
+  const decoded = decodeURIComponent(slug).trim().toLowerCase();
+  
+  // 1. Direct name match
+  let found = categories.find(c => {
+    const name = (typeof c === 'string' ? c : c?.name || '').toLowerCase();
+    return name === decoded;
+  });
+  if (found) return found;
+
+  // 2. Slugified name match
+  found = categories.find(c => {
+    const name = typeof c === 'string' ? c : c?.name || '';
+    return slugify(name).toLowerCase() === decoded;
+  });
+  if (found) return found;
+
+  // 3. Keyword / synonym match for Bengali / English searches
+  found = categories.find(c => {
+    const name = (typeof c === 'string' ? c : c?.name || '').toLowerCase();
+    if (decoded.includes('fan') && name.includes('fan')) return true;
+    if ((decoded.includes('power') || decoded.includes('bank')) && (name.includes('power') || name.includes('bank'))) return true;
+    if (decoded.includes('watch') && name.includes('watch')) return true;
+    if ((decoded.includes('headphone') || decoded.includes('earbud') || decoded.includes('earphone')) && name.includes('headphone')) return true;
+    return false;
+  });
+  if (found) return found;
+
+  return null;
+};

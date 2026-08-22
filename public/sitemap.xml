@@ -4,10 +4,48 @@
   xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 
   <url>
-    <loc>https://ishopbd.com</loc>
-    <lastmod>2026-08-20</lastmod>
+    <loc>https://ishopbd.com/</loc>
+    <lastmod>2026-08-23</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
+  </url>
+
+  <!-- High-Priority Category Landing Pages -->
+  <url>
+    <loc>https://ishopbd.com/category/charger-fan</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://ishopbd.com/category/power-bank</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://ishopbd.com/category/smart-watch</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://ishopbd.com/category/headphone</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://ishopbd.com/category/mobile-accessories</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
+    <loc>https://ishopbd.com/category/lifestyle-watch</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
   </url>
 
   <url>

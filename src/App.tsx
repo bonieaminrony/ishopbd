@@ -168,7 +168,7 @@ import { ProductSkeleton } from './components/ProductSkeleton';
 import { ProductCard } from './components/ProductCard';
 import ZoomableImage from './components/ui/ZoomableImage';
 import toast, { Toaster } from 'react-hot-toast';
-import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, findProductBySlugOrId, slugify } from './utils/helpers';
+import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug } from './utils/helpers';
 import { FlashSaleCountdown } from './components/FlashSaleCountdown';
 import { useUIContext } from './context/UIContext';
 import { useAuthContext } from './context/AuthContext';
@@ -2650,11 +2650,24 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   useEffect(() => {
     if (isQuotaExceeded) return;
     
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = window.location.pathname;
+    let categorySlug = urlParams.get('category') || urlParams.get('cat');
+    if (!categorySlug && path.startsWith('/category/')) {
+      categorySlug = path.replace(/^\/category\//, '').split('/')[0];
+    } else if (!categorySlug && path.startsWith('/c/')) {
+      categorySlug = path.replace(/^\/c\//, '').split('/')[0];
+    }
+
     const isAdminUser = isMasterAdmin || isAdmin;
     if (!isAdminUser) {
       getDocs(collection(db, "categories")).then(snap => {
         const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
         setCategories(data);
+        if (categorySlug) {
+          const matched = findCategoryBySlug(data, categorySlug);
+          if (matched) setSelectedCategory(matched.name);
+        }
         try {
           localStorage.setItem("cached_categories", JSON.stringify(data));
         } catch (e) {
@@ -2673,8 +2686,6 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const cachedProducts = localStorage.getItem("cached_products");
       const lastFetch = localStorage.getItem("products_last_fetch");
       const now = Date.now();
-      const urlParams = new URLSearchParams(window.location.search);
-      const path = window.location.pathname;
       let productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing') || urlParams.get('id');
       if (!productId && path.startsWith('/product/')) {
         productId = path.replace(/^\/product\//, '');
@@ -2881,61 +2892,6 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         });
     }
   }, [siteConfig?.productsUpdatedAt]);
-  // Listen for browser back/forward buttons (popstate)
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const productId = urlParams.get("p") || urlParams.get("product") || urlParams.get("landing");
-      const isCheckout = urlParams.get("checkout") === "true";
-      
-      // Update checkout state
-      if (isCheckout) {
-        setIsCheckoutOpen(true);
-      } else {
-        setIsCheckoutOpen(false);
-      }
-
-      // Update product details state
-      if (productId) {
-        const prod = products.find((p) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-        if (prod) {
-          setSelectedProduct(prod);
-          setIsProductDetailsOpen(true);
-        } else {
-          setSelectedProduct(null);
-          setIsProductDetailsOpen(false);
-        }
-      } else {
-        setSelectedProduct(null);
-        setIsProductDetailsOpen(false);
-      }
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    
-    // Initial sync on page load (deep linking)
-    if (products.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const productId = urlParams.get("p") || urlParams.get("product") || urlParams.get("landing");
-      const isCheckout = urlParams.get("checkout") === "true";
-      
-      if (productId) {
-        const prod = products.find((p) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-        if (prod) {
-          setSelectedProduct(prod);
-          setIsProductDetailsOpen(true);
-        }
-      }
-      if (isCheckout) {
-        setIsCheckoutOpen(true);
-      }
-    }
-
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [products]);
-
   // Synchronize URL and History when React State changes (User actions)
   useEffect(() => {
     if (products.length === 0) return;
@@ -2951,12 +2907,17 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       if (path !== targetPath || isCheckoutParam || window.location.search.includes('p=')) {
         window.history.pushState({ p: selectedProduct.id }, "", targetPath);
       }
+    } else if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "All") {
+      const targetPath = getCategoryPath(selectedCategory);
+      if (path !== targetPath || isCheckoutParam || window.location.search.includes('category=')) {
+        window.history.pushState({ category: selectedCategory }, "", targetPath);
+      }
     } else {
-      if (path.startsWith("/product/") || path.startsWith("/p/") || isCheckoutParam || window.location.search.includes('p=') || window.location.search.includes('product=')) {
+      if (path.startsWith("/category/") || path.startsWith("/c/") || path.startsWith("/product/") || path.startsWith("/p/") || isCheckoutParam || window.location.search.includes('p=') || window.location.search.includes('product=') || window.location.search.includes('category=')) {
         window.history.pushState({}, "", "/");
       }
     }
-  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, products.length]);
+  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, products.length]);
 
   // Handle browser Back / Forward buttons smoothly
   useEffect(() => {
@@ -2971,6 +2932,13 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         productId = path.replace(/^\/p\//, "");
       }
 
+      let categoryParam = urlParams.get("category") || urlParams.get("cat");
+      if (!categoryParam && path.startsWith("/category/")) {
+        categoryParam = path.replace(/^\/category\//, "").split("/")[0];
+      } else if (!categoryParam && path.startsWith("/c/")) {
+        categoryParam = path.replace(/^\/c\//, "").split("/")[0];
+      }
+
       if (isCheckout) {
         setIsCheckoutOpen(true);
         setIsProductDetailsOpen(false);
@@ -2981,15 +2949,25 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           setIsProductDetailsOpen(true);
           setIsCheckoutOpen(false);
         }
+      } else if (categoryParam && categories.length > 0) {
+        const matchedCat = findCategoryBySlug(categories, categoryParam);
+        if (matchedCat) {
+          setSelectedCategory(matchedCat.name);
+          setIsProductDetailsOpen(false);
+          setIsCheckoutOpen(false);
+        }
       } else {
         setIsProductDetailsOpen(false);
         setIsCheckoutOpen(false);
+        if (path === "/" && selectedCategory !== "all" && selectedCategory !== "All") {
+          setSelectedCategory("all");
+        }
       }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [products]);
+  }, [products, categories, selectedCategory]);
   const [adminTab, setAdminTab] = useState<
     "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
   >("orders");
@@ -6803,6 +6781,24 @@ const handleSaveQuickEdit = async () => {
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden relative">
+      <Helmet>
+        {selectedCategory && selectedCategory !== "all" && selectedCategory !== "All" ? (
+          <>
+            <title>{`${selectedCategory} Price in Bangladesh - ${selectedCategory} কিনুন সেরা দামে | i SHOP BD`}</title>
+            <meta name="description" content={`সেরা দামে আসল ${selectedCategory} কিনুন i SHOP BD থেকে। 100% অথেনটিক গ্যাজেট, অফিসিয়াল ওয়ারেন্টি ও ক্যাশ অন হোম ডেলিভারি!`} />
+            <link rel="canonical" href={`https://ishopbd.com${getCategoryPath(selectedCategory)}`} />
+            <meta property="og:title" content={`${selectedCategory} Price in Bangladesh | i SHOP BD`} />
+            <meta property="og:description" content={`সেরা দামে আসল ${selectedCategory} কিনুন i SHOP BD থেকে। 100% অথেনটিক গ্যাজেট ও ক্যাশ অন হোম ডেলিভারি!`} />
+            <meta property="og:url" content={`https://ishopbd.com${getCategoryPath(selectedCategory)}`} />
+          </>
+        ) : (
+          <>
+            <title>i SHOP BD (আই শপ বিডি) - Online Gadgets, Charger Fan & Electronics Shopping in BD</title>
+            <meta name="description" content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের বিশ্বস্ত গ্যাজেট ও ইলেকট্রনিক্স শপ। চার্জার ফ্যান, পাওয়ার ব্যাংক, স্মার্ট ওয়াচ, হেডফোন সহ প্রিমিয়াম গ্যাজেট সেরা দামে কিনুন।" />
+            <link rel="canonical" href="https://ishopbd.com/" />
+          </>
+        )}
+      </Helmet>
       <Toaster position="top-right" reverseOrder={false} />
       {/* Bulk Action Floating Bar */}
       <AnimatePresence>
@@ -7217,9 +7213,11 @@ const handleSaveQuickEdit = async () => {
                 {t("সবগুলো", "All")}
               </button>
               {categories.map((cat) => (
-                <button
+                <a
                   key={cat.id}
-                  onClick={() => {
+                  href={getCategoryPath(cat.name)}
+                  onClick={(e) => {
+                    e.preventDefault();
                     setSelectedCategory(cat.name);
                     setSelectedSubcategory("all");
                     setCurrentPage(1);
@@ -7229,7 +7227,7 @@ const handleSaveQuickEdit = async () => {
                   className={`cursor-pointer whitespace-nowrap text-sm font-medium transition-all px-3 py-1 rounded-full ${selectedCategory === cat.name ? "bg-primary text-white shadow-sm" : "text-gray-600 bg-gray-100 hover:bg-gray-200"}`}
                 >
                   {tc(cat.name)}
-                </button>
+                </a>
               ))}
             </div>
           </div>
@@ -7305,8 +7303,10 @@ const handleSaveQuickEdit = async () => {
                 const subcats = cat.subcategories || [];
                 return (
                   <div key={cat.id} className="flex-1 relative group flex">
-                    <button
-                      onClick={() => {
+                    <a
+                      href={getCategoryPath(cat.name)}
+                      onClick={(e) => {
+                        e.preventDefault();
                         setSelectedCategory(cat.name);
                         setSelectedSubcategory("all");
                         setCurrentPage(1);
@@ -7323,13 +7323,15 @@ const handleSaveQuickEdit = async () => {
                       {subcats.length > 0 && (
                         <ChevronDown size={14} className="transition-transform group-hover:rotate-180 duration-300" />
                       )}
-                    </button>
+                    </a>
                     
                     {subcats.length > 0 && (
                       <div className="absolute left-1/2 -translate-x-1/2 top-full pt-2 w-56 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300 ease-out z-[999]">
                         <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-gray-100 shadow-xl p-2.5 flex flex-col gap-1 ring-1 ring-black/5">
-                          <button
-                            onClick={() => {
+                          <a
+                            href={getCategoryPath(cat.name)}
+                            onClick={(e) => {
+                              e.preventDefault();
                               setSelectedCategory(cat.name);
                               setSelectedSubcategory("all");
                               setCurrentPage(1);
@@ -7343,7 +7345,7 @@ const handleSaveQuickEdit = async () => {
                             }`}
                           >
                             All {tc(cat.name)}
-                          </button>
+                          </a>
                           <div className="h-[1px] bg-gray-100 my-1" />
                           {subcats.map((sub, sIdx) => (
                             <button

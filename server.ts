@@ -540,8 +540,8 @@ async function startServer() {
       categoriesSnap.forEach(doc => {
         const name = doc.data().name || "";
         if (!name) return;
-        const encodedName = encodeURIComponent(name);
-        xml += `  <url>\n    <loc>https://ishopbd.com/?category=${encodedName}</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+        const catSlug = (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        xml += `  <url>\n    <loc>https://ishopbd.com/category/${catSlug}</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
       });
 
       // Campaign pages
@@ -554,9 +554,10 @@ async function startServer() {
       productsSnap.forEach(doc => {
         const id = doc.id;
         const name = doc.data().name || "";
-        const slug = name.toLowerCase().replace(/ /g, "-").replace(/[^\w-]/g, "");
+        const slug = (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
         const updatedAt = doc.data().updatedAt?.toDate?.()?.toISOString?.() || new Date().toISOString();
-        xml += `  <url>\n    <loc>https://ishopbd.com/?p=${id}&amp;slug=${slug}</loc>\n    <lastmod>${updatedAt.split('T')[0]}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+        const prodPath = slug ? `/product/${slug}-${id}` : `/product/${id}`;
+        xml += `  <url>\n    <loc>https://ishopbd.com${prodPath}</loc>\n    <lastmod>${updatedAt.split('T')[0]}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
       });
       
       xml += `</urlset>`;
@@ -1846,39 +1847,125 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
         } catch (error) {
           console.error("Error fetching product meta tags for OG:", error.message);
         }
-      } else if (req.query.category) {
-        const categoryName = String(req.query.category);
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-        const host = req.get('host');
-        const currentUrl = `${protocol}://${host}/?category=${encodeURIComponent(categoryName)}`;
-        const description = `Buy high-quality ${categoryName} online at the best price in Bangladesh from i SHOP BD. Fast home delivery available!`;
-        const title = `${categoryName} Price in Bangladesh - i SHOP BD`;
-        const imageUrl = `${protocol}://${host}/logo.png`; // Fallback logo
+      } else {
+        let categorySlug = "";
+        if (req.path.startsWith('/category/')) {
+          categorySlug = req.path.replace(/^\/category\//, '').split('/')[0];
+        } else if (req.path.startsWith('/c/')) {
+          categorySlug = req.path.replace(/^\/c\//, '').split('/')[0];
+        } else if (req.query.category) {
+          categorySlug = String(req.query.category).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        }
+        
+        if (categorySlug) {
+          const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+          const host = req.get('host');
+          const currentUrl = `${protocol}://${host}/category/${categorySlug}`;
+          
+          const CATEGORY_SEO_DATA: Record<string, { title: string; description: string; keywords: string }> = {
+            "charger-fan": {
+              title: "চার্জার ফ্যান ও মিনি ফ্যান দাম | Rechargeable Charger Fan Price in BD - i SHOP BD",
+              description: "সেরা দামে রিচার্জেবল চার্জার ফ্যান ও পোর্টেবল মিনি ফ্যান কিনুন i SHOP BD থেকে। হাই স্পিড ব্যাটারি ব্যাকআপ, ওয়ারেন্টি এবং দ্রুত হোম ডেলিভারি!",
+              keywords: "চার্জার ফ্যান, রিচার্জেবল ফ্যান, মিনি ফ্যান, portable fan, mini charger fan, hand fan, fan price in bangladesh, rechargeable table fan, ishopbd"
+            },
+            "power-bank": {
+              title: "পাওয়ার ব্যাংক এর দাম | Best Power Bank Price in Bangladesh - i SHOP BD",
+              description: "সেরা দামে আসল পাওয়ার ব্যাংক (Power Bank) কিনুন i SHOP BD থেকে। 10000mAh, 20000mAh, 30000mAh ফাস্ট চার্জিং ও অফিসিয়াল ওয়ারেন্টি সহ হোম ডেলিভারি!",
+              keywords: "পাওয়ার ব্যাংক, power bank price in bd, 10000mah power bank, 20000mah fast charging power bank, portable mobile charger, reman, joyroom, anker, ishopbd"
+            },
+            "smart-watch": {
+              title: "স্মার্ট ওয়াচ এর দাম | Smart Watch Price in Bangladesh - i SHOP BD",
+              description: "লেটেস্ট মডেলের স্মার্ট ওয়াচ কিনুন i SHOP BD থেকে। অ্যামোলেড ডিসপ্লে, ব্লুটুথ কলিং, হার্টরেট মনিটর ও দীর্ঘস্থায়ী ব্যাটারি ব্যাকআপ সহ সেরা অফার!",
+              keywords: "স্মার্ট ওয়াচ, smart watch price in bd, calling smart watch, amoled smartwatch, smartwatch bd, ishopbd"
+            },
+            "headphone": {
+              title: "হেডফোন ও ব্লুটুথ ইয়ারবাডস | Headphone & Earbuds Price in BD - i SHOP BD",
+              description: "সেরা সাউন্ড কোয়ালিটি এবং অ্যাক্টিভ নয়েজ ক্যান্সেলেশন (ANC) হেডফোন ও ওয়্যারলেস ইয়ারবাডস কিনুন i SHOP BD থেকে। আকর্ষণীয় ডিসকাউন্ট ও ফাস্ট ডেলিভারি!",
+              keywords: "হেডফোন, ব্লুটুথ ইয়ারবাডস, earbuds price in bd, wireless headphones, tws airpods bd, gaming headphone, ishopbd"
+            },
+            "mobile-accessories": {
+              title: "মোবাইল এক্সেসরিজ ও গ্যাজেট | Mobile Accessories in Bangladesh - i SHOP BD",
+              description: "সব ধরনের প্রিমিয়াম মোবাইল এক্সেসরিজ, ফাস্ট চার্জার, কেবল, ট্রাইপড ও ট্রিপড মাউন্ট কিনুন সেরা মূল্যে i SHOP BD থেকে।",
+              keywords: "মোবাইল এক্সেসরিজ, mobile accessories bd, fast charger, usb cable, phone tripod, microphone, ishopbd"
+            },
+            "lifestyle-watch": {
+              title: "লাইফস্টাইল গ্যাজেট ও ঘড়ি | Lifestyle & Watches in BD - i SHOP BD",
+              description: "আধুনিক লাইফস্টাইল গ্যাজেট ও ট্রেন্ডি ঘড়ির বিশাল কালেকশন কিনুন i SHOP BD থেকে। দ্রুত হোম ডেলিভারি ও শতভাগ আসল পণ্যের গ্যারান্টি।",
+              keywords: "লাইফস্টাইল গ্যাজেট, ঘড়ি, watches in bd, lifestyle accessories, ishopbd"
+            }
+          };
 
-        const categorySchema = {
-          "@context": "https://schema.org",
-          "@type": "CollectionPage",
-          "name": title,
-          "description": description,
-          "url": currentUrl,
-          "image": imageUrl
-        };
+          const formattedName = categorySlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          const categorySeo = CATEGORY_SEO_DATA[categorySlug] || {
+            title: `${formattedName} Price in Bangladesh - i SHOP BD`,
+            description: `Buy authentic ${formattedName} online at the best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!`,
+            keywords: `${categorySlug}, buy ${categorySlug} bd, ishopbd`
+          };
 
-        html = html.replace('<!-- CANONICAL_URL_PLACEHOLDER -->', `<link rel="canonical" href="${currentUrl}" />`);
-        html = html.replace('</head>', `<script type="application/ld+json">${JSON.stringify(categorySchema)}</script></head>`);
-        
-        html = html.replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`);
-        html = html.replace(/<meta name="description" content="[^"]*"\s*\/?>/i, `<meta name="description" content="${description}" />`);
-        
-        html = html.replace(/<meta property="og:url" content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${currentUrl}" />`);
-        html = html.replace(/<meta property="og:title" content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${title}" />`);
-        html = html.replace(/<meta property="og:description" content="[^"]*"\s*\/?>/i, `<meta property="og:description" content="${description}" />`);
-        html = html.replace(/<meta property="og:image" content="[^"]*"\s*\/?>/i, `<meta property="og:image" content="${imageUrl}" />`);
-        
-        html = html.replace(/<meta property="twitter:url" content="[^"]*"\s*\/?>/i, `<meta property="twitter:url" content="${currentUrl}" />`);
-        html = html.replace(/<meta property="twitter:title" content="[^"]*"\s*\/?>/i, `<meta property="twitter:title" content="${title}" />`);
-        html = html.replace(/<meta property="twitter:description" content="[^"]*"\s*\/?>/i, `<meta property="twitter:description" content="${description}" />`);
-        html = html.replace(/<meta property="twitter:image" content="[^"]*"\s*\/?>/i, `<meta property="twitter:image" content="${imageUrl}" />`);
+          const imageUrl = `${protocol}://${host}/logo.png`;
+
+          let categoryProducts: any[] = [];
+          try {
+            if ((admin as any).apps.length) {
+              const db = getFirestore();
+              const snap = await db.collection("products").where("deleted", "==", false).where("isPublished", "==", true).get();
+              categoryProducts = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })).filter(p => {
+                const catSlug = (p.category || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                return catSlug.includes(categorySlug) || categorySlug.includes(catSlug);
+              });
+            }
+          } catch (e) {}
+
+          const categorySchema = {
+            "@context": "https://schema.org",
+            "@type": "CollectionPage",
+            "name": categorySeo.title,
+            "description": categorySeo.description,
+            "url": currentUrl,
+            "image": imageUrl,
+            "mainEntity": {
+              "@type": "ItemList",
+              "numberOfItems": categoryProducts.length,
+              "itemListElement": categoryProducts.slice(0, 24).map((p, idx) => ({
+                "@type": "ListItem",
+                "position": idx + 1,
+                "url": `${protocol}://${host}/product/${(p.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${p.id}`,
+                "name": p.name,
+                "image": p.image || imageUrl
+              }))
+            }
+          };
+
+          html = html.replace('<!-- CANONICAL_URL_PLACEHOLDER -->', `<link rel="canonical" href="${currentUrl}" />`);
+          html = html.replace('</head>', `<script type="application/ld+json">${JSON.stringify(categorySchema)}</script></head>`);
+          
+          html = html.replace(/<title>[^<]*<\/title>/i, `<title>${categorySeo.title}</title>`);
+          html = html.replace(/<meta name="description" content="[^"]*"\s*\/?>/i, `<meta name="description" content="${categorySeo.description}" />`);
+          html = html.replace(/<meta name="keywords" content="[^"]*"\s*\/?>/i, `<meta name="keywords" content="${categorySeo.keywords}" />`);
+          
+          html = html.replace(/<meta property="og:url" content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${currentUrl}" />`);
+          html = html.replace(/<meta property="og:title" content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${categorySeo.title}" />`);
+          html = html.replace(/<meta property="og:description" content="[^"]*"\s*\/?>/i, `<meta property="og:description" content="${categorySeo.description}" />`);
+          html = html.replace(/<meta property="og:image" content="[^"]*"\s*\/?>/i, `<meta property="og:image" content="${imageUrl}" />`);
+          
+          html = html.replace(/<meta property="twitter:url" content="[^"]*"\s*\/?>/i, `<meta property="twitter:url" content="${currentUrl}" />`);
+          html = html.replace(/<meta property="twitter:title" content="[^"]*"\s*\/?>/i, `<meta property="twitter:title" content="${categorySeo.title}" />`);
+          html = html.replace(/<meta property="twitter:description" content="[^"]*"\s*\/?>/i, `<meta property="twitter:description" content="${categorySeo.description}" />`);
+          html = html.replace(/<meta property="twitter:image" content="[^"]*"\s*\/?>/i, `<meta property="twitter:image" content="${imageUrl}" />`);
+
+          if (categoryProducts.length > 0) {
+            const fallbackHtml = `
+              <div id="seo-category-fallback" style="opacity:0; position:absolute; z-index:-1;">
+                <h1>${categorySeo.title}</h1>
+                <p>${categorySeo.description}</p>
+                <ul>
+                  ${categoryProducts.map(p => `<li><a href="/product/${(p.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${p.id}">${p.name} - ৳${p.price}</a></li>`).join('')}
+                </ul>
+              </div>
+            `;
+            html = html.replace('<div id="root">', `<div id="root">${fallbackHtml}`);
+          }
+        }
       }
       
       if (html.includes('<!-- CANONICAL_URL_PLACEHOLDER -->')) {
