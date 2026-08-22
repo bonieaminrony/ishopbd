@@ -593,7 +593,8 @@ export default function POS({
       }
 
       // 3. Send SMS if valid phone number provided
-      if (isSmsConfirmEnabled && customerPhone.trim().length >= 11 && !customerPhone.startsWith('01000000000')) {
+      const cleanPhone = customerPhone.replace(/\D/g, '');
+      if (isSmsConfirmEnabled !== false && cleanPhone.length >= 11 && !cleanPhone.startsWith('01000000000')) {
         try {
           const productNames = itemsForDb.map(i => i.product.smsName || i.product.name).join(', ');
           const start = (smsTemplateStart || '').trim() || 'প্রিয় গ্রাহক, আপনার কেনাকাটা সম্পন্ন হয়েছে';
@@ -604,7 +605,7 @@ export default function POS({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              phone: customerPhone.trim(),
+              phone: cleanPhone,
               message: message
             })
           }).catch(err => console.warn("POS SMS failed:", err));
