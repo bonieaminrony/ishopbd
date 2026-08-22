@@ -5894,17 +5894,28 @@ const handleSaveQuickEdit = async () => {
             updateData.paymentMethod = "N/A";
           }
           await updateDoc(orderRef, updateData);
-                if (newStatus === "confirmed") {
+        const orderData = orderSnap.data();
+        const statusTextMap: Record<string, string> = {
+          pending: "পেন্ডিং (অপেক্ষমান)",
+          confirmed: "কনফার্মড (অনুমোদিত)",
+          processing: "প্রসেসিং হচ্ছে",
+          shipped: "কুরিয়ারে পাঠানো হয়েছে (অন দ্য ওয়ে)",
+          delivered: "সফলভাবে ডেলিভারি সম্পন্ন হয়েছে",
+          cancelled: "বাতিল করা হয়েছে",
+          returned: "রিটার্ন করা হয়েছে"
+        };
+        const banglaStatus = statusTextMap[newStatus.toLowerCase()] || newStatus;
+
+        if (newStatus === "confirmed") {
           const confirmedOrder = updated.find((o) => o.id === orderId);
           if (confirmedOrder) {
             sendConfirmationSMS(confirmedOrder);
           }
-          const orderData = orderSnap.data();
-          if (orderData && orderData.userId) {
+          if (orderData && orderData.userId && orderData.userId !== "guest") {
             try {
               await addDoc(collection(db, "notifications"), {
-                title: "অর্ডার অর্ডার?",
-                message: `প্রিয় ${orderData.customerName || ''}, আপনার ি (#${orderId})অর্ডার করা হয়েছে? মোট বিল: ৳${orderData.total}।`,
+                title: `অর্ডার কনফার্মড (#${orderId})`,
+                message: `প্রিয় ${orderData.customerName || 'গ্রাহক'}, আপনার অর্ডারটি (#${orderId}) সফলভাবে কনফার্ম করা হয়েছে। মোট বিল: ৳${orderData.total}।`,
                 link: "/profile",
                 userId: orderData.userId,
                 userEmail: orderData.customerEmail || "",
@@ -5912,16 +5923,19 @@ const handleSaveQuickEdit = async () => {
                 sender: "system",
                 type: "direct"
               });
-              console.log("In-app confirmation notification sent successfully to userId:", orderData.userId);
             } catch (err) {
               console.error("Failed to send in-app confirmation notification:", err);
             }
           }
         }
         
-        const orderData = orderSnap.data();
-        if (orderData && orderData.userId) {
-          sendPushToUser(orderData.userId, "অর্ডার আপডেট", `আপনার অর্ডারের বর্তমান স্ট্যাটাস: ${newStatus}`, "/profile");
+        if (orderData && orderData.userId && orderData.userId !== "guest") {
+          sendPushToUser(
+            orderData.userId, 
+            `অর্ডার আপডেট (#${orderId})`, 
+            `আপনার অর্ডারের বর্তমান অবস্থা: ${banglaStatus}`, 
+            "/profile"
+          );
         }
         if (newStatus === "returned" && orderData.userId && orderData.paymentMethod !== "cod") {
             const userRef = doc(db, "users", orderData.userId);
