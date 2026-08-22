@@ -168,7 +168,7 @@ import { ProductSkeleton } from './components/ProductSkeleton';
 import { ProductCard } from './components/ProductCard';
 import ZoomableImage from './components/ui/ZoomableImage';
 import toast, { Toaster } from 'react-hot-toast';
-import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues } from './utils/helpers';
+import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, findProductBySlugOrId, slugify } from './utils/helpers';
 import { FlashSaleCountdown } from './components/FlashSaleCountdown';
 import { useUIContext } from './context/UIContext';
 import { useAuthContext } from './context/AuthContext';
@@ -939,10 +939,11 @@ function App() {
     });
   };
   const copyLandingPageLink = (productId: string) => {
-    const baseUrl = window.location.origin + window.location.pathname;
-    const shareUrl = `${baseUrl}?landing=${productId}`;
+    const prod = products.find(p => p.id === productId);
+    const path = prod ? getProductPath(prod) : `/product/${productId}`;
+    const shareUrl = `${window.location.origin}${path}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
-      toast.success("ল্যান্ডিং পেজ লিংক কপি হয়েছে!");
+      toast.success("প্রোডাক্ট পেজ লিংক কপি হয়েছে!");
     }).catch(err => {
       console.error("Copy failed", err);
       toast.error("লিংক কপি করা সম্ভব হয়নি।");
@@ -2641,15 +2642,24 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const lastFetch = localStorage.getItem("products_last_fetch");
       const now = Date.now();
       const urlParams = new URLSearchParams(window.location.search);
-      const productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing');
+      const path = window.location.pathname;
+      let productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing') || urlParams.get('id');
+      if (!productId && path.startsWith('/product/')) {
+        productId = path.replace(/^\/product\//, '');
+      } else if (!productId && path.startsWith('/p/')) {
+        productId = path.replace(/^\/p\//, '');
+      }
       
       if (cachedProducts) {
         try {
           const parsed = JSON.parse(cachedProducts);
           setProducts(parsed);
           if (productId) {
-             const prod = parsed.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-             if (prod) setSelectedProduct(prod);
+             const prod = findProductBySlugOrId(parsed, productId);
+             if (prod && !prod.deleted && (isAdmin || isMasterAdmin || prod.isPublished !== false)) {
+               setSelectedProduct(prod);
+               setIsProductDetailsOpen(true);
+             }
           }
           setIsLoading(false);
         } catch(e) {}
@@ -2672,8 +2682,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
               console.warn("localStorage write failed:", e);
             }
             if (productId) {
-               const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-               if (prod) setSelectedProduct(prod);
+               const prod = findProductBySlugOrId(prodData, productId);
+               if (prod && !prod.deleted && (isAdmin || isMasterAdmin || prod.isPublished !== false)) {
+                 setSelectedProduct(prod);
+                 setIsProductDetailsOpen(true);
+               }
             }
             setIsLoading(false);
           })
@@ -2894,32 +2907,57 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   // Synchronize URL and History when React State changes (User actions)
   useEffect(() => {
     if (products.length === 0) return;
-    const url = new URL(window.location.href);
-    const productId = url.searchParams.get("p");
-    const isCheckout = url.searchParams.get("checkout") === "true";
+    const path = window.location.pathname;
+    const isCheckoutParam = new URLSearchParams(window.location.search).get("checkout") === "true";
     
     if (isCheckoutOpen) {
-      if (!isCheckout) {
-        url.searchParams.set("checkout", "true");
-        window.history.pushState({ checkout: true }, "", url.toString());
+      if (!isCheckoutParam) {
+        window.history.pushState({ checkout: true }, "", "/?checkout=true");
       }
     } else if (isProductDetailsOpen && selectedProduct) {
-      if (productId !== selectedProduct.id || isCheckout) {
-        url.searchParams.set("p", selectedProduct.id || "");
-        const slug = (selectedProduct.name || "").toLowerCase().replace(/ /g, "-").replace(/[^\w-]/g, "");
-        if (slug) url.searchParams.set("prod", slug);
-        url.searchParams.delete("checkout");
-        window.history.pushState({ p: selectedProduct.id }, "", url.toString());
+      const targetPath = getProductPath(selectedProduct);
+      if (path !== targetPath || isCheckoutParam || window.location.search.includes('p=')) {
+        window.history.pushState({ p: selectedProduct.id }, "", targetPath);
       }
     } else {
-      if (productId || isCheckout) {
-        url.searchParams.delete("p");
-        url.searchParams.delete("prod");
-        url.searchParams.delete("checkout");
-        window.history.pushState({}, "", url.toString());
+      if (path.startsWith("/product/") || path.startsWith("/p/") || isCheckoutParam || window.location.search.includes('p=') || window.location.search.includes('product=')) {
+        window.history.pushState({}, "", "/");
       }
     }
   }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, products.length]);
+
+  // Handle browser Back / Forward buttons smoothly
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const urlParams = new URLSearchParams(window.location.search);
+      const isCheckout = urlParams.get("checkout") === "true";
+      let productId = urlParams.get("product") || urlParams.get("p") || urlParams.get("landing");
+      if (!productId && path.startsWith("/product/")) {
+        productId = path.replace(/^\/product\//, "");
+      } else if (!productId && path.startsWith("/p/")) {
+        productId = path.replace(/^\/p\//, "");
+      }
+
+      if (isCheckout) {
+        setIsCheckoutOpen(true);
+        setIsProductDetailsOpen(false);
+      } else if (productId && products.length > 0) {
+        const prod = findProductBySlugOrId(products, productId);
+        if (prod) {
+          setSelectedProduct(prod);
+          setIsProductDetailsOpen(true);
+          setIsCheckoutOpen(false);
+        }
+      } else {
+        setIsProductDetailsOpen(false);
+        setIsCheckoutOpen(false);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [products]);
   const [adminTab, setAdminTab] = useState<
     "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
   >("orders");

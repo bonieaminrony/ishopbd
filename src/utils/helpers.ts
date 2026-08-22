@@ -122,3 +122,58 @@ export const cleanLatex = (text: string) => {
 };
 
 export const sumValues = (obj: Record<string, number>): number => { const vals = Object.values(obj); let s = 0; for (const v of vals) s += Number(v); return s; };
+
+export const slugify = (text: string): string => {
+  if (!text) return "";
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
+export const getProductSlug = (product: any): string => {
+  if (!product) return "";
+  if (product.slug && typeof product.slug === "string" && product.slug.trim()) {
+    return product.slug.trim();
+  }
+  const cleanName = slugify(product.name || product.smsName || "");
+  if (cleanName && product.id) {
+    return `${cleanName}-${product.id}`;
+  }
+  return cleanName || product.id || "";
+};
+
+export const getProductPath = (product: any): string => {
+  const slug = getProductSlug(product);
+  return slug ? `/product/${slug}` : "/";
+};
+
+export const findProductBySlugOrId = (products: any[], slugOrId: string): any => {
+  if (!products || !Array.isArray(products) || !slugOrId) return null;
+  const decoded = decodeURIComponent(slugOrId).trim().toLowerCase();
+  
+  // 1. Direct ID match
+  let found = products.find(p => p.id === slugOrId || p.id?.toLowerCase() === decoded);
+  if (found) return found;
+
+  // 2. Direct slug match
+  found = products.find(p => p.slug && p.slug.toLowerCase() === decoded);
+  if (found) return found;
+
+  // 3. getProductSlug match
+  found = products.find(p => getProductSlug(p).toLowerCase() === decoded);
+  if (found) return found;
+
+  // 4. Ends with ID match (e.g. "ulanzi-j12-wireless-microphone-174829102" ends with "174829102")
+  found = products.find(p => p.id && decoded.endsWith(p.id.toLowerCase()));
+  if (found) return found;
+
+  // 5. Slugified name match
+  found = products.find(p => slugify(p.name).toLowerCase() === decoded);
+  if (found) return found;
+
+  return null;
+};

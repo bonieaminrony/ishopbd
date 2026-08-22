@@ -3,6 +3,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info, MessageSquare, ArrowRight } from 'lucide-react';
+import { getProductPath } from '../utils/helpers';
 
 export interface ProductDetailsProps {
   selectedProduct: any;
@@ -243,7 +244,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
               <meta property="og:title" content={`${selectedProduct.name} - I SHOP BD`} />
               <meta property="og:description" content={(selectedProduct.metaDescription || selectedProduct.shortDescription || selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from i SHOP BD.`).substring(0, 160)} />
               <meta property="og:image" content={selectedProduct.image} />
-              <meta property="og:url" content={`https://ishopbd.com/?product=${selectedProduct.id}`} />
+              <meta property="og:url" content={`https://ishopbd.com${getProductPath(selectedProduct)}`} />
               <script type="application/ld+json">
                 {JSON.stringify({
                   "@context": "https://schema.org/",
@@ -257,7 +258,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   },
                   "offers": {
                     "@type": "Offer",
-                    "url": `https://ishopbd.com/?product=${selectedProduct.id}`,
+                    "url": `https://ishopbd.com${getProductPath(selectedProduct)}`,
                     "priceCurrency": "BDT",
                     "price": selectedProduct.price,
                     "availability": selectedProduct.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
@@ -350,35 +351,18 @@ export default function ProductDetails(props: ProductDetailsProps) {
                            window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl.toString())}`, '_blank');
                          }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-[#1877F2] hover:bg-[#1877F2]/10 transition-all" title="Share on Facebook"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></button>
                          <button onClick={() => {
-                           const shareUrl = new URL(window.location.origin);
-                           shareUrl.searchParams.set("p", selectedProduct.id || "");
-                           const title = encodeURIComponent(selectedProduct.name || '');
-                           const url = encodeURIComponent(shareUrl.toString());
-                           window.open(`https://www.blogger.com/blog-this.g?n=${title}&u=${url}`, '_blank');
+                           const shareUrl = `${window.location.origin}${getProductPath(selectedProduct)}`;
+                           window.open(`https://www.blogger.com/blog-this.g?n=${encodeURIComponent(selectedProduct.name || '')}&u=${encodeURIComponent(shareUrl)}`, '_blank');
                          }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-[#F57C00] hover:bg-[#F57C00]/10 transition-all" title="Share on Blogger"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18.8 0H5.2C2.3 0 0 2.3 0 5.2v13.6C0 21.7 2.3 24 5.2 24h13.6c2.9 0 5.2-2.3 5.2-5.2V5.2C24 2.3 21.7 0 18.8 0zM17 10.5c0 1-.8 1.8-1.8 1.8.8.2 1.4.9 1.4 1.7v2.5c0 1.9-1.6 3.5-3.5 3.5H9.7c-2 0-3.7-1.7-3.7-3.7V7.7c0-2 1.7-3.7 3.7-3.7h3.8c1.9 0 3.5 1.6 3.5 3.5v3zm-4.7-4H9.7c-.7 0-1.2.5-1.2 1.2v2.1c0 .7.5 1.2 1.2 1.2h2.6c.7 0 1.2-.5 1.2-1.2V7.7c0-.7-.5-1.2-1.2-1.2zm2.2 7.8c0-.7-.5-1.2-1.2-1.2H9.7c-.7 0-1.2.5-1.2 1.2v2.1c0 .7.5 1.2 1.2 1.2h3.6c.7 0 1.2-.5 1.2-1.2v-2.1z"/></svg></button>
-                              <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl.toString())}`, '_blank');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-[#1877F2] hover:bg-[#1877F2]/10 transition-all" title="Share on Facebook"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></button>
-                              <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                const title = encodeURIComponent(selectedProduct.name || '');
-                                const url = encodeURIComponent(shareUrl.toString());
-                                window.open(`https://www.blogger.com/blog-this.g?n=${title}&u=${url}`, '_blank');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-[#F57C00] hover:bg-[#F57C00]/10 transition-all" title="Share on Blogger"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18.8 0H5.2C2.3 0 0 2.3 0 5.2v13.6C0 21.7 2.3 24 5.2 24h13.6c2.9 0 5.2-2.3 5.2-5.2V5.2C24 2.3 21.7 0 18.8 0zM17 10.5c0 1-.8 1.8-1.8 1.8.8.2 1.4.9 1.4 1.7v2.5c0 1.9-1.6 3.5-3.5 3.5H9.7c-2 0-3.7-1.7-3.7-3.7V7.7c0-2 1.7-3.7 3.7-3.7h3.8c1.9 0 3.5 1.6 3.5 3.5v3zm-4.7-4H9.7c-.7 0-1.2.5-1.2 1.2v2.1c0 .7.5 1.2 1.2 1.2h2.6c.7 0 1.2-.5 1.2-1.2V7.7c0-.7-.5-1.2-1.2-1.2zm2.2 7.8c0-.7-.5-1.2-1.2-1.2H9.7c-.7 0-1.2.5-1.2 1.2v2.1c0 .7.5 1.2 1.2 1.2h3.6c.7 0 1.2-.5 1.2-1.2v-2.1z"/></svg></button>
-                              <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                window.open(`https://wa.me/?text=${encodeURIComponent(selectedProduct.name + ' ' + shareUrl.toString())}`, '_blank');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-green-600 hover:bg-green-50 transition-all"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
-                              <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                navigator.clipboard.writeText(shareUrl.toString());
-                                alert('Link copied to clipboard!');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-all"><LinkIcon size={16} /></button>
+                         <button onClick={() => {
+                           const shareUrl = `${window.location.origin}${getProductPath(selectedProduct)}`;
+                           window.open(`https://wa.me/?text=${encodeURIComponent(selectedProduct.name + ' ' + shareUrl)}`, '_blank');
+                         }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-green-600 hover:bg-green-50 transition-all"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
+                         <button onClick={() => {
+                           const shareUrl = `${window.location.origin}${getProductPath(selectedProduct)}`;
+                           navigator.clipboard.writeText(shareUrl);
+                           alert('Link copied to clipboard!');
+                         }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-all"><LinkIcon size={16} /></button>
                               
                               <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                               
@@ -447,21 +431,18 @@ export default function ProductDetails(props: ProductDetailsProps) {
                      <div className="flex items-center gap-1.5 bg-gray-50/50 p-1 rounded-full border border-gray-100">
                         <span className="text-sm text-gray-500 ml-3 mr-1 font-medium hidden lg:inline">Share:</span>
                         <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                window.open(`https://www.facebook.com/dialog/send?link=${shareUrl.toString()}&app_id=291494419107518&redirect_uri=${shareUrl.toString()}`, '_blank');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.477 2 2 6.145 2 11.258c0 2.899 1.488 5.485 3.82 7.158v3.584l3.472-1.921c.854.238 1.761.365 2.708.365 5.523 0 10-4.145 10-9.258S17.523 2 12 2zm1.096 12.385l-2.775-2.955-5.412 2.955 5.962-6.332 2.836 2.955 5.348-2.955-5.959 6.332z"/></svg></button>
+                                 const shareUrl = `${window.location.origin}${getProductPath(selectedProduct)}`;
+                                 window.open(`https://www.facebook.com/dialog/send?link=${encodeURIComponent(shareUrl)}&app_id=291494419107518&redirect_uri=${encodeURIComponent(shareUrl)}`, '_blank');
+                               }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.477 2 2 6.145 2 11.258c0 2.899 1.488 5.485 3.82 7.158v3.584l3.472-1.921c.854.238 1.761.365 2.708.365 5.523 0 10-4.145 10-9.258S17.523 2 12 2zm1.096 12.385l-2.775-2.955-5.412 2.955 5.962-6.332 2.836 2.955 5.348-2.955-5.959 6.332z"/></svg></button>
                         <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                window.open(`https://wa.me/?text=${encodeURIComponent(selectedProduct.name + ' ' + shareUrl.toString())}`, '_blank');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-green-600 hover:bg-green-50 transition-all"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
+                                 const shareUrl = `${window.location.origin}${getProductPath(selectedProduct)}`;
+                                 window.open(`https://wa.me/?text=${encodeURIComponent(selectedProduct.name + ' ' + shareUrl)}`, '_blank');
+                               }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-green-600 hover:bg-green-50 transition-all"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></button>
                         <button onClick={() => {
-                                const shareUrl = new URL(window.location.origin);
-                                shareUrl.searchParams.set("p", selectedProduct.id || "");
-                                navigator.clipboard.writeText(shareUrl.toString());
-                                alert('Link copied to clipboard!');
-                              }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-all"><LinkIcon size={16} /></button>
+                                 const shareUrl = `${window.location.origin}${getProductPath(selectedProduct)}`;
+                                 navigator.clipboard.writeText(shareUrl);
+                                 alert('Link copied to clipboard!');
+                               }} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-900 hover:bg-gray-200 transition-all"><LinkIcon size={16} /></button>
                         
                         <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         

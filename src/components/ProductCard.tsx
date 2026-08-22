@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Truck, Heart, ArrowRight } from 'lucide-react';
 import { Product } from '../types';
 import { useCartContext } from '../context/CartContext';
+import { getProductPath } from '../utils/helpers';
 
 export const ProductCard = React.memo(({ 
   product, 
@@ -26,6 +27,8 @@ export const ProductCard = React.memo(({
       ? product.variants.every((v) => (Number(v.stock) || 0) <= 0)
       : (product.stock !== undefined && product.stock !== null ? Number(product.stock) <= 0 : false));
 
+  const productPath = getProductPath(product);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -33,7 +36,7 @@ export const ProductCard = React.memo(({
       className="bg-white rounded-2xl shadow-sm hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col h-full group"
     >
       <a
-        href={`?product=${product.id}`}
+        href={productPath}
         className="relative aspect-square overflow-hidden cursor-pointer flex items-center justify-center bg-cream block"
         onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
       >
@@ -79,7 +82,7 @@ export const ProductCard = React.memo(({
       </a>
       <div className="p-2.5 md:p-3 flex flex-col flex-1">
         <a 
-          href={`?product=${product.id}`}
+          href={productPath}
           onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
           className="block"
         >

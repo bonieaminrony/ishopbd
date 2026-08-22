@@ -16,6 +16,15 @@ $productId = isset($_GET['p']) ? $_GET['p'] : (isset($_GET['product']) ? $_GET['
 if (!$productId && isset($_GET['landing'])) {
     $productId = $_GET['landing'];
 }
+if (!$productId) {
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    if (preg_match('#^/(?:product|p|landing)/([^/?]+)#', $uri, $matches)) {
+        $slug = $matches[1];
+        $parts = explode('-', $slug);
+        $last = end($parts);
+        $productId = (strlen($last) >= 6) ? $last : $slug;
+    }
+}
 
 if ($productId) {
     $url = "https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/" . urlencode($productId);

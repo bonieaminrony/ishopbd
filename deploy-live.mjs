@@ -89,7 +89,14 @@ async function deploy() {
       console.log('✅ api folder uploaded!');
     }
 
-    // 8. Upload .htaccess
+    // 8. Upload .htaccess and index.php / app.php
+    if (fs.existsSync(path.join(__dirname, 'public', 'index.php'))) {
+      console.log('📤 Uploading public/index.php...');
+      await client.uploadFrom(path.join(__dirname, 'public', 'index.php'), `${REMOTE_DIR}/index.php`);
+      await client.uploadFrom(path.join(__dirname, 'public', 'index.php'), `${REMOTE_DIR}/app.php`);
+      console.log('✅ index.php & app.php uploaded!');
+    }
+
     if (fs.existsSync(path.join(__dirname, 'htaccess.txt'))) {
       console.log('📤 Uploading .htaccess...');
       await client.uploadFrom(path.join(__dirname, 'htaccess.txt'), `${REMOTE_DIR}/.htaccess`);

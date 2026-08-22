@@ -1744,13 +1744,28 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       }
       
       let html = fs.readFileSync(htmlPath, 'utf8');
-      const productId = req.query.p || req.query.product || req.query.landing;
+      let productIdentifier = (req.query.p || req.query.product || req.query.landing) as string;
+      if (!productIdentifier && req.path.startsWith('/product/')) {
+        productIdentifier = req.path.replace(/^\/product\//, '').split('/')[0];
+      } else if (!productIdentifier && req.path.startsWith('/p/')) {
+        productIdentifier = req.path.replace(/^\/p\//, '').split('/')[0];
+      }
       
-      if (productId) {
+      if (productIdentifier) {
         try {
-          const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
-          const response = await axios.get(url, { timeout: 4000 });
-          const data = response.data;
+          const parts = String(productIdentifier).split('-');
+          const lastPart = parts[parts.length - 1];
+          const productId = (lastPart && lastPart.length >= 6) ? lastPart : String(productIdentifier);
+
+          let url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
+          let response = await axios.get(url, { timeout: 4000 }).catch(() => null);
+          
+          if (!response?.data?.fields && productId !== productIdentifier) {
+            url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productIdentifier}`;
+            response = await axios.get(url, { timeout: 4000 }).catch(() => null);
+          }
+
+          const data = response?.data;
           
           if (data && data.fields) {
             const name = data.fields.name?.stringValue || "Product Details";
@@ -1774,8 +1789,9 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
             const protocol = req.headers['x-forwarded-proto'] || req.protocol;
             const host = req.get('host');
             const imageUrl = `${protocol}://${host}/api/product-image/${productId}`;
-            const slug = (name || "").toLowerCase().replace(/ /g, "-").replace(/[^\w-]/g, "");
-            const currentUrl = `${protocol}://${host}/?p=${productId}&slug=${slug}`;
+            const cleanSlug = data.fields.slug?.stringValue || (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+            const productPath = cleanSlug ? `/product/${cleanSlug}-${productId}` : `/product/${productId}`;
+            const currentUrl = `${protocol}://${host}${productPath}`;
             
             const productSchema = {
               "@context": "https://schema.org/",
