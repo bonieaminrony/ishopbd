@@ -8380,10 +8380,9 @@ const handleSaveQuickEdit = async () => {
           <>
             <button
               onClick={() => {
-                if (!isMasterAdmin) {
-                  setAdminViewMode("support_only");
-                }
+                setAdminViewMode("support_only");
                 setAdminTab("orders");
+                setShowOnlyPreOrders(false);
                 setIsAdminOpen(true);
               }}
               className="w-14 h-14 bg-[#6FA838] hover:bg-[#5E942E] text-white rounded-full shadow-2xl shadow-[#6FA838]/30 hover:scale-110 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
