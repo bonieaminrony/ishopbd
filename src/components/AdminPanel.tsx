@@ -2532,24 +2532,34 @@ export default function AdminPanel(props: AdminPanelProps) {
                   </div>
                 )}
                 {adminTab === "categories" && (
-                  <div className="max-w-2xl mx-auto">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 mb-8">
-                      <div className="flex items-center justify-between mb-6">
-                        <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
-                          <LayoutGrid size={20} className="text-primary" />
-                          {editingCategory?.id ? `ক্যাটাগরি সম্পাদনা: "${editingCategory.name}"` : "ক্যাটাগরি তালিকা ও নতুন যোগ"}
-                        </h4>
+                  <div className="w-full space-y-6">
+                    {/* Top Action Card - Full Width */}
+                    <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                            <LayoutGrid size={22} />
+                          </div>
+                          <div>
+                            <h4 className="text-lg md:text-xl font-black text-secondary">
+                              {editingCategory?.id ? `ক্যাটাগরি সম্পাদনা: "${editingCategory.name}"` : "ক্যাটাগরি তালিকা ও নতুন যোগ"}
+                            </h4>
+                            <p className="text-xs text-gray-500 font-bold">
+                              মোট ক্যাটাগরি: <span className="text-primary font-black">{categories.length}</span> টি
+                            </p>
+                          </div>
+                        </div>
                         {editingCategory?.id && (
                           <button
                             type="button"
                             onClick={() => setEditingCategory(null)}
-                            className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-gray-100 px-3 py-1.5 rounded-xl transition-all"
+                            className="text-xs font-bold text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-xl transition-all self-start sm:self-auto cursor-pointer"
                           >
                             বাতিল করুন (Cancel)
                           </button>
                         )}
                       </div>
-                      <form onSubmit={saveCategory} className="flex gap-3 mb-8">
+                      <form onSubmit={saveCategory} className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="text"
                           required
@@ -2560,36 +2570,51 @@ export default function AdminPanel(props: AdminPanelProps) {
                               name: e.target.value,
                             })
                           }
-                          className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl py-3.5 px-5 outline-none focus:ring-2 focus:ring-primary font-bold text-sm"
-                          placeholder="যেমন: খাঁটি মধু, গাওয়া ঘি, তেল..."
+                          className="flex-1 bg-gray-50/80 border border-gray-200 rounded-2xl py-3.5 px-5 outline-none focus:ring-2 focus:ring-primary focus:bg-white font-bold text-sm transition-all"
+                          placeholder="নতুন ক্যাটাগরির নাম লিখুন (যেমন: খাঁটি মধু, গাওয়া ঘি, তেল)..."
                         />
-                        <button type="submit" className="bg-primary text-white font-bold px-7 py-3.5 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 transition-all active:scale-95 text-sm">
-                          {editingCategory?.id ? "Update" : "+ Add"}
+                        <button 
+                          type="submit" 
+                          className="bg-primary text-white font-bold px-8 py-3.5 rounded-2xl shadow-lg shadow-primary/20 hover:brightness-105 transition-all active:scale-95 text-sm cursor-pointer whitespace-nowrap"
+                        >
+                          {editingCategory?.id ? "Update Category" : "+ Add Category"}
                         </button>
                       </form>
-                      <div className="space-y-4">
-                        {categories.map((cat) => {
-                          const subcats = cat.subcategories || [];
-                          return (
-                            <div
-                              key={cat.id}
-                              className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex flex-col gap-4"
-                            >
-                              <div className="flex items-center justify-between">
-                                <p className="font-bold text-secondary text-base">
-                                  {cat.name}
-                                </p>
-                                <div className="flex gap-2">
+                    </div>
+
+                    {/* Category Cards - Full Page Responsive Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+                      {categories.map((cat) => {
+                        const subcats = cat.subcategories || [];
+                        const isEditingThis = editingCategory?.id === cat.id;
+                        return (
+                          <div
+                            key={cat.id}
+                            className={`bg-white p-5 rounded-[2rem] border transition-all duration-300 flex flex-col justify-between shadow-sm hover:shadow-md ${
+                              isEditingThis ? "border-primary ring-2 ring-primary/20" : "border-gray-150"
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-2 mb-3 pb-3 border-b border-gray-100">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-black text-secondary text-base truncate" title={cat.name}>
+                                    {cat.name}
+                                  </p>
+                                  <span className="text-[10px] text-gray-400 font-bold">
+                                    {subcats.length} টি সাব-ক্যাটাগরি
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
                                   <button
                                     onClick={() => copyCategoryLink(cat.name)}
-                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-1"
-                                    title="Action"
+                                    className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all border border-blue-100 cursor-pointer"
+                                    title="ক্যাটাগরি লিংক কপি করুন"
                                   >
-                                    <Share2 size={12} />  
+                                    <Share2 size={13} />  
                                   </button>
                                   <button
                                     onClick={() => setEditingCategory(cat)}
-                                    className="text-xs font-bold text-gray-400 hover:text-primary transition-colors px-2 py-1 hover:bg-gray-100 rounded-lg"
+                                    className="text-xs font-bold text-gray-600 hover:text-primary transition-colors px-2.5 py-1.5 hover:bg-gray-100 rounded-xl cursor-pointer"
                                   >
                                     Edit
                                   </button>
@@ -2600,27 +2625,29 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       await deleteCategory(cat.id, cat.name);
                                     }}
                                     disabled={deletingCatId === String(cat.id)}
-                                    className={`text-xs font-bold transition-all px-3 py-1.5 rounded-lg ${
+                                    className={`text-xs font-bold transition-all px-2.5 py-1.5 rounded-xl cursor-pointer ${
                                       deletingCatId === String(cat.id)
                                         ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                        : "text-red-500 hover:bg-red-50 active:scale-95 border border-transparent hover:border-red-100"
+                                        : "text-red-500 hover:bg-red-50 active:scale-95 hover:border-red-100"
                                     }`}
                                   >
-                                    {deletingCatId === String(cat.id) ? "Deleting..." : "Delete"}
+                                    {deletingCatId === String(cat.id) ? "..." : "Delete"}
                                   </button>
                                 </div>
                               </div>
                               
-                              {/* Subcategories Management */}
-                              <div className="bg-white p-4 rounded-2xl border border-gray-100/80">
-                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Subcategories</div>
-                                <div className="flex flex-wrap gap-1.5 mb-3">
+                              {/* Subcategories Section */}
+                              <div className="bg-gray-50/70 p-3.5 rounded-2xl border border-gray-100">
+                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">
+                                  Subcategories
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 min-h-[32px] mb-2.5">
                                   {subcats.length === 0 ? (
-                                    <span className="text-xs text-gray-400 italic">No subcategories defined</span>
+                                    <span className="text-xs text-gray-400 italic">No subcategories</span>
                                   ) : (
                                     subcats.map((sub, sIdx) => (
-                                      <span key={sIdx} className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-                                        {sub}
+                                      <span key={sIdx} className="inline-flex items-center gap-1.5 bg-white border border-gray-200/80 text-gray-700 px-2.5 py-1 rounded-full text-xs font-bold shadow-2xs">
+                                        <span>{sub}</span>
                                         <button
                                           type="button"
                                           onClick={async () => {
@@ -2634,7 +2661,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               toast.error("সাব-ক্যাটাগরি রিমুভ করতে সমস্যা হয়েছে");
                                             }
                                           }}
-                                          className="text-gray-400 hover:text-red-500 transition-colors"
+                                          className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                         >
                                           <X size={12} />
                                         </button>
@@ -2642,7 +2669,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     ))
                                   )}
                                 </div>
-                                <div className="flex gap-2">
+                                
+                                <div className="flex gap-1.5">
                                   <input
                                     type="text"
                                     value={newSubcategoryInputs[cat.id] || ""}
@@ -2650,8 +2678,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       const val = e.target.value;
                                       setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: val }));
                                     }}
-                                    placeholder="Add subcategory name..."
-                                    className="flex-1 bg-gray-50/50 border border-gray-200 transition-colors focus:border-primary/50 text-xs font-bold px-3 py-2 rounded-xl outline-none"
+                                    placeholder="Add subcategory..."
+                                    className="flex-1 bg-white border border-gray-200 transition-colors focus:border-primary text-xs font-bold px-3 py-1.5 rounded-xl outline-none"
                                     onKeyDown={async (e) => {
                                       if (e.key === 'Enter') {
                                         e.preventDefault();
@@ -2688,16 +2716,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         }
                                       }
                                     }}
-                                    className="bg-primary hover:brightness-105 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm shadow-primary/10 active:scale-95"
+                                    className="bg-primary hover:brightness-105 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 shrink-0"
                                   >
                                     Add
                                   </button>
                                 </div>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
