@@ -2624,9 +2624,15 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         <button
                                           type="button"
                                           onClick={async () => {
-                                            await updateDoc(doc(db, "categories", cat.id), {
-                                              subcategories: arrayRemove(sub)
-                                            });
+                                            try {
+                                              await setDoc(doc(db, "categories", String(cat.id)), {
+                                                subcategories: arrayRemove(sub)
+                                              }, { merge: true });
+                                              toast.success(`"${sub}" সাব-ক্যাটাগরি রিমুভ করা হয়েছে`);
+                                            } catch (err: any) {
+                                              console.error("Remove subcategory error:", err);
+                                              toast.error("সাব-ক্যাটাগরি রিমুভ করতে সমস্যা হয়েছে");
+                                            }
                                           }}
                                           className="text-gray-400 hover:text-red-500 transition-colors"
                                         >
@@ -2651,10 +2657,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         e.preventDefault();
                                         const subName = (newSubcategoryInputs[cat.id] || "").trim();
                                         if (subName) {
-                                          await updateDoc(doc(db, "categories", cat.id), {
-                                            subcategories: arrayUnion(subName)
-                                          });
-                                          setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                          try {
+                                            await setDoc(doc(db, "categories", String(cat.id)), {
+                                              subcategories: arrayUnion(subName)
+                                            }, { merge: true });
+                                            setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                            toast.success(`"${subName}" সাব-ক্যাটাগরি যোগ করা হয়েছে`);
+                                          } catch (err: any) {
+                                            console.error("Add subcategory error:", err);
+                                            toast.error("সাব-ক্যাটাগরি যোগ করতে সমস্যা হয়েছে");
+                                          }
                                         }
                                       }
                                     }}
@@ -2664,10 +2676,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     onClick={async () => {
                                       const subName = (newSubcategoryInputs[cat.id] || "").trim();
                                       if (subName) {
-                                        await updateDoc(doc(db, "categories", cat.id), {
-                                          subcategories: arrayUnion(subName)
-                                        });
-                                        setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                        try {
+                                          await setDoc(doc(db, "categories", String(cat.id)), {
+                                            subcategories: arrayUnion(subName)
+                                          }, { merge: true });
+                                          setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                          toast.success(`"${subName}" সাব-ক্যাটাগরি যোগ করা হয়েছে`);
+                                        } catch (err: any) {
+                                          console.error("Add subcategory error:", err);
+                                          toast.error("সাব-ক্যাটাগরি যোগ করতে সমস্যা হয়েছে");
+                                        }
                                       }
                                     }}
                                     className="bg-primary hover:brightness-105 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm shadow-primary/10 active:scale-95"

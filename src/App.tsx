@@ -4095,58 +4095,65 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   const saveCategory = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingCategory?.name) return;
+    const catName = editingCategory.name.trim();
+    if (!catName) return;
+    const isEdit = !!editingCategory.id;
+    const oldCat = isEdit ? categories.find((c: any) => String(c.id) === String(editingCategory.id)) : null;
+    const oldCatName = oldCat?.name || "";
+
     try {
-      if (editingCategory.id) {
-        await updateDoc(doc(db, "categories", editingCategory.id), {
-          name: editingCategory.name,
-        });
+      if (isEdit) {
+        const catId = String(editingCategory.id);
+        await setDoc(doc(db, "categories", catId), {
+          name: catName,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        
+        // Optimistic local state update
+        setCategories((prev: any) => prev.map((c: any) => String(c.id) === catId ? { ...c, name: catName } : c));
+        
+        // If name changed, also update products referencing old category name
+        if (oldCatName && oldCatName !== catName) {
+          setProducts((prev: any) => prev.map((p: any) => p.category === oldCatName ? { ...p, category: catName } : p));
+        }
+        
+        toast.success("ক্যাটাগরি সফলভাবে আপডেট করা হয়েছে!");
       } else {
-        await setDoc(doc(collection(db, "categories")), {
-          name: editingCategory.name,
+        const docRef = await addDoc(collection(db, "categories"), {
+          name: catName,
           createdAt: new Date().toISOString(),
         });
+        setCategories((prev: any) => [...prev, { id: docRef.id, name: catName }]);
+        toast.success("নতুন ক্যাটাগরি সফলভাবে যোগ করা হয়েছে!");
       }
       setEditingCategory(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Save category failed", err);
-      alert("Failed to save data on server. Please check your internet connection or log in again.");
+      toast.error("ক্যাটাগরি সেভ করতে সমস্যা হয়েছে: " + (err?.message || "Please check connection"));
     }
   };
   const [deletingCatId, setDeletingCatId] = useState<string | null>(null);
   const deleteCategory = async (id: any, name: string) => {
     if (!id) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("Category ID not found.");
       return;
     }
     const categoryId = String(id);
-    console.log("Log", { id, categoryId, name });
-    
     const conf = window.confirm(`আপনি কি "${name}" ক্যাটাগরি ডিলিট করতে চান?`);
-    if (!conf) {
-      console.log(" Deletion cancelled by user");
-      return;
-    }
+    if (!conf) return;
+    
     setDeletingCatId(categoryId);
     try {
-      console.log("Log" + categoryId);
       const docRef = doc(db, "categories", categoryId);
       await deleteDoc(docRef);
-      console.log("Log");
-      
-      // Manual state update as fallback for slow snapshot
-      setCategories((prev) => prev.filter((c) => String(c.id) !== categoryId));
-      
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      setCategories((prev: any) => prev.filter((c: any) => String(c.id) !== categoryId));
+      toast.success(`"${name}" ক্যাটাগরি সফলভাবে ডিলিট করা হয়েছে।`);
       if (editingCategory && String(editingCategory.id) === categoryId) {
         setEditingCategory(null);
       }
     } catch (err: any) {
-      console.error(" Category delete error details:", err);
-      if (err.code === "permission-denied") {
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-      } else {
-        alert("ছবি প্রসেস করতে সমস্যা হয়েছে।");
-      }
+      console.error("Category delete error details:", err);
+      toast.error("ক্যাটাগরি ডিলিট করতে সমস্যা হয়েছে: " + (err?.message || "Permission error"));
       handleFirestoreError(err, OperationType.DELETE, `categories/${categoryId}`);
     } finally {
       setDeletingCatId(null);
