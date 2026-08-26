@@ -271,7 +271,7 @@ export const MASTER_EMAILS = [
   "rokomariponnohari@gmail.com",
   "bonieaminrony@gmail.com",
   "islamicsoktitv@gmail.com",
-  "ishopbd.online@gmail.com",
+  "rokomariponnohari@gmail.com",
   "ifilmbd2025@gmail.com",
 ];
 

@@ -223,7 +223,7 @@ export const getProductSlug = (product: any): string => {
 
 /**
  * Standard Short Product Path: /p/{slug}
- * (e.g. https://ishopbd.com/p/awei-pa-103-491298)
+ * (e.g. https://rokomariponnohari.com/p/awei-pa-103-491298)
  */
 export const getProductPath = (product: any): string => {
   const slug = getProductSlug(product);

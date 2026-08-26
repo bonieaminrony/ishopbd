@@ -23,7 +23,7 @@ service cloud.firestore {
         request.auth.token.email.lower() == "rokomariponnohari@gmail.com" ||
         request.auth.token.email.lower() == "bonieaminrony@gmail.com" ||
         request.auth.token.email.lower() == "islamicsoktitv@gmail.com" ||
-        request.auth.token.email.lower() == "ishopbd.online@gmail.com" ||
+        request.auth.token.email.lower() == "rokomariponnohari@gmail.com" ||
         request.auth.token.email.lower() == "ifilmbd2025@gmail.com"
       );
     }
@@ -226,7 +226,7 @@ service cloud.firestore {
         adminId != "rokomariponnohari@gmail.com" && 
         adminId != "bonieaminrony@gmail.com" && 
         adminId != "islamicsoktitv@gmail.com" && 
-        adminId != "ishopbd.online@gmail.com" && 
+        adminId != "rokomariponnohari@gmail.com" && 
         adminId != "ifilmbd2025@gmail.com");
     }
 

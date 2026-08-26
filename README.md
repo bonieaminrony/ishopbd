@@ -2,7 +2,7 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# 🛒 i SHOP BD — Premium Online Shop Bangladesh
+# 🛒 রকমারি পণ্য হাড়ি — Premium Online Shop Bangladesh
 
 বাংলাদেশের সেরা প্রিমিয়াম অনলাইন শপ। রিচার্জেবল ফ্যান, স্মার্ট ওয়াচ, হেডফোন এবং আরও অনেক পণ্য।
 
@@ -118,7 +118,7 @@ npm run test:coverage
 ## 📁 Project Structure
 
 ```
-ishopbd.com/
+rokomariponnohari.com/
 ├── src/
 │   ├── App.tsx              # Main app component
 │   ├── components/          # UI components
@@ -151,5 +151,5 @@ ishopbd.com/
 
 ## 📞 Support
 
-- **Website:** [ishopbd.com](https://ishopbd.com)
-- **Facebook:** [i SHOP BD](https://facebook.com/ishopbd)
+- **Website:** [rokomariponnohari.com](https://rokomariponnohari.com)
+- **Facebook:** [রকমারি পণ্য হাড়ি](https://facebook.com/rokomari)

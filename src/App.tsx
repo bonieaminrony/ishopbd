@@ -502,7 +502,7 @@ function App() {
           const updatedHistory = [localOrder, ...orderHistory];
           setOrderHistory(updatedHistory);
           try {
-            localStorage.setItem("ishopbd_orders", JSON.stringify(updatedHistory));
+            localStorage.setItem("rokomari_orders", JSON.stringify(updatedHistory));
           } catch (e) {
             console.warn("Failed to save orders to localStorage:", e);
           }
@@ -527,10 +527,10 @@ function App() {
             }).catch(err => console.warn("Auto SMS failed:", err));
           } catch(e) {}
           try {
-            const sessionId = localStorage.getItem("ishopbd_session_id");
+            const sessionId = localStorage.getItem("rokomari_session_id");
             if (sessionId) {
               deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
-              localStorage.removeItem("ishopbd_session_id");
+              localStorage.removeItem("rokomari_session_id");
             }
             if (newOrder.customerPhone) {
               deleteDoc(doc(db, "incomplete_orders", newOrder.customerPhone)).catch(() => {});
@@ -705,10 +705,10 @@ function App() {
             }).catch(err => console.warn("Auto SMS failed:", err));
           } catch(e) {}
           try {
-            const sessionId = localStorage.getItem("ishopbd_session_id");
+            const sessionId = localStorage.getItem("rokomari_session_id");
             if (sessionId) {
               deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
-              localStorage.removeItem("ishopbd_session_id");
+              localStorage.removeItem("rokomari_session_id");
             }
             if (orderData.customerPhone) {
               deleteDoc(doc(db, "incomplete_orders", orderData.customerPhone)).catch(() => {});
@@ -872,10 +872,10 @@ function App() {
   const [isAdminRecording, setIsAdminRecording] = useState(false);
   const [adminMediaRecorder, setAdminMediaRecorder] = useState<MediaRecorder | null>(null);
   const [sessionId] = useState(() => {
-    const saved = localStorage.getItem("ishopbd_chat_session");
+    const saved = localStorage.getItem("rokomari_chat_session");
     if (saved && saved.startsWith("guest_")) return saved;
     const newId = "guest_" + Math.random().toString(36).substring(2, 9);
-    localStorage.setItem("ishopbd_chat_session", newId);
+    localStorage.setItem("rokomari_chat_session", newId);
     return newId;
   });
   const [supportChats, setSupportChats] = useState<any[]>([]);
@@ -1097,7 +1097,7 @@ function App() {
 
   const [savedProfiles, setSavedProfiles] = useState<any[]>(() => {
     try {
-      const saved = localStorage.getItem("ishopbd_saved_profiles");
+      const saved = localStorage.getItem("rokomari_saved_profiles");
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -1119,10 +1119,10 @@ function App() {
   }, [inlineOrderPhone]);
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      let sessionId = localStorage.getItem("ishopbd_session_id");
+      let sessionId = localStorage.getItem("rokomari_session_id");
       if (!sessionId) {
         sessionId = "cart_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
-        localStorage.setItem("ishopbd_session_id", sessionId);
+        localStorage.setItem("rokomari_session_id", sessionId);
       }
       if (cartItems.length > 0) {
         const totalAmt = cartItems.reduce((sum: number, item: any) => sum + (getProductPrice(item.product, item.quantity) * item.quantity), 0);
@@ -1435,7 +1435,7 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
   const chatEndRef = useRef<HTMLDivElement>(null);
   const adminChatEndRef = useRef<HTMLDivElement>(null);
   const [blacklist, setBlacklist] = useState<string[]>(() => {
-    const saved = localStorage.getItem("ishopbd_blacklist");
+    const saved = localStorage.getItem("rokomari_blacklist");
     return saved ? JSON.parse(saved) : [];
   });
   const [courierReports, setCourierReports] = useState<Record<string, { total_parcel: number; total_delivered: number; total_cancelled: number; total_fraud_report: number }>>({});
@@ -1748,7 +1748,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       } else {
         next = [...prev, phone];
       }
-      localStorage.setItem("ishopbd_blacklist", JSON.stringify(next));
+      localStorage.setItem("rokomari_blacklist", JSON.stringify(next));
       return next;
     });
   };
@@ -1785,10 +1785,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (selectedProduct) {
-        let inlineSessionId = localStorage.getItem("ishopbd_inline_session_id");
+        let inlineSessionId = localStorage.getItem("rokomari_inline_session_id");
         if (!inlineSessionId) {
           inlineSessionId = "inline_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
-          localStorage.setItem("ishopbd_inline_session_id", inlineSessionId);
+          localStorage.setItem("rokomari_inline_session_id", inlineSessionId);
         }
 
         const resolvedPhone = (
@@ -1852,10 +1852,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (landingProduct && landingPhone && landingPhone.trim().length >= 4) {
-        let landingSessionId = localStorage.getItem("ishopbd_landing_session_id");
+        let landingSessionId = localStorage.getItem("rokomari_landing_session_id");
         if (!landingSessionId) {
           landingSessionId = "landing_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
-          localStorage.setItem("ishopbd_landing_session_id", landingSessionId);
+          localStorage.setItem("rokomari_landing_session_id", landingSessionId);
         }
         setDoc(doc(db, "incomplete_orders", landingSessionId), {
           phone: landingPhone.trim(),
@@ -2018,7 +2018,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     "rokomariponnohari@gmail.com",
     "bonieaminrony@gmail.com",
     "islamicsoktitv@gmail.com", 
-    "ishopbd.online@gmail.com",
+    "rokomariponnohari@gmail.com",
     "ifilmbd2025@gmail.com",
   ], []);
   const [isAdminDocLoading, setIsAdminDocLoading] = useState(true);
@@ -3952,7 +3952,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const next = isAlreadyLiked
         ? prev.filter(id => id !== productId)
         : [...prev, productId];
-      localStorage.setItem("ishopbd_liked_products", JSON.stringify(next));
+      localStorage.setItem("rokomari_liked_products", JSON.stringify(next));
       return next;
     });
     setSelectedProduct(prev => {
@@ -3983,7 +3983,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         const reverted = isAlreadyLiked
           ? [...prev, productId]
           : prev.filter(id => id !== productId);
-        localStorage.setItem("ishopbd_liked_products", JSON.stringify(reverted));
+        localStorage.setItem("rokomari_liked_products", JSON.stringify(reverted));
         return reverted;
       });
       setSelectedProduct(prev => {
@@ -5502,7 +5502,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
   const savePhoneProfile = (phone: string, name: string, address: string, district?: string, thana?: string, area?: string) => {
     if (!phone || phone.trim().length < 11) return;
     try {
-      const saved = localStorage.getItem("ishopbd_saved_profiles");
+      const saved = localStorage.getItem("rokomari_saved_profiles");
       let profiles: any[] = saved ? JSON.parse(saved) : [];
       profiles = profiles.filter(p => p.phone !== phone.trim());
       profiles.unshift({
@@ -5515,7 +5515,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
         timestamp: Date.now()
       });
       if (profiles.length > 10) profiles.pop();
-      localStorage.setItem("ishopbd_saved_profiles", JSON.stringify(profiles));
+      localStorage.setItem("rokomari_saved_profiles", JSON.stringify(profiles));
       setSavedProfiles(profiles);
     } catch (err) {
       console.error("Error saving profile:", err);
@@ -5844,7 +5844,7 @@ const handleSaveQuickEdit = async () => {
         );
         setOrderHistory(updated);
         try {
-          localStorage.setItem("ishopbd_orders", JSON.stringify(updated));
+          localStorage.setItem("rokomari_orders", JSON.stringify(updated));
         } catch (e) {
           console.warn("Failed to save orders to localStorage:", e);
         }
@@ -5882,7 +5882,7 @@ const handleSaveQuickEdit = async () => {
         );
       setOrderHistory(updated);
       try {
-        localStorage.setItem("ishopbd_orders", JSON.stringify(updated));
+        localStorage.setItem("rokomari_orders", JSON.stringify(updated));
       } catch (e) {
         console.warn("Failed to save orders to localStorage:", e);
       }
@@ -5970,7 +5970,7 @@ const handleSaveQuickEdit = async () => {
       );
       setOrderHistory(updated);
       try {
-        localStorage.setItem("ishopbd_orders", JSON.stringify(updated));
+        localStorage.setItem("rokomari_orders", JSON.stringify(updated));
       } catch (e) {
         console.warn("Failed to save orders to localStorage:", e);
       }

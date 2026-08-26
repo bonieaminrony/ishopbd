@@ -9,8 +9,8 @@
 $allowedOrigins = [
     'https://rokomariponnohari.com',
     'https://www.rokomariponnohari.com',
-    'https://ishopbd.com',
-    'https://www.ishopbd.com',
+    'https://rokomariponnohari.com',
+    'https://www.rokomariponnohari.com',
     'http://localhost:5173',
     'http://localhost:3000',
 ];

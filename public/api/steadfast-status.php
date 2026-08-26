@@ -6,10 +6,10 @@
 
 // --- CORS: Only allow your own domain ---
 $allowedOrigins = [
-    'https://ishopbd.com',
-    'https://www.ishopbd.com',
-    'https://ishopbd.online',
-    'https://www.ishopbd.online',
+    'https://rokomariponnohari.com',
+    'https://www.rokomariponnohari.com',
+    'https://rokomariponnohari.com',
+    'https://www.rokomariponnohari.com',
     'http://localhost:5173',
     'http://localhost:3000',
 ];
@@ -17,7 +17,7 @@ $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (in_array($origin, $allowedOrigins)) {
     header("Access-Control-Allow-Origin: $origin");
 } else {
-    header("Access-Control-Allow-Origin: https://ishopbd.com");
+    header("Access-Control-Allow-Origin: https://rokomariponnohari.com");
 }
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, OPTIONS");

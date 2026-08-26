@@ -6,10 +6,10 @@
 
 // --- CORS: Only allow your own domain ---
 $allowedOrigins = [
-    'https://ishopbd.com',
-    'https://www.ishopbd.com',
-    'https://ishopbd.online',
-    'https://www.ishopbd.online',
+    'https://rokomariponnohari.com',
+    'https://www.rokomariponnohari.com',
+    'https://rokomariponnohari.com',
+    'https://www.rokomariponnohari.com',
     'http://localhost:5173',
     'http://localhost:3000',
 ];
@@ -17,7 +17,7 @@ $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (in_array($origin, $allowedOrigins)) {
     header("Access-Control-Allow-Origin: $origin");
 } else {
-    header("Access-Control-Allow-Origin: https://ishopbd.com");
+    header("Access-Control-Allow-Origin: https://rokomariponnohari.com");
 }
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -135,8 +135,8 @@ if ($total === false || $total < 0) {
 $items = array_slice($items, 0, 50);
 
 // --- BUILD EMAIL ---
-$emailUser = getEnvVar('EMAIL_USER', 'ishopbd.online@gmail.com');
-$to        = getEnvVar('ORDER_NOTIFY_EMAIL') ?: getEnvVar('EMAIL_USER') ?: 'ishopbd.online@gmail.com';
+$emailUser = getEnvVar('EMAIL_USER', 'rokomariponnohari@gmail.com');
+$to        = getEnvVar('ORDER_NOTIFY_EMAIL') ?: getEnvVar('EMAIL_USER') ?: 'rokomariponnohari@gmail.com';
 $subject   = "=?UTF-8?B?" . base64_encode("New Order from " . $customerName) . "?=";
 
 $itemsList = '';

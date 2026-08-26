@@ -4339,7 +4339,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                              <Tag size={24} className="text-primary" /> Coupon & Payment Settings
                            </h4>
                            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold">
-                              Used: {orderHistory.filter(o => o.appliedCoupon === (siteConfig?.couponCode || "ISHOPBD5")).length} times
+                              Used: {orderHistory.filter(o => o.appliedCoupon === (siteConfig?.couponCode || "ROKOMARI5")).length} times
                            </div>
                          </div>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">

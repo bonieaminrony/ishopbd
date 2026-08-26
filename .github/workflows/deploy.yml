@@ -21,5 +21,5 @@ jobs:
             git pull origin main
             npm install --production=false
             npm run build
-            pm2 restart all || pm2 start dist/server.cjs --name ishopbd
+            pm2 restart all || pm2 start dist/server.cjs --name rokomariponnohari
             echo "✅ Deployed successfully!"

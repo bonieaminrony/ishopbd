@@ -54,7 +54,6 @@ describe('Admin Access Control', () => {
 
   it('master email admin access পাবে', () => {
     expect(checkIsAdmin('rokomariponnohari@gmail.com', [])).toBe(true);
-    expect(checkIsAdmin('ishopbd.online@gmail.com', [])).toBe(true);
     expect(checkIsAdmin('bonieaminrony@gmail.com', [])).toBe(true);
   });
 
