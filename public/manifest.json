@@ -1,7 +1,7 @@
 {
-  "short_name": "I SHOP BD",
-  "name": "I SHOP BD",
-  "description": "Premium online shop for gadgets, electronics, and accessories in Bangladesh.",
+  "short_name": "রকমারি পণ্য হাড়ি",
+  "name": "রকমারি পণ্য হাড়ি - Rokomari Ponno Hari",
+  "description": "১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের বিশ্বস্ত অনলাইন শপ।",
   "icons": [
     {
       "src": "/icon-192x192.png",
@@ -18,6 +18,6 @@
   ],
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#ff4d4f",
-  "background_color": "#ffffff"
+  "theme_color": "#5C6E6C",
+  "background_color": "#F4F3EF"
 }

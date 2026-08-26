@@ -2,7 +2,10 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { FlashSaleCountdown } from './FlashSaleCountdown';
-import { Zap, ChevronRight, Star, X, LayoutGrid, ChevronDown, ChevronLeft } from 'lucide-react';
+import { Zap, ChevronRight, Star, X, LayoutGrid, ChevronDown, ChevronLeft, Leaf, ShieldCheck, Truck, Sparkles, Award, HeartHandshake, CheckCircle2, Flame, ShoppingCart, Heart } from 'lucide-react';
+import { useCartContext } from '../context/CartContext';
+import { useProductContext } from '../context/ProductContext';
+import { DEFAULT_BANNERS } from '../constants/data';
 
 export interface ShopListProps {
   activeCampaign: any;
@@ -101,65 +104,411 @@ export default function ShopList(props: ShopListProps) {
     brands,
   } = props;
 
+  const { products } = useProductContext();
+  const { addToCart } = useCartContext();
+
+  const topSellingList = React.useMemo(() => {
+    if (featuredProducts && featuredProducts.length >= 4) {
+      return featuredProducts.slice(0, 4);
+    }
+    if (products && products.length >= 4) {
+      return products.slice(0, 4);
+    }
+    return products || [];
+  }, [featuredProducts, products]);
+
+  const siteTitle = t(
+    "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ",
+    "Rokomari Ponno Hari - 100% Pure & Natural Organic Food Shop"
+  );
+  const siteDescription = t(
+    "সুন্দরবনের প্রাকৃতিক চাকের খাঁটি মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম মরিয়ম খেজুর, ড্রাই ফ্রুটস ও অর্গানিক খাদ্যপণ্য কিনুন সেরা মূল্যে।",
+    "Buy pure raw honey, wood-pressed mustard oil, homemade cow ghee, dates, dry fruits and organic essentials online."
+  );
+
+  const [currentSlide, setCurrentSlide] = React.useState(0);
+  const heroBanners = React.useMemo(() => {
+    return DEFAULT_BANNERS.filter((b: any) => (b.type || 'hero') === 'hero');
+  }, []);
+  const bTop = React.useMemo(() => DEFAULT_BANNERS.find((b: any) => b.type === 'right_top'), []);
+  const bBottom = React.useMemo(() => DEFAULT_BANNERS.find((b: any) => b.type === 'right_bottom'), []);
+
+  React.useEffect(() => {
+    if (heroBanners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroBanners.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [heroBanners.length]);
+
   return (
-    <>
-      {activeCampaign && (
-              <div className="relative bg-black overflow-hidden mb-12 shadow-2xl">
-                {activeCampaign.image && (
-                  <img
-                    loading="lazy"
-                    decoding="async"
-                    src={activeCampaign.image}
-                    className="w-full h-auto block"
-                    alt={activeCampaign.name}
-                  />
-                )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6">
-              {!activeCampaign.image && (
-                <>
-                  <motion.h2
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="text-3xl md:text-6xl font-black text-center mb-4 tracking-tighter font-ador"
-                  >
-                    {activeCampaign.name}
-                  </motion.h2>
-                  {activeCampaign.description && (
-                    <motion.p
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.1 }}
-                      className="text-sm md:text-lg text-center max-w-2xl opacity-90 font-bold font-ador"
-                    >
-                      {cleanLatex(activeCampaign.description || "")}
-                    </motion.p>
-                  )}
-                </>
-              )}
+    <div className="w-full flex-1">
+      {/* 4. Products Grid */}
+      <section id="product-display-section" className="relative">
+        <Helmet>
+          <title>{siteTitle}</title>
+          <meta name="description" content={siteDescription} />
+        </Helmet>
+        {activeCampaign && (
+          <div className="container mx-auto px-4 pt-4 pb-2">
+            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-md">
+                  <Zap size={20} className="animate-bounce" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black tracking-widest text-primary uppercase bg-primary/10 px-2 py-0.5 rounded-full">
+                    স্পেশাল অফার
+                  </span>
+                  <h3 className="text-base font-black text-secondary">
+                    {cleanLatex(activeCampaign.title || activeCampaign.name)}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-bold">
+                    {cleanLatex(activeCampaign.subtitle || activeCampaign.description)}
+                  </p>
+                </div>
+              </div>
               <motion.button
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.2 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   setActiveCampaign(null);
                   const url = new URL(window.location.href);
                   url.searchParams.delete("campaign");
                   window.history.pushState({}, "", url.toString());
                 }}
-                className="mt-8 flex items-center gap-2 bg-cream text-black px-8 py-3 rounded-full font-black text-xs hover:bg-primary hover:text-white transition-all shadow-xl active:scale-95 group"
+                className="bg-primary text-white px-6 py-2 rounded-xl text-xs font-bold shadow-md hover:bg-primary/90"
               >
-                <Home
-                  size={16}
-                  className="group-hover:-translate-y-0.5 transition-transform"
-                />
-              Back to Home
+                বন্ধ করুন
               </motion.button>
             </div>
           </div>
         )}
         {/* 4.5 Featured & New Arrivals Section (Only on Homepage) */}
         {selectedCategory === "all" && !searchQuery && !activeCampaign && !isTrendingFilterActive && (
-          <div className="space-y-6 mb-6">
+          <div className="space-y-6 mb-8">
+            {/* 1. Hero Banner Slider & Side Banners */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
+              {/* Main 3/4 Slider */}
+              <div className="md:col-span-3 relative overflow-hidden shadow-xl rounded-2xl md:rounded-3xl border border-stone-100 bg-white min-h-[240px] md:min-h-[380px] group">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentSlide}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="relative w-full h-full min-h-[240px] md:min-h-[380px]"
+                  >
+                    <img
+                      src={heroBanners[currentSlide % heroBanners.length]?.image}
+                      className="w-full h-full object-cover block absolute inset-0"
+                      loading="eager"
+                      alt={heroBanners[currentSlide % heroBanners.length]?.title || "রকমারি পণ্য হাড়ি ব্যানার"}
+                    />
+                    {/* Dark gradient overlay for crystal clear typography */}
+                    <div className="absolute inset-0 flex items-center px-6 sm:px-10 md:px-14 text-white bg-gradient-to-r from-black/80 via-black/45 to-transparent">
+                      <div className="max-w-xl py-4">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#6FA838]/30 border border-[#6FA838]/60 text-[#96D657] text-xs font-bold mb-2.5 backdrop-blur-xs">
+                          <Leaf size={13} className="text-[#96D657]" />
+                          <span>{t("১০০% খাঁটি ও প্রাকৃতিক অর্গানিক খাদ্যপণ্য", "100% Pure & Organic")}</span>
+                        </div>
+
+                        <motion.h2
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-xl sm:text-2xl md:text-3xl lg:text-4xl mb-2 font-black tracking-tight text-white drop-shadow-xl font-sans leading-tight"
+                        >
+                          {heroBanners[currentSlide % heroBanners.length]?.title}
+                        </motion.h2>
+
+                        <motion.p
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.15 }}
+                          className="text-xs sm:text-sm md:text-base opacity-90 text-white/90 drop-shadow-lg font-sans line-clamp-2 max-w-lg mb-4"
+                        >
+                          {heroBanners[currentSlide % heroBanners.length]?.subtitle}
+                        </motion.p>
+
+                        <button
+                          onClick={() => {
+                            document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+                          }}
+                          className="bg-[#6FA838] hover:bg-[#5E942E] text-white text-xs sm:text-sm font-bold px-5 py-2 sm:py-2.5 rounded-xl shadow-lg shadow-[#6FA838]/30 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                        >
+                          <Zap size={15} className="fill-white" />
+                          <span>{t("এখনই কেনাকাটা করুন", "Shop Now")}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Left/Right Arrows */}
+                {heroBanners.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => setCurrentSlide((prev) => (prev - 1 + heroBanners.length) % heroBanners.length)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/70 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer shadow-md"
+                      title="Previous"
+                    >
+                      <ChevronLeft size={22} />
+                    </button>
+                    <button
+                      onClick={() => setCurrentSlide((prev) => (prev + 1) % heroBanners.length)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/70 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer shadow-md"
+                      title="Next"
+                    >
+                      <ChevronRight size={22} />
+                    </button>
+
+                    {/* Dots indicator */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+                      {heroBanners.map((_, dotIdx) => (
+                        <button
+                          key={dotIdx}
+                          onClick={() => setCurrentSlide(dotIdx)}
+                          className={`h-2 rounded-full transition-all cursor-pointer ${
+                            (currentSlide % heroBanners.length) === dotIdx
+                              ? "w-6 bg-[#6FA838] shadow-xs"
+                              : "w-2 bg-white/50 hover:bg-white/80"
+                          }`}
+                          title={`Slide ${dotIdx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Right 1/4 Side Promo Cards - Combo Packs */}
+              <div className="col-span-1 md:flex hidden flex-col gap-4">
+                {/* Top Promo - Combo 1 */}
+                <div
+                  onClick={() => {
+                    document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-stone-150 overflow-hidden shadow-md group hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0 cursor-pointer"
+                >
+                  <img
+                    src={bTop?.image || "https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&h=500&fit=crop"}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 absolute inset-0"
+                    alt={bTop?.title || "মধু + ঘি + সরিষার তেল কম্বো"}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent flex items-end p-4">
+                    <div className="text-white">
+                      <span className="text-[10px] font-bold bg-[#D2A96A] text-[#2C3534] px-2 py-0.5 rounded-md inline-block mb-1 shadow-xs">
+                        🎁 {t("মেগা কম্বো প্যাক", "Mega Combo Pack")}
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-bold line-clamp-1 text-white drop-shadow">
+                        {bTop?.title || "মধু + ঘি + সরিষার তেল কম্বো প্যাক"}
+                      </h4>
+                      <p className="text-[10px] text-white/80 line-clamp-1 font-sans">
+                        {bTop?.subtitle || "একসাথে ৩টি খাঁটি খাদ্যপণ্য কিনুন বিশেষ ছাড়ে"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Promo - Combo 2 */}
+                <div
+                  onClick={() => {
+                    document.getElementById("flash-sale-section")?.scrollIntoView({ behavior: "smooth" }) ||
+                    document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-stone-150 overflow-hidden shadow-md group hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0 cursor-pointer"
+                >
+                  <img
+                    src={bBottom?.image || "https://images.unsplash.com/photo-1599599810769-bcde5a160d32?w=800&h=500&fit=crop"}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 absolute inset-0"
+                    alt={bBottom?.title || "হানি নাট ও মরিয়ম খেজুর কম্বো"}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent flex items-end p-4">
+                    <div className="text-white">
+                      <span className="text-[10px] font-bold bg-[#BB7154] text-white px-2 py-0.5 rounded-md inline-block mb-1 shadow-xs">
+                        ⚡ {t("ধামাকা কম্বো অফার", "Dhamaka Combo Offer")}
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-bold line-clamp-1 text-white drop-shadow">
+                        {bBottom?.title || "প্রিমিয়াম হানি নাট ও মরিয়ম খেজুর কম্বো"}
+                      </h4>
+                      <p className="text-[10px] text-white/80 line-clamp-1 font-sans">
+                        {bBottom?.subtitle || "প্রাকৃতিক এনার্জি ও পুষ্টির সেরা কম্বিনেশন"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Organic Categories Showcase (Seamless & Clean) */}
+            {categories && categories.length > 0 && (
+              <section className="my-6">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <Leaf size={18} className="text-emerald-700" />
+                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-secondary font-sans">
+                      {t("জনপ্রিয় ক্যাটাগরি", "Popular Categories")}
+                    </h3>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 md:grid-cols-8 gap-2 sm:gap-2.5">
+                  {categories.map((cat: any) => {
+                    const categoryEmojiMap: Record<string, string> = {
+                      "কৃত্তিক চাকের মধু": "🍯",
+                      "বিভিন্ন ফুলের মধু": "🐝",
+                      "গাওয়া ঘি": "🧈",
+                      "সরিষার তেল": "🛢️",
+                      "খেজুরের গুড়": "🌴",
+                      "আখের গুড়": "🌾",
+                      "রসালো লিচু": "🍒",
+                      "খাঁটি আম": "🥭",
+                    };
+                    const emoji = categoryEmojiMap[cat.name] || "🌿";
+                    const isSelected = selectedCategory === cat.name;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => {
+                          setSelectedCategory(cat.name);
+                          document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        className={`flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-2xl transition-all cursor-pointer group ${
+                          isSelected
+                            ? "bg-emerald-800 text-white shadow-md scale-105"
+                            : "bg-white/70 hover:bg-white border border-stone-200/60 hover:border-emerald-600/40 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md hover:-translate-y-1"
+                        }`}
+                      >
+                        <span className="text-2xl sm:text-3xl mb-1.5 group-hover:scale-110 transition-transform">{emoji}</span>
+                        <span className={`text-[11px] sm:text-xs font-bold text-center line-clamp-2 leading-tight ${isSelected ? "text-white" : "text-stone-800 group-hover:text-emerald-800"}`}>
+                          {cat.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Top Selling Products (Ultra-Premium 2x2 Clean Showcase) */}
+            {topSellingList && topSellingList.length > 0 && (
+              <section className="my-8">
+                <div className="flex items-center justify-between mb-4 px-1">
+                  <div className="flex items-center gap-2">
+                    <Flame size={22} className="text-[#6FA838] fill-[#6FA838]" />
+                    <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-secondary font-sans">
+                      {t("টপ সেলিং পণ্য", "Top Selling Products")}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="text-xs sm:text-sm font-semibold text-stone-600 hover:text-[#6FA838] flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <span>{t("সব দেখুন", "View All")}</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  {topSellingList.slice(0, 4).map((product: any, index: number) => {
+                    const price = product.price || 0;
+                    const originalPrice = product.originalPrice || (product.price ? Math.round(product.price * 1.2) : 0);
+                    const savings = originalPrice > price ? originalPrice - price : 0;
+                    const showBestSellingBadge = index === 0 || index === 3;
+
+                    return (
+                      <div
+                        key={product.id || index}
+                        className="bg-white rounded-3xl border border-stone-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-lg transition-all duration-300 p-4 sm:p-5 flex flex-row items-center gap-4 sm:gap-6 relative overflow-hidden group"
+                      >
+                        {/* Best Selling Top-Right Badge */}
+                        {showBestSellingBadge && (
+                          <div className="absolute top-0 right-0 bg-[#6FA838] text-white text-[10px] sm:text-[11px] font-bold px-3.5 py-1 rounded-bl-2xl shadow-xs flex items-center gap-1 z-10">
+                            <Flame size={12} className="fill-white text-white" />
+                            <span>{t("বেস্ট সেলিং", "Best Selling")}</span>
+                          </div>
+                        )}
+
+                        {/* Product Image - Significantly Larger & Crisp */}
+                        <div
+                          onClick={() => openProductDetails(product)}
+                          className="w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 shrink-0 flex items-center justify-center cursor-pointer p-2 bg-stone-50/80 rounded-2xl group-hover:scale-105 transition-transform duration-300 border border-stone-100 overflow-hidden"
+                        >
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                          />
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <h4
+                            onClick={() => openProductDetails(product)}
+                            className="text-sm sm:text-base md:text-lg font-bold text-secondary hover:text-[#6FA838] line-clamp-2 leading-snug cursor-pointer transition-colors font-sans"
+                          >
+                            {product.name}
+                          </h4>
+
+                          {/* Pricing & Save Badge */}
+                          <div className="mt-2">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-lg sm:text-xl md:text-2xl font-black text-[#6FA838] font-sans tracking-tight">
+                                ৳{price.toLocaleString('bn-BD')}
+                              </span>
+                              {originalPrice > price && (
+                                <span className="text-xs sm:text-sm text-stone-400 line-through font-normal">
+                                  ৳{originalPrice.toLocaleString('bn-BD')}
+                                </span>
+                              )}
+                            </div>
+
+                            {savings > 0 && (
+                              <div className="mt-1.5">
+                                <span className="bg-[#6FA838]/15 text-[#4D7C23] border border-[#6FA838]/30 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full inline-block">
+                                  Save ৳{savings.toLocaleString('bn-BD')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 sm:gap-3 mt-3.5 flex-wrap sm:flex-nowrap">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToCart(product, 1);
+                              }}
+                              className="border border-[#6FA838] text-[#6FA838] hover:bg-[#6FA838] hover:text-white bg-transparent rounded-xl px-3.5 sm:px-4 py-2 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                            >
+                              <ShoppingCart size={14} />
+                              <span>{t("কার্ট", "Add To Cart")}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBuyNow(product);
+                              }}
+                              className="bg-[#6FA838] hover:bg-[#5E942E] text-white rounded-xl px-4 sm:px-5 py-2 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-[#6FA838]/25 cursor-pointer active:scale-95 hover:shadow-lg"
+                            >
+                              <ShoppingCart size={14} className="fill-white" />
+                              <span>{t("অর্ডার করুন", "Buy now")}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
             {/* New Arrivals Horizontal Scroll */}
             {isLoading && newArrivals.length === 0 ? (
               <section>
@@ -355,24 +704,21 @@ export default function ShopList(props: ShopListProps) {
           </div>
         )}
         {/* Flash Sale Section */}
-        {console.log("Flash sale render - cache bust v7")}
         {!isProductDetailsOpen && !activeCampaign && flashSaleProducts.length > 0 && (
-          <section id="flash-sale-section" className="mb-10 relative p-[2px] rounded-[2.6rem] overflow-hidden shadow-2xl shadow-red-500/10 transform-gpu">
+          <section id="flash-sale-section" className="mb-10 relative p-[2px] rounded-[2.4rem] overflow-hidden shadow-2xl shadow-[#2C3534]/10 transform-gpu">
             {/* Running Border Effect Background */}
-            <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#f00b24_0%,#ff3d54_25%,transparent_40%,#f00b24_50%,#ff3d54_75%,transparent_90%,#f00b24_100%)] animate-[spin_4s_linear_infinite] origin-center pointer-events-none z-0"></div>
+            <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#D2A96A_0%,#5C6E6C_25%,transparent_40%,#BB7154_50%,#A6B7AA_75%,transparent_90%,#D2A96A_100%)] animate-[spin_6s_linear_infinite] origin-center pointer-events-none z-0"></div>
             
             {/* Inner Content Card */}
-            <div className="relative w-full bg-white rounded-[2.5rem] overflow-hidden z-10 flex flex-col transform-gpu">
-              {/* Red Countdown Header Container */}
-              <div className="bg-[#f00b24] p-6 md:p-8 text-white relative overflow-hidden flex flex-col items-center justify-center gap-4 shadow-xl transform-gpu">
-                {/* Animated Background Overlay */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-                <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl transform translate-x-20 -translate-y-20"></div>
+            <div className="relative w-full bg-white rounded-[2.3rem] overflow-hidden z-10 flex flex-col transform-gpu">
+              {/* Countdown Header Container */}
+              <div className="bg-gradient-to-r from-[#5C6E6C] via-[#485755] to-[#2C3534] p-5 md:p-7 text-white relative overflow-hidden flex flex-col items-center justify-center gap-3 shadow-xl transform-gpu">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl transform translate-x-20 -translate-y-20"></div>
                 
                 <div className="flex items-center gap-2 relative z-10 animate-text-zoom">
-                  <Zap className="text-yellow-300 fill-yellow-300 drop-shadow-[0_0_10px_rgba(253,224,71,0.8)]" size={32} />
-                  <h3 className="text-3xl md:text-4xl font-black italic tracking-widest text-white drop-shadow-md">
-                    FLASHSALE
+                  <Zap className="text-[#D2A96A] fill-[#D2A96A] drop-shadow-[0_0_10px_rgba(210,169,106,0.8)]" size={28} />
+                  <h3 className="text-2xl md:text-3xl font-black italic tracking-wider text-white drop-shadow-md font-sans">
+                    ⚡ স্পেশাল অর্গানিক অফার — FLASH SALE
                   </h3>
                 </div>
                 
@@ -451,7 +797,7 @@ export default function ShopList(props: ShopListProps) {
                         ? selectedBrand
                         : searchQuery
                           ? t("সার্চ রেজাল্ট", "Search Results")
-                          : t("সকল গ্যাজেট", "All Gadgets")}
+                          : t("সকল অর্গানিক পণ্য", "All Organic Products")}
               </h3>
               {(isTrendingFilterActive || selectedCategory !== "all" || searchQuery || selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
                 <button 
@@ -599,7 +945,51 @@ export default function ShopList(props: ShopListProps) {
               </motion.button>
             </div>
           )}
+
+          {/* Organic Value Proposition / Trust Strip (Placed at bottom before Why Choose) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 md:gap-4 my-10">
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white hover:bg-stone-50/80 border border-stone-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all hover:shadow-md hover:-translate-y-0.5 group">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Leaf size={20} className="text-emerald-700" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-stone-800 font-sans leading-tight">{t("১০০% খাঁটি ও প্রাকৃতিক", "100% Pure & Natural")}</h4>
+                <p className="text-[10px] sm:text-xs text-stone-500 truncate">{t("চাক ও বাগান থেকে সরাসরি", "Direct Farm & Hive")}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white hover:bg-stone-50/80 border border-stone-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all hover:shadow-md hover:-translate-y-0.5 group">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Truck size={20} className="text-amber-700" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-stone-800 font-sans leading-tight">{t("ক্যাশ অন ডেলিভারি", "Cash on Delivery")}</h4>
+                <p className="text-[10px] sm:text-xs text-stone-500 truncate">{t("সারাদেশে দ্রুত হোম ডেলিভারি", "Fast Nationwide Delivery")}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white hover:bg-stone-50/80 border border-stone-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all hover:shadow-md hover:-translate-y-0.5 group">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <ShieldCheck size={20} className="text-emerald-700" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-stone-800 font-sans leading-tight">{t("প্রিজারভেটিভ মুক্ত", "Chemical Free")}</h4>
+                <p className="text-[10px] sm:text-xs text-stone-500 truncate">{t("শতভাগ বিশুদ্ধতার নিশ্চয়তা", "100% Pure Guarantee")}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white hover:bg-stone-50/80 border border-stone-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all hover:shadow-md hover:-translate-y-0.5 group">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Sparkles size={20} className="text-amber-700" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs sm:text-sm font-bold text-stone-800 font-sans leading-tight">{t("প্রিমিয়াম কোয়ালিটি", "Premium Quality")}</h4>
+                <p className="text-[10px] sm:text-xs text-stone-500 truncate">{t("আসল স্বাদ ও পুষ্টির সমাহার", "Rich Taste & Health")}</p>
+              </div>
+            </div>
+          </div>
         </div>
-    </>
+      </section>
+    </div>
   );
 }

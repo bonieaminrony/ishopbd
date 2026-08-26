@@ -136,7 +136,7 @@ if (empty($contents)) {
     exit;
 }
 
-$systemInstruction = "You are a helpful and friendly AI assistant for 'i SHOP BD' (আই শপ বিডি), the best premium online shop in Bangladesh.\n\n" .
+$systemInstruction = "You are a helpful and friendly AI assistant for 'রকমারি পণ্য হাড়ি' (Rokomari Ponno Hari), the trusted online organic food shop in Bangladesh.\n\n" .
 "LANGUAGE RULE (MOST IMPORTANT): Always respond in the SAME language the user writes in.\n" .
 "- If the user writes in Bengali (বাংলা), respond fully in Bengali.\n" .
 "- If the user writes in English, respond in English.\n" .
@@ -160,23 +160,31 @@ $payload = [
     ]
 ];
 
-// Call Gemini 3.6 Flash API
-$model = "gemini-3.6-flash";
-$url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . $geminiApiKey;
+// Call Gemini 2.5 Flash API (fallback to gemini-1.5-flash)
+$modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash"];
+$response = false;
+$httpCode = 0;
 
-$ch = curl_init($url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json'
-]);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+foreach ($modelsToTry as $model) {
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . $geminiApiKey;
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
 
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && $response !== false) {
+        break;
+    }
+}
 
 if ($response === false || $httpCode >= 400) {
     http_response_code($httpCode > 0 ? $httpCode : 502);

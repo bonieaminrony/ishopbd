@@ -51,7 +51,7 @@ const ProductCard = React.memo(({
         {/* Discount Badge */}
         <div className="absolute top-1 left-1 flex flex-col gap-1 z-10">
           {product.discount > 0 && (
-            <div className="bg-primary text-white text-xs md:text-sm font-bold px-2 py-0.5 rounded whitespace-nowrap shadow-sm">
+            <div className="bg-[#6FA838] text-white text-xs md:text-sm font-bold px-2 py-0.5 rounded whitespace-nowrap shadow-sm">
               -{product.discount}%
             </div>
           )}
@@ -63,7 +63,7 @@ const ProductCard = React.memo(({
             e.stopPropagation();
             handleLikeProduct(product.id);
           }}
-          className={`absolute top-1 right-1 p-1.5 backdrop-blur-sm rounded-full transition-all shadow-md transform hover:scale-110 flex items-center gap-1 ${product.likes ? "bg-red-50 text-primary" : "bg-white/90 text-gray-400 hover:text-red-500"}`}
+          className={`absolute top-1 right-1 p-1.5 backdrop-blur-sm rounded-full transition-all shadow-md transform hover:scale-110 flex items-center gap-1 ${product.likes ? "bg-primary/10 text-primary" : "bg-white/90 text-gray-400 hover:text-primary"}`}
         >
           <Heart size={12} fill={product.likes ? "currentColor" : "none"} />
           {(product.likes ?? 0) > 0 && <span className="text-[8px] font-bold">{product.likes}</span>}
@@ -83,30 +83,15 @@ const ProductCard = React.memo(({
           {product.name}
         </h4>
         <div className="mt-auto px-0.5">
-          <div className="flex items-baseline justify-between gap-1">
-            <span className="text-red-600 font-bold text-lg sm:text-xl lg:text-2xl tracking-tight">
+          <div className="flex items-baseline flex-wrap gap-2">
+            <span className="text-[#6FA838] font-bold text-lg sm:text-xl lg:text-2xl tracking-tight">
               ৳{product.price}
             </span>
             {product.originalPrice > product.price && (
-              <span className="text-xs lg:text-sm text-gray-400 line-through">
+              <span className="text-xs sm:text-sm text-stone-400 line-through font-semibold">
                 ৳{product.originalPrice}
               </span>
             )}
-          </div>
-
-          <div className="relative">
-            <motion.button
-              disabled={isOutOfStock}
-              whileTap={isOutOfStock ? {} : { scale: 0.98 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                openProductDetails(product);
-              }}
-              className="w-full relative overflow-hidden bg-gradient-to-br from-primary to-red-600 text-white text-xs sm:text-sm lg:text-base font-bold py-3.5 lg:py-2.5 rounded-lg transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group/btn active:scale-95 flex items-center justify-center gap-1.5"
-            >
-              {isOutOfStock ? t("স্টক আউট", "Stock Out") : t("অর্ডার দিন", "Order Now")}
-              {!isOutOfStock && <ArrowRight size={12} className="sm:w-[14px] sm:h-[14px]" />}
-            </motion.button>
           </div>
         </div>
       </div>

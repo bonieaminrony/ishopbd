@@ -4,255 +4,47 @@
   xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 
   <url>
-    <loc>https://ishopbd.com/</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
-  <!-- High-Priority Category Landing Pages -->
+  <!-- High-Priority Organic Food Category Landing Pages -->
   <url>
-    <loc>https://ishopbd.com/category/charger-fan</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/category/pure-honey</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://ishopbd.com/category/power-bank</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/category/mustard-oil-ghee</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://ishopbd.com/category/smart-watch</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/category/dates-dry-fruits</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://ishopbd.com/category/headphone</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/category/organic-seeds-oil</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://ishopbd.com/category/mobile-accessories</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/category/pure-spices</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
-    <loc>https://ishopbd.com/category/lifestyle-watch</loc>
-    <lastmod>2026-08-23</lastmod>
+    <loc>https://rokomariponnohari.com/category/organic-tea-herbal</loc>
+    <lastmod>2026-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=2OkoVXyoUOab9DpPPevt&amp;slug=ulanzi-j12-dual-wireless-lavalier-microphone-price-in-bangladesh-</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=3PmgUDX4JAyyQtILQxUI&amp;slug=-jysuper-jy-2570------price-in-bangladesh</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=4QtBOlNclgjN6lgUUjdO&amp;slug=dji-mic-mini------</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=E5Y3JlHztFGVgYcdbIVP&amp;slug=rechargeable-handheld-fan-----</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=F2hbuEi8zUxIt1IDgtGZ&amp;slug=dji-mic-mini-2--wireless-microphone</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=GvkagYBW5ng6TLtrFpjz&amp;slug=uurig-tp-02-multi-functional-selfie-stick-tripod-stand-with-flexible-ball-head-phone-holder---black</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=HN3TS6L5xUaBPS6q5E39&amp;slug=ven-dens-20000mah-power-bank-vd-pb059---best-price-in-bd</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=HlXTQUixu33Ve3kl4Oh2&amp;slug=tranyoo-t-m31-300-hours-bluetooth-neckband</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=IJUowN9NlbF4TyZ2WxIy&amp;slug=sx21-wireless-lavalier-microphone--pro-noise-reduction--perfect-for-interview-</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=LEoNe44HBqPUpdDFtSKQ&amp;slug=geeoo-p800-225w-fast-charging-power-bank-20000mah--built-in-4-cables--digital-display</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=NCcES8QBFBvjwr9KkhQk&amp;slug=plokama-cx-60-neck-bracket-hands-free-mount-for-action-camera--smartphone</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=QsNLuhseLYMYvNsSA4HJ&amp;slug=hollyland-lark-m2-wireless-microphone-price-in-bangladesh</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=RWlpva3y2QbMqvlU1zLD&amp;slug=awei-10000mah-magnetic-wireless-protable-powerbank-p139k-price-in-bd</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-    <image:image>
-      <image:loc>https://www.applegadgetsbd.com/_next/image?url=https%3A%2F%2Fadminapi.applegadgetsbd.com%2Fstorage%2Fmedia%2Flarge%2FAwei-P139K-10000mAh-15W-Magnetic-Wireless-Power-Bank-8237.png&amp;w=1920&amp;q=100</image:loc>
-      <image:title>Awei 10000Mah Magnetic Wireless Protable Powerbank P139K Price In Bd</image:title>
-    </image:image>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=SL2TBEgZZn9yK75g0A07&amp;slug=jysuper-jy-2218-----</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=SYl4M6ox48nc6jtAkcGF&amp;slug=rado-true-thinline-white-ceramic-watch-price-in-bangladesh--ishop-bd</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=Uh3XwcwRIHC6NndTBMwU&amp;slug=boya-by-mw2-dual-wireless-microphone-system--for-type-c-android--iphone</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=X9klFJmp8tOGRznbryX9&amp;slug=jysuper-jy-2526----</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=YxSGxOUucwlyjfYj3rpq&amp;slug=dji-mic-mini-2-1tx--for-action-camera-</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=d8B5Z07YKmgnmvK68ENZ&amp;slug=-jysuper-jy-2571-----</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=exNmv02ZWRPi1elzO0fa&amp;slug=geeoo-p850-20000mah-super-fast-charging-power-bank--225w</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=gpbhdfxL6dNsbwcC4jiB&amp;slug=rode-podmic-usb-and-xlr-dynamic-broadcast-microphone-black</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=ippxH0cHFZsAmBhyS2FR&amp;slug=awei-10000mah-pa-91-225w-portable-power-bank-price-in-bd</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=uvfMeq5SUT2lH0EEjYnw&amp;slug=mini-hand-fan-hl-mf2------price-in-bangladesh</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=vGUyIdRdbZ7Vu0ODoIUP&amp;slug=---</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?p=xQiTMlFqSmhX4x4vqxhe&amp;slug=awei-pa-103-30000mah-225w-fast-charging-power-bank--multi-port-portable-charger</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?category=Electrical</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?category=Organic</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?category=Lifestyle</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <url>
-    <loc>https://ishopbd.com/?category=Gadgets</loc>
-    <lastmod>2026-08-20</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
 </urlset>

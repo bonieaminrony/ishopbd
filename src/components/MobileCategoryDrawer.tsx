@@ -21,7 +21,7 @@ export const MobileCategoryDrawer: React.FC<MobileCategoryDrawerProps> = ({
   selectedCategory,
   selectedSubcategory,
   onSelectCategory,
-  t = (bn: string, en?: string) => bn,
+  t = (bn: string, en?: string) => en || bn,
   tc = (cat: string) => cat,
 }) => {
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export const MobileCategoryDrawer: React.FC<MobileCategoryDrawerProps> = ({
                   {t("সকল ক্যাটাগরি", "All Categories")}
                 </h3>
                 <span className="text-[11px] text-gray-500 font-medium">
-                  {categories.length} টি ক্যাটাগরি উপলব্ধ
+                  {categories.length} categories available
                 </span>
               </div>
             </div>

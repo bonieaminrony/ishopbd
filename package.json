@@ -1,7 +1,7 @@
 {
-  "name": "ishopbd",
+  "name": "rokomariponnohari",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "seed": "node seed-new-database.mjs",
     "sitemap": "node sitemap-generator.mjs",
     "deploy": "npm run build && node deploy-live.mjs"
   },

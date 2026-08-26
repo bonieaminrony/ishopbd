@@ -40,13 +40,13 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
   }, [siteConfig]);
 
   const downloadDesktopShortcut = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ishopbd.com';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rokomariponnohari.com';
     const content = `[InternetShortcut]\r\nURL=${origin}\r\nIconIndex=0\r\nIconFile=${origin}/icon-192x192.png\r\n`;
     const blob = new Blob([content], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'iShop BD App.url';
+    a.download = 'Rokomari Ponno Hari App.url';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -57,7 +57,7 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
     if (deviceOS === 'iOS') {
       if (!siteConfig?.iphoneAppUrl || siteConfig.iphoneAppUrl === '#' || siteConfig.iphoneAppUrl.trim() === '') {
         e.preventDefault();
-        alert('আইফোন অ্যাপটি বর্তমানে অ্যাপল অ্যাপ স্টোরে রিভিউতে রয়েছে। খুব শীঘ্রই এটি লাইভ হবে!');
+        alert('The iPhone app is currently undergoing Apple App Store review. It will be live soon!');
         return;
       }
       return;
@@ -93,7 +93,7 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
     // 3. If on Android without PWA event, instruct to install from browser menu
     if (deviceOS === 'Android') {
       e.preventDefault();
-      alert('সরাসরি ফোনে ইনস্টল করতে ব্রাউজারের উপরে (⋮) মেনুতে চাপ দিয়ে "Add to Home screen" বা "Install app" চাপুন।');
+      alert('To install on your phone, open the browser menu (⋮) and tap "Add to Home screen" or "Install app".');
       return;
     }
   };
@@ -102,7 +102,7 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
     if (platform === 'ios') {
       if (!siteConfig?.iphoneAppUrl || siteConfig.iphoneAppUrl === '#' || siteConfig.iphoneAppUrl.trim() === '') {
         e.preventDefault();
-        alert('আইফোন অ্যাপটি বর্তমানে অ্যাপল অ্যাপ স্টোরে রিভিউতে রয়েছে। খুব শীঘ্রই এটি লাইভ হবে!');
+        alert('The iPhone app is currently undergoing Apple App Store review. It will be live soon!');
         return;
       }
       return;
@@ -129,7 +129,7 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
 
     if (platform === 'android') {
       e.preventDefault();
-      alert('সরাসরি ফোনে ইনস্টল করতে ব্রাউজারের উপরে (⋮) মেনুতে চাপ দিয়ে "Add to Home screen" বা "Install app" চাপুন।');
+      alert('To install on your phone, open the browser menu (⋮) and tap "Add to Home screen" or "Install app".');
       return;
     }
   };
@@ -139,9 +139,9 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
       case 'Windows': return 'Windows PC';
       case 'macOS': return 'macOS Device';
       case 'Linux': return 'Linux Computer';
-      case 'Android': return 'অ্যান্ড্রয়েড ফোন';
-      case 'iOS': return 'আইফোন (iOS)';
-      default: return 'স্মার্ট ডিভাইস';
+      case 'Android': return 'Android Phone';
+      case 'iOS': return 'iPhone (iOS)';
+      default: return 'Smart Device';
     }
   };
 
@@ -182,15 +182,15 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
         className="relative bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[500px]"
       >
         {/* Left Banner Column (Visual App Preview) */}
-        <div className="md:col-span-5 bg-gradient-to-br from-primary via-red-500 to-rose-600 p-8 flex flex-col justify-between relative overflow-hidden text-white min-h-[250px] md:min-h-auto">
+        <div className="md:col-span-5 bg-gradient-to-br from-emerald-800 via-emerald-700 to-amber-700 p-8 flex flex-col justify-between relative overflow-hidden text-white min-h-[250px] md:min-h-auto">
           {/* Decorative background shapes */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-black/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Top content */}
           <div className="relative z-10">
-            <span className="text-[10px] bg-white/20 backdrop-blur-md px-3 py-1 rounded-full font-bold uppercase tracking-wider">i SHOP BD App</span>
-            <h4 className="text-2xl font-black mt-3 leading-tight font-ador">শপিং করুন আরও সহজে, যেকোনো সময়!</h4>
+            <span className="text-[10px] bg-white/20 backdrop-blur-md px-3 py-1 rounded-full font-bold uppercase tracking-wider">রকমারি পণ্য হাড়ি অ্যাপ</span>
+            <h4 className="text-2xl font-black mt-3 leading-tight">Shop Smarter, Anytime, Anywhere!</h4>
           </div>
 
           {/* CSS Phone Mockup Preview */}
@@ -202,12 +202,12 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
             </div>
 
             {/* Screen Content */}
-            <div className="flex-1 bg-cream p-3 flex flex-col justify-between">
+            <div className="flex-1 bg-[#FAF7F0] p-3 flex flex-col justify-between">
               {/* Fake App Header */}
               <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
-                <span className="text-[8px] font-black text-primary">i SHOP BD</span>
-                <span className="w-3 h-3 bg-primary/10 rounded-full flex items-center justify-center">
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-ping" />
+                <span className="text-[9px] font-black text-emerald-800">রকমারি পণ্য হাড়ি</span>
+                <span className="w-3 h-3 bg-emerald-700/10 rounded-full flex items-center justify-center">
+                  <span className="w-1.5 h-1.5 bg-emerald-700 rounded-full animate-ping" />
                 </span>
               </div>
               
@@ -230,11 +230,11 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
           <div className="relative z-10 hidden md:block space-y-2.5">
             <div className="flex items-center gap-2 text-xs">
               <Zap size={14} className="text-amber-300 shrink-0" />
-              <span className="font-bold">সুপার ফাস্ট ট্র্যাকিং সিস্টেম</span>
+              <span className="font-bold">Super Fast Order Tracking</span>
             </div>
             <div className="flex items-center gap-2 text-xs">
               <ShieldCheck size={14} className="text-emerald-300 shrink-0" />
-              <span className="font-bold">১০০% নিরাপদ ডাউনলোড ও পেমেন্ট</span>
+              <span className="font-bold">100% Safe Download & Payments</span>
             </div>
           </div>
         </div>
@@ -252,9 +252,9 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
           <div>
             {/* Logo and Headings */}
             <div className="mb-6 pr-8">
-              <h3 className="text-2xl font-black text-secondary tracking-tight">অফিশিয়াল অ্যাপ ডাউনলোড</h3>
+              <h3 className="text-2xl font-black text-secondary tracking-tight">Download Official App</h3>
               <p className="text-xs text-gray-400 mt-1 font-bold">
-                আমাদের অফিশিয়াল কাস্টমার মোবাইল ও কম্পিউটার ক্লায়েন্ট অ্যাপ ডাউনলোড করুন।
+                Download our official mobile and desktop application for faster shopping.
               </p>
             </div>
 
@@ -265,10 +265,10 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
               </div>
               <div className="flex-1 min-w-0">
                 <span className="text-[9px] bg-primary/10 text-primary font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  ডিভাইস ডিটেকশন
+                  Device Detection
                 </span>
                 <h4 className="text-sm font-black text-secondary mt-1">
-                  {getOSDisplayName(deviceOS)} প্রস্তুত!
+                  {getOSDisplayName(deviceOS)} Ready!
                 </h4>
               </div>
             </div>
@@ -283,13 +283,13 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
               className="w-full bg-primary hover:bg-red-700 text-white font-black py-4 px-6 rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 text-sm tracking-widest uppercase mb-8 cursor-pointer"
             >
               <Download size={18} />
-              {deviceOS === 'iOS' ? 'অ্যাপ স্টোর থেকে নিন' : 'সরাসরি ডাউনলোড'}
+              {deviceOS === 'iOS' ? 'Get on App Store' : 'Direct Download'}
             </a>
           </div>
 
           {/* Alternative links */}
           <div>
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">অন্যান্য প্ল্যাটফর্ম</h5>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Other Platforms</h5>
             <div className="grid grid-cols-3 gap-2.5">
               <a
                 href={siteConfig?.computerAppUrl || '#'}

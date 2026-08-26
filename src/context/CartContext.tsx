@@ -77,7 +77,7 @@ const [cartItems, setCartItems] = useState<
     }[]
   >(() => {
     try {
-      const saved = localStorage.getItem("ishopbd_cart");
+      const saved = localStorage.getItem("rokomari_cart");
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -298,26 +298,26 @@ const calculateTotal = () => {
     return subtotal + deliveryCharge;
   };
 
-useEffect(() => {
+  useEffect(() => {
     try {
-      localStorage.setItem("ishopbd_cart", JSON.stringify(cartItems));
+      localStorage.setItem("rokomari_cart", JSON.stringify(cartItems));
     } catch (e) {
       if (e instanceof DOMException && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED")) {
-        // Storage full â€” clear non-critical keys and retry
+        // Storage full — clear non-critical keys and retry
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && key !== "ishopbd_cart" && key !== "ishopbd_user") {
+          if (key && key !== "rokomari_cart" && key !== "rokomari_user") {
             keysToRemove.push(key);
           }
         }
         keysToRemove.forEach((k) => localStorage.removeItem(k));
         try {
-          localStorage.setItem("ishopbd_cart", JSON.stringify(cartItems));
+          localStorage.setItem("rokomari_cart", JSON.stringify(cartItems));
         } catch {
           // If still fails, store minimal cart (only ids + qty)
           const minimalCart = cartItems.map(({ id, quantity, color, size }) => ({ id, quantity, color, size }));
-          try { localStorage.setItem("ishopbd_cart", JSON.stringify(minimalCart)); } catch { /* ignore */ }
+          try { localStorage.setItem("rokomari_cart", JSON.stringify(minimalCart)); } catch { /* ignore */ }
         }
       }
     }

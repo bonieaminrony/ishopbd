@@ -13,11 +13,61 @@ const firebaseConfig = JSON.parse(readFileSync('./firebase-applet-config.json', 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const SITE_URL = 'https://ishopbd.com';
+const SITE_URL = 'https://rokomariponnohari.com';
 const TODAY = new Date().toISOString().split('T')[0];
 
-function slugify(str) {
-  return (str || '').toLowerCase().replace(/ /g, '-').replace(/[^\w-]/g, '');
+function slugify(text, maxLen = 38) {
+  if (!text) return "";
+  let s = text
+    .toString()
+    .trim()
+    .replace(/&/g, " and ")
+    .replace(/\+/g, " plus ")
+    .replace(/@/g, " at ")
+    .replace(/(\d)\.(\d)/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^\w\s\u0980-\u09FF-]/g, "")
+    .replace(/[\s_–—-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (s.length > maxLen) {
+    const cut = s.substring(0, maxLen);
+    const lastHyphen = cut.lastIndexOf("-");
+    s = (lastHyphen > 10 ? cut.substring(0, lastHyphen) : cut).replace(/-+$/, "");
+  }
+
+  return s;
+}
+
+function getProductSlug(product) {
+  if (!product) return "";
+  if (product.slug && typeof product.slug === "string" && product.slug.trim()) {
+    const custom = slugify(product.slug.trim(), 50);
+    if (custom) return custom;
+  }
+  if (product.smsName && typeof product.smsName === "string" && product.smsName.trim().length >= 3) {
+    const smsSlug = slugify(product.smsName.trim(), 35);
+    const prodId = product.id ? String(product.id).trim() : "";
+    if (smsSlug) {
+      if (prodId && !smsSlug.includes(prodId.toLowerCase())) {
+        const shortId = prodId.length > 8 ? prodId.slice(-6) : prodId;
+        return `${smsSlug}-${shortId}`;
+      }
+      return smsSlug;
+    }
+  }
+  const rawName = product.name || product.title || "";
+  const nameSlug = slugify(rawName, 35);
+  const prodId = product.id ? String(product.id).trim() : "";
+
+  if (nameSlug && prodId) {
+    if (nameSlug.endsWith(prodId.toLowerCase())) {
+      return nameSlug;
+    }
+    const shortId = prodId.length > 8 ? prodId.slice(-6) : prodId;
+    return `${nameSlug}-${shortId}`;
+  }
+  return nameSlug || prodId || "";
 }
 
 async function generateSitemap() {
@@ -37,15 +87,15 @@ async function generateSitemap() {
   try {
     const snap = await getDocs(collection(db, 'products'));
     snap.forEach(doc => {
-      const p = doc.data();
+      const p = { id: doc.id, ...doc.data() };
       if (!p.name) return;
-      const slug = slugify(p.name);
+      const slug = getProductSlug(p);
       let imgUrl = p.image || null;
       if (imgUrl && imgUrl.startsWith('data:')) {
         imgUrl = null;
       }
       urls.push({
-        loc: `${SITE_URL}/?p=${doc.id}&amp;slug=${slug}`,
+        loc: `${SITE_URL}/p/${slug}`,
         changefreq: 'weekly',
         priority: '0.9',
         lastmod: TODAY,

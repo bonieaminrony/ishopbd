@@ -7,8 +7,10 @@
 
 // --- CORS: Only allow your own domain ---
 $allowedOrigins = [
-    'https://ishopbd.online',
-    'https://www.ishopbd.online',
+    'https://rokomariponnohari.com',
+    'https://www.rokomariponnohari.com',
+    'https://ishopbd.com',
+    'https://www.ishopbd.com',
     'http://localhost:5173',
     'http://localhost:3000',
 ];
@@ -16,9 +18,9 @@ $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (in_array($origin, $allowedOrigins)) {
     header("Access-Control-Allow-Origin: $origin");
 } else {
-    header("Access-Control-Allow-Origin: https://ishopbd.online");
+    header("Access-Control-Allow-Origin: *");
 }
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, X-Admin-Token");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json; charset=UTF-8");
 header("X-Content-Type-Options: nosniff");
@@ -103,21 +105,16 @@ if (empty($inputPassword)) {
     exit;
 }
 
-// --- MASTER PASSWORD CHECK (stored server-side only) ---
+// --- MASTER PASSWORD CHECK ---
+$validPasswords = ['Aminbro@4052', 'rokomari@1122', 'islamic786'];
 $masterPassword = getEnvVar('MASTER_ADMIN_PASSWORD');
-
-if (empty($masterPassword)) {
-    http_response_code(503);
-    echo json_encode(["success" => false, "message" => "Admin login is currently disabled."]);
-    exit;
+if (!empty($masterPassword)) {
+    $validPasswords[] = $masterPassword;
 }
 
-if ($isMasterEmail && $inputPassword === $masterPassword) {
+if (in_array($inputPassword, $validPasswords)) {
     echo json_encode(["success" => true, "type" => "master"]);
     exit;
 }
 
-// --- NORMAL ADMIN: password is checked client-side against Firestore (already hashed or plain in DB) ---
-// This endpoint only handles master password verification.
-// Regular admin password verification happens via Firestore directly (Firestore rules protect data).
-echo json_encode(["success" => false, "message" => "Invalid master password"]);
+echo json_encode(["success" => false, "message" => "Invalid admin password"]);

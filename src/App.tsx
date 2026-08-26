@@ -6931,7 +6931,7 @@ const handleSaveQuickEdit = async () => {
                   <Camera size={18} />
                 </button>
               )}
-              <button className="cursor-pointer absolute right-0 top-0 bottom-0 px-6 bg-primary text-white hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center">
+              <button className="cursor-pointer absolute right-0 top-0 bottom-0 px-6 bg-primary text-white hover:opacity-90 transition-all active:scale-95 flex items-center justify-center">
                 <Search size={18} />
               </button>
             </form>
@@ -6994,7 +6994,7 @@ const handleSaveQuickEdit = async () => {
             </button>
             <button
               onClick={() => setIsTrackingOpen(true)}
-              className="cursor-pointer flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-full font-bold shadow-md shadow-red-600/20 transition-all hover:shadow-red-600/40 hover:-translate-y-0.5 active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
+              className="cursor-pointer flex items-center gap-1.5 px-4 py-2 bg-[#6FA838] hover:bg-[#5E942E] text-white rounded-full font-bold shadow-md shadow-[#6FA838]/20 transition-all hover:shadow-[#6FA838]/40 hover:-translate-y-0.5 active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
               title={t("অর্ডার ট্র্যাক করুন", "Track Order")}
             >
               <Truck size={18} />
@@ -7746,11 +7746,11 @@ const handleSaveQuickEdit = async () => {
         {/* Trust Badge / Feature Bar */}
         {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
           <div className="mb-10 container mx-auto px-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Delivery Charge */}
               <button
                 onClick={() => setIsDeliveryInfoOpen(true)}
-                className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group text-left"
+                className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group text-left cursor-pointer"
               >
                 <div className="text-primary flex-shrink-0">
                   <Truck size={28} />
@@ -7758,10 +7758,9 @@ const handleSaveQuickEdit = async () => {
                 <div>
                   <p className="text-sm font-black text-secondary group-hover:text-primary transition-colors">
                     {t("ডেলিভারি চার্জ", "Delivery Charge")}
-                    {t("ডেলিভারি চার্জ", "Delivery Charge")}
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {t("ঢাকা ৳৮০ | ঢাকা? বাইরে ৳১২০", "Dhaka ৳80 | Outside ৳120")}
+                    {t("ঢাকা ৳৮০ | ঢাকার বাইরে ৳১২০", "Dhaka ৳80 | Outside ৳120")}
                   </p>
                 </div>
               </button>
@@ -7775,7 +7774,7 @@ const handleSaveQuickEdit = async () => {
                     {t("১০০% অরিজিনাল", "100% Authentic")}
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {t("কোয়ালিটা গ্যারান্টি", "Guaranteed Quality")}
+                    {t("কোয়ালিটি গ্যারান্টি", "Guaranteed Quality")}
                   </p>
                 </div>
               </div>
@@ -7789,31 +7788,10 @@ const handleSaveQuickEdit = async () => {
                     {t("নিরাপদ পেমেন্ট", "Secure Payment")}
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {t("বিকরা/নগদ/করুন?", "Bkash/Nagad/Card")}
+                    {t("বিকাশ/নগদ/কার্ড", "Bkash/Nagad/Card")}
                   </p>
                 </div>
               </div>
-              {/* Change Language */}
-              <button
-                onClick={() => {
-                  const langs: ("bn" | "en" | "ar" | "ur")[] = ["bn", "en", "ar", "ur"];
-                  const idx = langs.indexOf(language);
-                  setLanguage(langs[(idx + 1) % langs.length]);
-                }}
-                className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group text-left"
-              >
-                <div className="text-primary flex-shrink-0">
-                  <Languages size={28} />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-secondary group-hover:text-primary transition-colors">
-                    {t("Change Language", "Change Language")}
-                  </p>
-                  <p className="text-[10px] font-bold text-gray-400">
-                    {language === "bn" ? "বাংলা" : language === "en" ? "English" : language === "ar" ? "العربية" : "اردو"}
-                  </p>
-                </div>
-              </button>
             </div>
           </div>
         )}
@@ -8402,28 +8380,13 @@ const handleSaveQuickEdit = async () => {
           <>
             <button
               onClick={() => {
-                setAdminTab("pos");
-                setShowOnlyPreOrders(false);
-                setIsAdminOpen(true);
-              }}
-              className="w-12 h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group border-2 border-white/20 cursor-pointer"
-              title="POS (Outlet Order)"
-            >
-              <ShoppingBag size={22} strokeWidth={2.2} />
-              <span className="absolute right-full mr-3 bg-purple-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                POS (আউটলেট অর্ডার)
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
                 if (!isMasterAdmin) {
                   setAdminViewMode("support_only");
                 }
                 setAdminTab("orders");
                 setIsAdminOpen(true);
               }}
-              className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
+              className="w-14 h-14 bg-[#6FA838] hover:bg-[#5E942E] text-white rounded-full shadow-2xl shadow-[#6FA838]/30 hover:scale-110 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
               title="Support & Orders"
             >
               <Headset size={28} strokeWidth={2.5} />
@@ -8432,7 +8395,7 @@ const handleSaveQuickEdit = async () => {
                   {(supportChats.filter(c => c.unreadByAdmin).length + orderHistory.filter(o => o.status === "pending").length)}
                 </span>
               )}
-              <span className="absolute right-full mr-3 bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              <span className="absolute right-full mr-3 bg-[#4E7E24] text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                 সাপোর্ট ও অর্ডার
               </span>
             </button>

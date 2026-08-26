@@ -55,13 +55,13 @@ export const ProductCard = React.memo(({
         {/* Badges - Even larger for visibility */}
         <div className="absolute top-1.5 left-1.5 flex flex-col gap-1.5 z-10">
           {product.discount > 0 && (
-            <div className="bg-primary text-white text-[10px] md:text-xs font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md">
+            <div className="bg-[#6FA838] text-white text-[10px] md:text-xs font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md">
               -{product.discount}%
             </div>
           )}
           {product.isFreeDelivery && (
-            <div className="bg-emerald-600 text-white text-[9px] md:text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md flex items-center gap-1 border border-emerald-500/10">
-              <Truck size={11} /> ফ্রি ডেলিভারি
+            <div className="bg-primary text-white text-[9px] md:text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md flex items-center gap-1">
+              <Truck size={11} /> Free Delivery
             </div>
           )}
         </div>
@@ -74,7 +74,7 @@ export const ProductCard = React.memo(({
             isLiked ? "text-primary" : "text-gray-400 hover:text-primary"
           }`}
         >
-          <Heart size={11} fill={isLiked ? "#ec2029" : "none"} className={isLiked ? "text-primary" : ""} />
+          <Heart size={11} fill={isLiked ? "currentColor" : "none"} className={isLiked ? "text-primary" : ""} />
           {product.likes !== undefined && product.likes >= 0 && (
             <span className="text-[10px] text-gray-700 font-bold ml-0.5">{product.likes || 0}</span>
           )}
@@ -91,34 +91,15 @@ export const ProductCard = React.memo(({
           </h4>
         </a>
         <div className="mt-auto pt-1">
-          <div className="flex items-baseline justify-between gap-1 mb-2">
-            <span className="text-primary font-black text-base sm:text-lg md:text-xl tracking-tight">
+          <div className="flex items-baseline flex-wrap gap-2">
+            <span className="text-[#6FA838] font-black text-lg sm:text-xl md:text-2xl tracking-tight">
               ৳{product.price}
             </span>
             {product.originalPrice > product.price && (
-              <span className="text-[10px] sm:text-xs text-gray-400 line-through font-medium">
+              <span className="text-xs sm:text-sm text-stone-400 line-through font-semibold">
                 ৳{product.originalPrice}
               </span>
             )}
-          </div>
-          
-          <div className="relative">
-            <motion.button
-              disabled={isOutOfStock}
-              whileTap={isOutOfStock ? {} : { scale: 0.96 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                openProductDetails(product);
-              }}
-              className="w-full relative overflow-hidden bg-gradient-to-r from-primary to-red-600 hover:from-red-600 hover:to-primary text-white text-xs sm:text-sm font-bold py-2 md:py-2.5 rounded-xl transition-all shadow-md shadow-primary/20 hover:shadow-lg disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group/btn active:scale-95 flex items-center justify-center gap-1.5"
-            >
-              {isOutOfStock ? t("স্টক আউট", "Stock Out") : (
-                <>
-                  <span>{t("অর্ডার দিন", "Order Now")}</span>
-                  <ArrowRight size={13} className="group-hover/btn:translate-x-0.5 transition-transform" />
-                </>
-              )}
-            </motion.button>
           </div>
         </div>
       </div>

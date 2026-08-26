@@ -6,6 +6,8 @@
 
 // --- CORS: Only allow your own domain ---
 $allowedOrigins = [
+    'https://ishopbd.com',
+    'https://www.ishopbd.com',
     'https://ishopbd.online',
     'https://www.ishopbd.online',
     'http://localhost:5173',
@@ -15,7 +17,7 @@ $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (in_array($origin, $allowedOrigins)) {
     header("Access-Control-Allow-Origin: $origin");
 } else {
-    header("Access-Control-Allow-Origin: https://ishopbd.online");
+    header("Access-Control-Allow-Origin: https://ishopbd.com");
 }
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -146,17 +148,17 @@ foreach ($items as $item) {
 }
 
 $message =
-    "=== নতুন অর্ডার (i SHOP BD) ===\n\n" .
+    "=== নতুন অর্ডার (রকমারি পণ্য হাড়ি) ===\n\n" .
     "Customer Name : " . $customerName . "\n" .
     "Phone Number  : " . $customerPhone . "\n" .
     "Address       : " . $address . "\n" .
     "Total Amount  : ৳" . number_format($total, 2) . "\n\n" .
     "Items:\n" . ($itemsList ?: "No items\n") .
     "\n=================================\n" .
-    "Sent via i SHOP BD API\n";
+    "Sent via Rokomari Ponno Hari API\n";
 
 $headers =
-    "From: i SHOP BD <" . $emailUser . ">\r\n" .
+    "From: Rokomari Ponno Hari <" . $emailUser . ">\r\n" .
     "Reply-To: " . $emailUser . "\r\n" .
     "Content-Type: text/plain; charset=UTF-8\r\n" .
     "MIME-Version: 1.0\r\n" .

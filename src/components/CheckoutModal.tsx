@@ -373,7 +373,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
               <span className="bg-primary/10 text-primary p-2 rounded-lg">
                 <ShoppingBag size={18} className="text-primary" />
               </span>
-              <h1 className="text-lg md:text-xl font-bold text-secondary tracking-tight">Checkout (Checkout)</h1>
+              <h1 className="text-lg md:text-xl font-bold text-secondary tracking-tight">Checkout</h1>
             </div>
             <button
               onClick={() => setIsCheckoutOpen(false)}
@@ -435,11 +435,11 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   {/* Name & Mobile (Single Name field followed immediately by Mobile Number) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-secondary mb-1.5">আপনার নাম (Full Name)</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">Full Name</label>
                       <input
                         required
                         type="text"
-                        placeholder="আপনার সম্পূর্ণ নাম লিখুন *"
+                        placeholder="Enter your full name *"
                         value={checkoutName || checkoutFirstName}
                         onChange={(e) => {
                           setCheckoutName(e.target.value);
@@ -449,7 +449,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                       />
                     </div>
                     <div className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">মোবাইল নাম্বার (Mobile Number)</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">Mobile Number</label>
                       <input
                         required
                         type="tel"
@@ -490,11 +490,11 @@ export default function CheckoutModal(props: CheckoutModalProps) {
 
                   {/* Address */}
                   <div>
-                    <label className="block text-xs font-bold text-secondary mb-1.5">সম্পূর্ণ ঠিকানা (Full Address)</label>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">Full Delivery Address</label>
                     <input
                       required
                       type="text"
-                      placeholder="আপনার বিস্তারিত ঠিকানা (বাসা/রোড/এলাকা) লিখুন *"
+                      placeholder="House / Road / Area address *"
                       value={checkoutAddress}
                       onChange={(e) => setCheckoutAddress(e.target.value)}
                       className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
@@ -504,7 +504,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   {/* District & Upazila/Thana (Searchable custom combo-boxes) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div ref={distRef} className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">জেলা (District)</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">District</label>
                       <div className="relative">
                         <input
                           type="text"
@@ -551,7 +551,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     </div>
 
                     <div ref={thanaRef} className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">থানা / উপজেলা (Upazila/Thana)</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">Upazila / Thana</label>
                       <div className="relative">
                         <input
                           type="text"
@@ -600,7 +600,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
 
                   {/* Email (Optional) */}
                   <div>
-                    <label className="block text-xs font-bold text-secondary mb-1.5">ইমেইল (Email - ঐচ্ছিক)</label>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">Email Address (Optional)</label>
                     <input
                       type="email"
                       placeholder="e.g. yourname@gmail.com (Optional)"
@@ -831,7 +831,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     </div>
                   )}
                   <div className="flex justify-between text-xs md:text-sm font-bold text-secondary pt-2.5 border-t border-gray-100">
-                    <span>সর্বমোট (Total)</span>
+                    <span>Total Amount</span>
                     <span className="text-primary text-base font-extrabold">
                       ৳{checkoutItems.reduce((acc: number, curr: any) => acc + (getProductPrice(curr.product, curr.quantity) || 0) * curr.quantity, 0) + (appliedCoupon ? 0 : (checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon) : 0)) - (isApplyingRewardPoints ? Math.floor(availableRewardPoints / 10) : 0)}
                     </span>

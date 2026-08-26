@@ -47,7 +47,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                   <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
                     <Truck size={24} />
                   </div>
-                  <h2 className="text-xl font-bold text-secondary">অর্ডার ট্র্যাকিং</h2>
+                  <h2 className="text-xl font-bold text-secondary">Order Tracking</h2>
                 </div>
                 <button
                   onClick={() => setIsTrackingOpen(false)}
@@ -58,18 +58,18 @@ export default function TrackingModal(props: TrackingModalProps) {
               </div>
               <div className="p-6 overflow-y-auto">
                 <div className="mb-6">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">ফোন নাম্বার বা অর্ডার আইডি</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Phone Number or Order ID</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="01XXXXXXXXX অথবা অর্ডার আইডি"
+                      placeholder="01XXXXXXXXX or #Order ID (e.g. #664324)"
                       className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-orange-500 outline-none text-sm font-medium"
                       value={trackingInput}
                       onChange={(e) => setTrackingInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleTrackOrder()}
                     />
                     <button
-                      onClick={handleTrackOrder}
+                      onClick={() => handleTrackOrder()}
                       disabled={isTrackingLoading || !trackingInput.trim()}
                       className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -119,10 +119,10 @@ export default function TrackingModal(props: TrackingModalProps) {
                           })()}
                           
                           {[
-                            { key: 'pending', label: 'অর্ডার রিসিভড', icon: ShoppingBag },
-                            { key: 'confirmed', label: 'প্যাকিং ও কনফার্মড', icon: CheckCircle2 },
-                            { key: 'shipped', label: 'কুরিয়ারে পাঠানো হয়েছে', icon: Truck },
-                            { key: 'delivered', label: 'ডেলিভারি সম্পন্ন', icon: Home }
+                            { key: 'pending', label: 'Order Received', icon: ShoppingBag },
+                            { key: 'confirmed', label: 'Confirmed & Packing', icon: CheckCircle2 },
+                            { key: 'shipped', label: 'In Transit', icon: Truck },
+                            { key: 'delivered', label: 'Delivered', icon: Home }
                           ].map((step, index) => {
                             const statusList = ['pending', 'confirmed', 'shipped', 'delivered'];
                             let currentStatusStatus = trackingResult.status === 'processing' ? 'confirmed' : trackingResult.status;
@@ -166,19 +166,22 @@ export default function TrackingModal(props: TrackingModalProps) {
                     )}
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-xs text-gray-500 font-bold mb-1">অর্ডার আইডি</p>
-                        <p className="font-bold text-secondary">#{String(trackingResult.id).slice(-6).toUpperCase()}</p>
+                        <p className="text-xs text-gray-500 font-bold mb-1">Order ID</p>
+                        <p className="font-bold text-secondary text-base">#{String(trackingResult.shortId || trackingResult.orderId || trackingResult.id).slice(-6).toUpperCase()}</p>
+                        {(trackingResult.orderId || trackingResult.id) && (
+                          <p className="text-[10px] text-gray-400 font-mono mt-0.5 select-all">{trackingResult.orderId || trackingResult.id}</p>
+                        )}
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-gray-500 font-bold mb-1">তারিখ</p>
+                        <p className="text-xs text-gray-500 font-bold mb-1">Date</p>
                         <p className="font-bold text-secondary text-sm">
-                          {trackingResult.createdAt ? new Date(trackingResult.createdAt.toMillis?.() || trackingResult.createdAt).toLocaleDateString('bn-BD') : ''}
+                          {trackingResult.createdAt ? new Date(trackingResult.createdAt.toMillis?.() || trackingResult.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}
                         </p>
                       </div>
                     </div>
                     
                     <div>
-                      <p className="text-xs text-gray-500 font-bold mb-1">ওয়েবসাইট স্ট্যাটাস</p>
+                      <p className="text-xs text-gray-500 font-bold mb-1">Order Status</p>
                       {(() => {
                         let finalStatus = trackingResult.status;
                         if (trackingResult.steadfastStatus) {
@@ -192,13 +195,13 @@ export default function TrackingModal(props: TrackingModalProps) {
                         if (finalStatus === 'delivered') bgColor = 'bg-green-100 text-green-700';
                         else if (finalStatus === 'cancelled') bgColor = 'bg-red-100 text-red-700';
                         else if (finalStatus === 'shipped') bgColor = 'bg-blue-100 text-blue-700';
-                        let label = finalStatus;
-                        if (finalStatus === 'pending') label = 'প্রসেসিং এ আছে';
-                        else if (finalStatus === 'processing' || finalStatus === 'confirmed') label = 'অর্ডারটি কনফার্ম করা হয়েছে';
-                        else if (finalStatus === 'shipped') label = 'শিপমেন্ট করা হয়েছে';
-                        else if (finalStatus === 'delivered') label = 'ডেলিভার্ড';
-                        else if (finalStatus === 'cancelled') label = 'বাতিল করা হয়েছে';
-                        else if (finalStatus === 'returned') label = 'রিটার্ন করা হয়েছে';
+                        let label = 'Processing';
+                        if (finalStatus === 'pending') label = 'Pending / Processing';
+                        else if (finalStatus === 'processing' || finalStatus === 'confirmed') label = 'Order Confirmed';
+                        else if (finalStatus === 'shipped') label = 'Shipped / In Transit';
+                        else if (finalStatus === 'delivered') label = 'Delivered';
+                        else if (finalStatus === 'cancelled') label = 'Cancelled';
+                        else if (finalStatus === 'returned') label = 'Returned';
                         return (
                           <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${bgColor}`}>
                             {label}
@@ -212,8 +215,8 @@ export default function TrackingModal(props: TrackingModalProps) {
                           <X size={16} />
                         </div>
                         <div>
-                          <p className="font-bold text-xs text-red-700">অর্ডারটি বাতিল করা হয়েছে</p>
-                          <p className="text-[9px] text-red-500 font-bold mt-0.5">এই অর্ডারটি বাতিল করা হয়েছে। কোনো প্রশ্ন থাকলে হেল্পলাইনে যোগাযোগ করুন।</p>
+                          <p className="font-bold text-xs text-red-700">Order Cancelled</p>
+                          <p className="text-[9px] text-red-500 font-bold mt-0.5">This order has been cancelled. Please contact support if you have any questions.</p>
                         </div>
                       </div>
                     )}
@@ -223,14 +226,14 @@ export default function TrackingModal(props: TrackingModalProps) {
                           <RefreshCcw size={16} />
                         </div>
                         <div>
-                          <p className="font-bold text-xs text-amber-700">অর্ডারটি রিটার্ন করা হয়েছে</p>
-                          <p className="text-[9px] text-amber-500 font-bold mt-0.5">প্রোডাক্টটি সফলভাবে রিটার্ন করা হয়েছে। বিস্তারিত জানতে অনুগ্রহ করে যোগাযোগ করুন।</p>
+                          <p className="font-bold text-xs text-amber-700">Order Returned</p>
+                          <p className="text-[9px] text-amber-500 font-bold mt-0.5">The product has been returned. Please contact support for more details.</p>
                         </div>
                       </div>
                     )}
                     {trackingResult.steadfastStatus && (
                       <div>
-                        <p className="text-xs text-gray-500 font-bold mb-1.5">SteadFast কুরিয়ার লাইভ আপডেট</p>
+                        <p className="text-xs text-gray-500 font-bold mb-1.5">SteadFast Courier Live Update</p>
                         {(() => {
                           const rawStatus = String(trackingResult.steadfastStatus).toLowerCase();
                           
@@ -239,22 +242,22 @@ export default function TrackingModal(props: TrackingModalProps) {
                           let statusColorClass = 'text-orange-600 bg-orange-50 border-orange-100';
                           
                           if (rawStatus.includes('in_transit') || rawStatus.includes('transit') || rawStatus.includes('dispatched')) {
-                            translatedStatus = 'কাস্টমারের উদ্দেশ্যে পাঠানো হয়েছে (কুরিয়ার ট্রানজিট)';
+                            translatedStatus = 'On the way to customer (In Transit)';
                             statusColorClass = 'text-blue-600 bg-blue-50 border-blue-100';
                           } else if (rawStatus.includes('delivered')) {
-                            translatedStatus = 'ডেলিভারি সম্পন্ন হয়েছে';
+                            translatedStatus = 'Delivery Completed';
                             statusColorClass = 'text-green-600 bg-green-50 border-green-100';
                           } else if (rawStatus.includes('cancelled') || rawStatus.includes('returned')) {
-                            translatedStatus = 'অর্ডারটি রিটার্ন/বাতিল হয়েছে (কুরিয়ার)';
+                            translatedStatus = 'Cancelled / Returned (Courier)';
                             statusColorClass = 'text-red-600 bg-red-50 border-red-100';
                           } else if (rawStatus.includes('hold')) {
-                            translatedStatus = 'অর্ডারটি কুরিয়ারে হোল্ডে রাখা হয়েছে';
+                            translatedStatus = 'Order on Hold (Courier)';
                             statusColorClass = 'text-amber-600 bg-amber-50 border-amber-100';
                           } else if (rawStatus.includes('pending') || rawStatus.includes('processing')) {
-                            translatedStatus = 'কুরিয়ার বুকিং প্রসেস করা হচ্ছে';
+                            translatedStatus = 'Courier Booking in Progress';
                             statusColorClass = 'text-indigo-600 bg-indigo-50 border-indigo-100';
                           } else if (rawStatus.includes('picked_up') || rawStatus.includes('received')) {
-                            translatedStatus = 'কুরিয়ার এজেন্ট পার্সেল রিসিভ করেছে';
+                            translatedStatus = 'Parcel Picked Up by Courier';
                             statusColorClass = 'text-sky-600 bg-sky-50 border-sky-100';
                           }
                           
@@ -269,7 +272,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                                 </p>
                                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-current/10">
                                   <p className="text-[10px] font-bold opacity-80">
-                                    কুরিয়ার আইডি: #{trackingResult.couriers?.trackingId}
+                                    Courier Tracking ID: #{trackingResult.couriers?.trackingId}
                                   </p>
                                   <a 
                                     href={`https://steadfast.com.bd/t/${trackingResult.couriers?.trackingId}`}
@@ -277,7 +280,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                                     rel="noopener noreferrer"
                                     className="text-[9px] font-black underline hover:opacity-80 transition-opacity"
                                   >
-                                    লাইভ ট্র্যাক দেখুন ↗
+                                    View Live Tracking ↗
                                   </a>
                                 </div>
                               </div>
@@ -288,7 +291,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                     )}
                     {trackingResult.pathaoStatus && (
                       <div>
-                        <p className="text-xs text-gray-500 font-bold mb-1.5">Pathao কুরিয়ার লাইভ আপডেট</p>
+                        <p className="text-xs text-gray-500 font-bold mb-1.5">Pathao Courier Live Update</p>
                         {(() => {
                           const rawStatus = String(trackingResult.pathaoStatus).toLowerCase();
                           
@@ -297,22 +300,22 @@ export default function TrackingModal(props: TrackingModalProps) {
                           let statusColorClass = 'text-orange-600 bg-orange-50 border-orange-100';
                           
                           if (rawStatus.includes('transit') || rawStatus.includes('dispatch') || rawStatus.includes('shipped')) {
-                            translatedStatus = 'কাস্টমারের উদ্দেশ্যে পাঠানো হয়েছে (কুরিয়ার ট্রানজিট)';
+                            translatedStatus = 'On the way to customer (In Transit)';
                             statusColorClass = 'text-blue-600 bg-blue-50 border-blue-100';
                           } else if (rawStatus.includes('delivered')) {
-                            translatedStatus = 'ডেলিভারি সম্পন্ন হয়েছে';
+                            translatedStatus = 'Delivery Completed';
                             statusColorClass = 'text-green-600 bg-green-50 border-green-100';
                           } else if (rawStatus.includes('cancel') || rawStatus.includes('return') || rawStatus.includes('reject')) {
-                            translatedStatus = 'অর্ডারটি রিটার্ন/বাতিল হয়েছে (কুরিয়ার)';
+                            translatedStatus = 'Cancelled / Returned (Courier)';
                             statusColorClass = 'text-red-600 bg-red-50 border-red-100';
                           } else if (rawStatus.includes('hold') || rawStatus.includes('suspend')) {
-                            translatedStatus = 'অর্ডারটি কুরিয়ারে হোল্ডে রাখা হয়েছে';
+                            translatedStatus = 'Order on Hold (Courier)';
                             statusColorClass = 'text-amber-600 bg-amber-50 border-amber-100';
                           } else if (rawStatus.includes('pending') || rawStatus.includes('created') || rawStatus.includes('unassigned')) {
-                            translatedStatus = 'কুরিয়ার বুকিং প্রসেস করা হচ্ছে';
+                            translatedStatus = 'Courier Booking in Progress';
                             statusColorClass = 'text-indigo-600 bg-indigo-50 border-indigo-100';
                           } else if (rawStatus.includes('pickup') || rawStatus.includes('received') || rawStatus.includes('assigned')) {
-                            translatedStatus = 'কুরিয়ার এজেন্ট পার্সেল রিসিভ করেছে';
+                            translatedStatus = 'Parcel Picked Up by Courier';
                             statusColorClass = 'text-sky-600 bg-sky-50 border-sky-100';
                           }
                           
@@ -327,7 +330,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                                 </p>
                                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-current/10">
                                   <p className="text-[10px] font-bold opacity-80">
-                                    কুরিয়ার আইডি: #{trackingResult.couriers?.trackingId}
+                                    Courier Tracking ID: #{trackingResult.couriers?.trackingId}
                                   </p>
                                   <a 
                                     href={`https://pathaocourier.com.bd/`}
@@ -335,7 +338,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                                     rel="noopener noreferrer"
                                     className="text-[9px] font-black underline hover:opacity-80 transition-opacity"
                                   >
-                                    লাইভ ট্র্যাক দেখুন ↗
+                                    View Live Tracking ↗
                                   </a>
                                 </div>
                               </div>
@@ -350,20 +353,20 @@ export default function TrackingModal(props: TrackingModalProps) {
                           <Truck size={16} />
                         </div>
                         <div>
-                          <p className="font-bold text-xs text-blue-800">কুরিয়ার ডেলিভারি স্ট্যাটাস</p>
-                          <p className="text-[9px] text-blue-500 font-bold mt-0.5">এই অর্ডারটি সরাসরি Steadfast/Pathao কুরিয়ারে বুকিং করা হয়নি বা লোকাল ডেলিভারি হিসেবে প্রসেস হয়েছে।</p>
+                          <p className="font-bold text-xs text-blue-800">Courier Delivery Status</p>
+                          <p className="text-[9px] text-blue-500 font-bold mt-0.5">This order is being fulfilled via local delivery or direct store fulfillment.</p>
                         </div>
                       </div>
                     )}
                     {/* STEPS TIMELINE */}
                     <div className="border-t pt-5">
-                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">অর্ডার প্রসেসিং টাইমলাইন</h4>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Order Processing Timeline</h4>
                       <div className="relative pl-8 border-l-2 border-gray-200 space-y-6 ml-3">
                         {[
-                          { key: 'pending', label: 'অর্ডার রিসিভড', icon: ShoppingBag },
-                          { key: 'confirmed', label: 'প্যাকিং ও কনফার্মড', icon: CheckCircle2 },
-                          { key: 'shipped', label: 'কুরিয়ারে পাঠানো হয়েছে', icon: Truck },
-                          { key: 'delivered', label: 'ডেলিভারি সম্পন্ন', icon: Home }
+                          { key: 'pending', label: 'Order Received', icon: ShoppingBag },
+                          { key: 'confirmed', label: 'Confirmed & Packing', icon: CheckCircle2 },
+                          { key: 'shipped', label: 'In Transit', icon: Truck },
+                          { key: 'delivered', label: 'Delivered', icon: Home }
                         ].map((step, index) => {
                           let isCompleted = false;
                           let isCurrent = false;
@@ -401,7 +404,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                               </div>
                               <div>
                                 <h5 className={`text-sm font-black ${isCompleted ? 'text-secondary' : 'text-gray-400'}`}>{step.label}</h5>
-                                {isCurrent && <p className="text-[10px] text-orange-500 font-bold mt-0.5">বর্তমান স্ট্যাটাস</p>}
+                                {isCurrent && <p className="text-[10px] text-orange-500 font-bold mt-0.5">Current Status</p>}
                               </div>
                             </div>
                           );
@@ -410,7 +413,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                     </div>
                     {/* ORDER ITEMS */}
                     <div className="border-t pt-5">
-                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">অর্ডারকৃত পণ্যসমূহ</h4>
+                      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Ordered Items</h4>
                       <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
                         {trackingResult.items?.map((item: any, i: number) => (
                           <div key={i} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
@@ -423,7 +426,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                               <p className="text-xs font-black text-secondary truncate">{item.product?.name}</p>
                               {item.color || item.size ? (
                                 <p className="text-[9px] text-gray-400 font-bold mt-0.5">
-                                  {item.color ? `রঙ: ${item.color}` : ''} {item.size ? `সাইজ: ${item.size}` : ''}
+                                  {item.color ? `Color: ${item.color}` : ''} {item.size ? `Size: ${item.size}` : ''}
                                 </p>
                               ) : null}
                               <p className="text-xs font-bold text-primary mt-1">৳{item.product?.price} × {item.quantity}</p>
@@ -435,16 +438,16 @@ export default function TrackingModal(props: TrackingModalProps) {
                     {/* ADDRESS AND PAYMENT INFO */}
                     <div className="border-t pt-5 grid grid-cols-2 gap-4">
                       <div>
-                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">ডেলিভারি ঠিকানা</h4>
+                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Delivery Address</h4>
                         <p className="text-xs font-bold text-secondary">{trackingResult.customerName}</p>
                         <p className="text-[10px] text-gray-500 font-bold mt-1 leading-relaxed">{trackingResult.address}</p>
                         <p className="text-[10px] text-gray-500 font-bold mt-0.5">{trackingResult.customerPhone}</p>
                       </div>
                       <div className="text-right">
-                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">বিলিং বিবরণ</h4>
-                        <p className="text-xs font-bold text-secondary">মোট বিল: ৳{trackingResult.total}</p>
-                        <p className="text-[10px] text-gray-500 font-bold mt-1">পেমেন্ট মেথড: <span className="uppercase font-black text-primary">{trackingResult.paymentMethod || 'CASH'}</span></p>
-                        <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">এরিয়া: {trackingResult.deliveryArea === 'inside' ? 'Inside Dhaka' : 'Outside Dhaka'}</p>
+                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Billing Details</h4>
+                        <p className="text-xs font-bold text-secondary">Total: ৳{trackingResult.total}</p>
+                        <p className="text-[10px] text-gray-500 font-bold mt-1">Payment: <span className="uppercase font-black text-primary">{trackingResult.paymentMethod || 'CASH'}</span></p>
+                        <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Area: {trackingResult.deliveryArea === 'inside' ? 'Inside Dhaka' : 'Outside Dhaka'}</p>
                       </div>
                     </div>
                   </div>

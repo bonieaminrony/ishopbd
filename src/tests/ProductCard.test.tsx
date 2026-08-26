@@ -98,34 +98,7 @@ describe('ProductCard — Rendering', () => {
   });
 });
 
-describe('ProductCard — Order Button', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('স্টক থাকলে "অর্ডার দিন" বাটন দেখাতে হবে', () => {
-    renderCard(mockProduct);
-    expect(screen.getByText('অর্ডার দিন')).toBeInTheDocument();
-  });
-
-  it('স্টক শেষ হলে "স্টক আউট" বাটন দেখাতে হবে', () => {
-    renderCard(mockProductOutOfStock);
-    expect(screen.getByText('স্টক আউট')).toBeInTheDocument();
-  });
-
-  it('সব variants-এ stock=0 হলে স্টক আউট দেখাতে হবে', () => {
-    renderCard(mockProductWithVariants);
-    expect(screen.getByText('স্টক আউট')).toBeInTheDocument();
-  });
-
-  it('স্টক আউট বাটন disabled থাকতে হবে', () => {
-    renderCard(mockProductOutOfStock);
-    const btn = screen.getByRole('button', { name: /স্টক আউট/i });
-    expect(btn).toBeDisabled();
-  });
-});
-
-describe('ProductCard — Click Interactions', () => {
+describe('ProductCard — Interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -136,34 +109,10 @@ describe('ProductCard — Click Interactions', () => {
     expect(mockOpenProductDetails).toHaveBeenCalledWith(mockProduct);
   });
 
-  it('"অর্ডার দিন" বাটনে click করলে openProductDetails call হবে', () => {
-    // ProductCard-এ button সবসময় openProductDetails call করে
-    renderCard(mockProduct);
-    fireEvent.click(screen.getByText('অর্ডার দিন'));
-    expect(mockOpenProductDetails).toHaveBeenCalledWith(mockProduct);
-  });
-
-  it('variant পণ্যের অর্ডার বাটনে click করলে openProductDetails call হবে', () => {
-    const productWithInStockVariant: Product = {
-      ...mockProduct,
-      id: 'test-p4',
-      variants: [
-        { id: 'v1', name: 'Black', size: 'M', stock: 5, image: 'https://example.com/v1.jpg' },
-      ],
-    };
-    renderCard(productWithInStockVariant);
-    const btn = screen.getByText('অর্ডার দিন');
-    fireEvent.click(btn);
-    expect(mockOpenProductDetails).toHaveBeenCalledWith(productWithInStockVariant);
-  });
-
   it('like বাটনে click করলে handleLikeProduct call হবে', () => {
     renderCard(mockProduct);
-    // Find like button by its container (heart icon area)
-    const heartBtn = document.querySelector('button[class*="absolute top-1 right-1"]') as HTMLElement;
-    if (heartBtn) {
-      fireEvent.click(heartBtn);
-      expect(mockHandleLikeProduct).toHaveBeenCalledWith('test-p1');
-    }
+    const likeBtn = screen.getByRole('button');
+    fireEvent.click(likeBtn);
+    expect(mockHandleLikeProduct).toHaveBeenCalledWith('test-p1');
   });
 });

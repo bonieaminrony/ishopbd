@@ -53,6 +53,7 @@ describe('Admin Access Control', () => {
   ];
 
   it('master email admin access পাবে', () => {
+    expect(checkIsAdmin('rokomariponnohari@gmail.com', [])).toBe(true);
     expect(checkIsAdmin('ishopbd.online@gmail.com', [])).toBe(true);
     expect(checkIsAdmin('bonieaminrony@gmail.com', [])).toBe(true);
   });
@@ -92,14 +93,14 @@ describe('LocalStorage Security', () => {
   });
 
   it('cart data localStorage-এ থাকা নিরাপদ', () => {
-    localStorage.setItem('ishopbd_cart', JSON.stringify([{ id: 'p1', qty: 1 }]));
-    const cart = localStorage.getItem('ishopbd_cart');
+    localStorage.setItem('rokomari_cart', JSON.stringify([{ id: 'p1', qty: 1 }]));
+    const cart = localStorage.getItem('rokomari_cart');
     expect(cart).not.toBeNull();
   });
 
   it('session ID localStorage-এ থাকা নিরাপদ', () => {
-    localStorage.setItem('ishopbd_chat_session', 'guest_abc123');
-    expect(getFromStorage('ishopbd_chat_session')).toBe('guest_abc123');
+    localStorage.setItem('rokomari_chat_session', 'guest_abc123');
+    expect(getFromStorage('rokomari_chat_session')).toBe('guest_abc123');
   });
 });
 

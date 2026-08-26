@@ -6,6 +6,8 @@
 
 // --- CORS ---
 $allowedOrigins = [
+    'https://ishopbd.com',
+    'https://www.ishopbd.com',
     'https://ishopbd.online',
     'https://www.ishopbd.online',
     'http://localhost:5173',
@@ -15,7 +17,7 @@ $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 if (in_array($origin, $allowedOrigins)) {
     header("Access-Control-Allow-Origin: $origin");
 } else {
-    header("Access-Control-Allow-Origin: https://ishopbd.online");
+    header("Access-Control-Allow-Origin: https://ishopbd.com");
 }
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, X-Admin-Token");

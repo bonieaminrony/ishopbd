@@ -185,7 +185,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
 
     let viewedIds: string[] = [];
     try {
-      const stored = localStorage.getItem("ishopbd_viewed_products");
+      const stored = localStorage.getItem("rokomari_viewed_products");
       if (stored) {
         viewedIds = JSON.parse(stored);
       }
@@ -199,7 +199,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
     ].slice(0, 10);
     
     try {
-      localStorage.setItem("ishopbd_viewed_products", JSON.stringify(updatedViewed));
+      localStorage.setItem("rokomari_viewed_products", JSON.stringify(updatedViewed));
     } catch (e) {
       console.error(e);
     }
@@ -239,12 +239,12 @@ export default function ProductDetails(props: ProductDetailsProps) {
     <>
           <div className="w-full min-h-screen pb-24 md:pb-0">
             <Helmet>
-              <title>{selectedProduct.name} - I SHOP BD</title>
-              <meta name="description" content={(selectedProduct.metaDescription || selectedProduct.shortDescription || selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from i SHOP BD.`).substring(0, 160)} />
-              <meta property="og:title" content={`${selectedProduct.name} - I SHOP BD`} />
-              <meta property="og:description" content={(selectedProduct.metaDescription || selectedProduct.shortDescription || selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from i SHOP BD.`).substring(0, 160)} />
+              <title>{selectedProduct.name} - রকমারি পণ্য হাড়ি</title>
+              <meta name="description" content={(selectedProduct.metaDescription || selectedProduct.shortDescription || selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from Rokomari Ponno Hari.`).substring(0, 160)} />
+              <meta property="og:title" content={`${selectedProduct.name} - রকমারি পণ্য হাড়ি`} />
+              <meta property="og:description" content={(selectedProduct.metaDescription || selectedProduct.shortDescription || selectedProduct.description || `Buy ${selectedProduct.name} at the best price in Bangladesh from Rokomari Ponno Hari.`).substring(0, 160)} />
               <meta property="og:image" content={selectedProduct.image} />
-              <meta property="og:url" content={`https://ishopbd.com${getProductPath(selectedProduct)}`} />
+              <meta property="og:url" content={`https://rokomariponnohari.com${getProductPath(selectedProduct)}`} />
               <script type="application/ld+json">
                 {JSON.stringify({
                   "@context": "https://schema.org/",
@@ -254,11 +254,11 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   "description": selectedProduct.metaDescription || selectedProduct.shortDescription || selectedProduct.description || `Buy ${selectedProduct.name} at the best price.`,
                   "brand": {
                     "@type": "Brand",
-                    "name": selectedProduct.brand || "Generic"
+                    "name": selectedProduct.brand || "রকমারি পণ্য হাড়ি"
                   },
                   "offers": {
                     "@type": "Offer",
-                    "url": `https://ishopbd.com${getProductPath(selectedProduct)}`,
+                    "url": `https://rokomariponnohari.com${getProductPath(selectedProduct)}`,
                     "priceCurrency": "BDT",
                     "price": selectedProduct.price,
                     "availability": selectedProduct.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
@@ -475,8 +475,8 @@ export default function ProductDetails(props: ProductDetailsProps) {
                        </span>
                      )}
                      {(selectedProduct.originalPrice || selectedProduct.oldPrice) && Number(selectedProduct.originalPrice || selectedProduct.oldPrice) > Number(selectedProduct.price) && (
-                       <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-lg border border-primary/20">
-                          {Math.round(((Number(selectedProduct.originalPrice || selectedProduct.oldPrice) - Number(selectedProduct.price)) / Number(selectedProduct.originalPrice || selectedProduct.oldPrice)) * 100)}% OFF
+                       <span className="text-xs font-bold bg-[#6FA838]/15 text-[#4D7C23] border border-[#6FA838]/30 px-2.5 py-0.5 rounded-full">
+                          Save ৳{Number(selectedProduct.originalPrice || selectedProduct.oldPrice) - Number(selectedProduct.price)} ({Math.round(((Number(selectedProduct.originalPrice || selectedProduct.oldPrice) - Number(selectedProduct.price)) / Number(selectedProduct.originalPrice || selectedProduct.oldPrice)) * 100)}% OFF)
                        </span>
                      )}
                   </div>

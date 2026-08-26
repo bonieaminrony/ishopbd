@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [likedProducts, setLikedProducts] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem("ishopbd_liked_products");
+      const saved = localStorage.getItem("rokomari_liked_products");
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const likeInProgressRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    localStorage.setItem("ishopbd_liked_products", JSON.stringify(likedProducts));
+    localStorage.setItem("rokomari_liked_products", JSON.stringify(likedProducts));
   }, [likedProducts]);
 
   useEffect(() => {

@@ -24,7 +24,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onCartClick,
   isProductDetailsOpen = false,
   isCheckoutOpen = false,
-  t = (bn: string, en?: string) => bn,
+  t = (bn: string, en?: string) => en || bn,
 }) => {
   // Hide bottom bar when viewing product details (since it has sticky Buy Now bar) or checkout page
   if (isProductDetailsOpen || isCheckoutOpen) {

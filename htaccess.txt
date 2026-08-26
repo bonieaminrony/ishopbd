@@ -1,3 +1,9 @@
+DirectoryIndex app.php index.php index.html
+
+# Force UTF-8 encoding for all files
+AddDefaultCharset UTF-8
+AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
@@ -16,12 +22,19 @@
   RewriteRule ^api/courier/steadfast/bulk$ api/steadfast-bulk.php [L]
   RewriteRule ^api/steadfast-status$ api/steadfast-status.php [L]
   RewriteRule ^api/courier/steadfast/fraud/([^/]+)$ api/steadfast-fraud.php?phone=$1 [L,QSA]
+  RewriteRule ^api/products$ api/products.php [L]
   RewriteRule ^api/verify-admin$ api/verify-admin.php [L]
   RewriteRule ^api/product-image/(.*)$ api/product-image.php?id=$1 [L,QSA]
 
   # Route Firebase Auth endpoints to PHP proxy
   RewriteRule ^__/auth/(.*)$ api/auth-proxy.php?path=$1 [L,QSA]
 
+  # Prevent spawning PHP processes for missing static assets (images, css, js, fonts, icons, maps)
+  RewriteCond %{REQUEST_URI} \.(?:css|js|jpe?g|png|gif|ico|webp|svg|woff2?|ttf|eot|mp4|webm|map|json|webmanifest)$ [NC]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ - [R=404,L]
+
+  # SPA Routing: Send all non-file non-directory non-api requests to app.php
   RewriteCond %{REQUEST_URI} !^/api [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
@@ -83,15 +96,15 @@
 # SECURITY HEADERS
 # =========================================================
 
-# Block direct browser access to PHP files (must go through rewrite rules)
+# Block direct browser access to unlisted PHP files
 <FilesMatch "\.php$">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>
 </FilesMatch>
 
-# Allow only the specific API PHP files
-<FilesMatch "^(index|app|send-sms|send-push|confirm-order|send-email|product-image|chat|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy)\.php$">
+# Allow only the specific API and entry PHP files
+<FilesMatch "^(index|app|products|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy)\.php$">
   <IfModule mod_authz_core.c>
     Require all granted
   </IfModule>
@@ -136,4 +149,3 @@ Options -Indexes
     Deny from all
   </IfModule>
 </FilesMatch>
-RewriteRule ^\.builds - [F,L]

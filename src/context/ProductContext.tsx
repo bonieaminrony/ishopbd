@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useEffect } from '
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, Category } from '../types';
+import { findProductBySlugOrId, normalizeProducts, normalizeProduct } from '../utils/helpers';
 
 type ProductContextType = {
   activeCampaign: any;
@@ -52,30 +53,7 @@ type ProductContextType = {
   setIsAiSearching: any;
 };
 
-export const normalizeProduct = (p: any): Product => {
-  if (!p) return p;
-  let stock = Number(p.stock !== undefined && p.stock !== null ? p.stock : 0);
-  if (Array.isArray(p.variants) && p.variants.length > 0) {
-    const hasVariantStocks = p.variants.some((v: any) => v && v.stock !== undefined && v.stock !== null);
-    if (hasVariantStocks) {
-      const sum = p.variants.reduce((acc: number, v: any) => acc + (Number(v?.stock) || 0), 0);
-      stock = Math.max(0, sum);
-    } else {
-      stock = Math.max(0, stock);
-    }
-  } else {
-    stock = Math.max(0, stock);
-  }
-  return {
-    ...p,
-    stock
-  };
-};
-
-export const normalizeProducts = (prods: any[]): Product[] => {
-  if (!Array.isArray(prods)) return [];
-  return prods.map(normalizeProduct);
-};
+import { DEFAULT_CATEGORIES, DEFAULT_PRODUCTS } from '../constants/data';
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
@@ -85,21 +63,26 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
   const [activeCampaign, setActiveCampaign] = useState<any | null>(null);
   const [selectedColor, setSelectedColor] = useState<string>('all');
 
-const [categories, setCategories] = useState<Category[]>(() => {
+  const [categories, setCategories] = useState<Category[]>(() => {
     try {
-      const cached = localStorage.getItem("cached_categories");
-      return cached ? JSON.parse(cached) : [];
+      localStorage.removeItem("cached_categories");
+      const cached = localStorage.getItem("rokomari_categories");
+      return cached ? JSON.parse(cached) : DEFAULT_CATEGORIES;
     } catch {
-      return [];
+      return DEFAULT_CATEGORIES;
     }
   });
 
-const [productsRaw, setProductsRaw] = useState<Product[]>(() => {
+  const [productsRaw, setProductsRaw] = useState<Product[]>(() => {
     try {
-      const cached = localStorage.getItem("cached_products");
-      return cached ? normalizeProducts(JSON.parse(cached)) : [];
+      localStorage.removeItem("cached_products");
+      if (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_PRODUCTS__) && (window as any).__INITIAL_PRODUCTS__.length > 0) {
+        return normalizeProducts((window as any).__INITIAL_PRODUCTS__);
+      }
+      const cached = localStorage.getItem("rokomari_products");
+      return cached ? normalizeProducts(JSON.parse(cached)) : normalizeProducts(DEFAULT_PRODUCTS);
     } catch {
-      return [];
+      return normalizeProducts(DEFAULT_PRODUCTS);
     }
   });
 

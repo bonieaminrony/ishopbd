@@ -1,94 +1,32 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <script>
-      (function() {
-        // Test localStorage accessibility
-        var localStorageOk = true;
-        try {
-          var testKey = "__test_store__";
-          window.localStorage.setItem(testKey, "1");
-          window.localStorage.removeItem(testKey);
-        } catch (e) {
-          localStorageOk = false;
-        }
-
-        var makeFallbackStore = function() {
-          var store = {};
-          return {
-            getItem: function(key) {
-              return key in store ? store[key] : null;
-            },
-            setItem: function(key, value) {
-              store[key] = String(value);
-            },
-            removeItem: function(key) {
-              delete store[key];
-            },
-            clear: function() {
-              for (var key in store) {
-                delete store[key];
-              }
-            },
-            key: function(index) {
-              var keys = Object.keys(store);
-              return keys[index] || null;
-            },
-            get length() {
-              return Object.keys(store).length;
-            }
-          };
-        };
-
-        if (!localStorageOk) {
-          console.warn("localStorage is blocked/unavailable. Falling back to in-memory store.");
-          try {
-            Object.defineProperty(window, 'localStorage', {
-              value: makeFallbackStore(),
-              writable: true,
-              configurable: true
-            });
-          } catch(err) {
-            console.error("Failed to polyfill localStorage:", err);
-          }
-        }
-
-        // Test sessionStorage accessibility
-        var sessionStorageOk = true;
-        try {
-          var testKey = "__test_session__";
-          window.sessionStorage.setItem(testKey, "1");
-          window.sessionStorage.removeItem(testKey);
-        } catch (e) {
-          sessionStorageOk = false;
-        }
-
-        if (!sessionStorageOk) {
-          console.warn("sessionStorage is blocked/unavailable. Falling back to in-memory store.");
-          try {
-            Object.defineProperty(window, 'sessionStorage', {
-              value: makeFallbackStore(),
-              writable: true,
-              configurable: true
-            });
-          } catch(err) {
-            console.error("Failed to polyfill sessionStorage:", err);
-          }
-        }
-      })();
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        try {
+          const keys = ['cached_products', 'cached_categories', 'cached_banners', 'cached_admins', 'products_last_fetch'];
+          keys.forEach(k => localStorage.removeItem(k));
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('ishopbd_') || key.startsWith('cached_'))) {
+              localStorage.removeItem(key);
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://firestore.googleapis.com" />
     <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@100..800&family=Atma:wght@300;400;500;600;700&family=Baloo+Da+2:wght@400..800&family=Galada&family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@100..900&family=Mina:wght@400;700&family=Noto+Sans+Bengali:wght@100..900&family=Tiro+Bangla:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
     <link href="https://fonts.maateen.me/solaiman-lipi/font.css" rel="stylesheet" />
-    <title>i SHOP BD - Best Online Gadget & Lifestyle Store in Bangladesh</title>
-    <meta name="description" content="i SHOP BD - বাংলাদেশের বিশ্বস্ত অনলাইন গ্যাজেট ও লাইফস্টাইল শপ। সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland), Power Bank, Rechargeable Fan, Tripod, প্রিমিয়াম ঘড়ি ও ওয়ালেট কিনুন। Fast Cash on Delivery!" />
-    <meta name="keywords" content="i SHOP BD, আই শপ বিডি, ishopbd, ishop bd, wireless microphone price in bangladesh, dji mic bd, boya mic bd, ulanzi mic bd, power bank price in bangladesh, awei power bank bd, geeoo power bank bd, rechargeable fan price in bd, jysuper fan price in bangladesh, action camera accessories bd, tripod price bd, bluetooth neckband bd, rado watch bd, mens wallet bd, online gadget shop bangladesh" />
-    <meta name="author" content="i SHOP BD" />
+    <title>রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ</title>
+    <meta name="description" content="রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - খাঁটি সুন্দরবনের মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম মরিয়ম খেজুর, ড্রাই ফ্রুটস, চিয়া সিড ও অর্গানিক খাদ্যপণ্যের বিশ্বস্ত অনলাইন শপ। সারাদেশে ক্যাশ অন ডেলিভারি!" />
+    <meta name="keywords" content="রকমারি পণ্য হাড়ি, rokomari ponno hari, rokomari ponno, অর্গানিক পণ্য, খাঁটি মধু, সুন্দরবনের মধু, সরিষার তেল, গাওয়া ঘি, মরিয়ম খেজুর, ড্রাই ফ্রুটস, চিয়া সিড, কালোজিরা তেল, organic products bd, organic food bangladesh" />
+    <meta name="author" content="Rokomari Ponno Hari" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow" />
     <meta name="geo.region" content="BD" />
@@ -100,21 +38,25 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://ishopbd.com" />
-    <meta property="og:title" content="i SHOP BD - Best Online Gadget & Lifestyle Store in Bangladesh" />
-    <meta property="og:description" content="i SHOP BD - সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Tripod, স্মার্ট এক্সেসরিজ, প্রিমিয়াম ঘড়ি ও ওয়ালেট কিনুন।" />
-    <meta property="og:image" content="https://ishopbd.com/logo.png" />
+    <meta property="og:url" content="https://rokomariponnohari.com" />
+    <meta property="og:title" content="রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্য" />
+    <meta property="og:description" content="সুন্দরবনের প্রাকৃতিক চাকের খাঁটি মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম মরিয়ম খেজুর, ড্রাই ফ্রুটস ও অর্গানিক খাদ্যপণ্য কিনুন সেরা মূল্যে।" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:secure_url" content="/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:site_name" content="i SHOP BD" />
+    <meta property="og:image:alt" content="রকমারি পণ্য হাড়ি (Rokomari Ponno Hari)" />
+    <meta property="og:site_name" content="রকমারি পণ্য হাড়ি" />
     <meta property="og:locale" content="bn_BD" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://ishopbd.com" />
-    <meta name="twitter:title" content="i SHOP BD - Best Online Gadget & Lifestyle Store in Bangladesh" />
-    <meta name="twitter:description" content="i SHOP BD - সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Tripod, স্মার্ট এক্সেসরিজ, প্রিমিয়াম ঘড়ি ও ওয়ালেট কিনুন।" />
-    <meta name="twitter:image" content="https://ishopbd.com/logo.png" />
+    <meta name="twitter:url" content="https://rokomariponnohari.com" />
+    <meta name="twitter:title" content="রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্য" />
+    <meta name="twitter:description" content="সুন্দরবনের প্রাকৃতিক চাকের খাঁটি মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম মরিয়ম খেজুর, ড্রাই ফ্রুটস ও অর্গানিক খাদ্যপণ্য কিনুন সেরা মূল্যে।" />
+    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image:alt" content="রকমারি পণ্য হাড়ি" />
 
     <!-- CANONICAL_URL_PLACEHOLDER -->
 
@@ -123,14 +65,14 @@
     {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      "name": "i SHOP BD",
-      "alternateName": ["আই শপ বিডি", "ishopbd", "iSHOP Bangladesh", "i SHOP Bangladesh"],
-      "url": "https://ishopbd.com",
+      "name": "রকমারি পণ্য হাড়ি",
+      "alternateName": ["Rokomari Ponno Hari", "রকমারি পণ্য হাড়ি", "rokomari ponno hari", "rokomariponnohari"],
+      "url": "https://rokomariponnohari.com",
       "potentialAction": {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": "https://ishopbd.com/?search={search_term_string}"
+          "urlTemplate": "https://rokomariponnohari.com/?search={search_term_string}"
         },
         "query-input": "required name=search_term_string"
       }
@@ -142,28 +84,24 @@
     {
       "@context": "https://schema.org",
       "@type": ["OnlineStore", "Organization"],
-      "name": "i SHOP BD",
-      "alternateName": ["আই শপ বিডি", "ishopbd", "iSHOP Bangladesh"],
-      "description": "i SHOP BD (ishopbd.com) is an authentic online gadget & lifestyle shop in Bangladesh. We offer wireless microphones (DJI, BOYA, Hollyland, Ulanzi), power banks (GEEOO, Awei, Ven-Dens), rechargeable fans (JYSUPER), camera & smartphone accessories, neckbands, along with lifestyle accessories like premium watches and leather wallets with nationwide fast cash on delivery.",
-      "url": "https://ishopbd.com",
+      "name": "রকমারি পণ্য হাড়ি",
+      "alternateName": ["Rokomari Ponno Hari", "রকমারি পণ্য হাড়ি"],
+      "description": "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) হলো ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক খাদ্যপণ্যের একটি বিশ্বস্ত অনলাইন শপ। আমরা সরবরাহ করি সুন্দরবনের প্রাকৃতিক চাকের খাঁটি মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, মরিয়ম খেজুর, ড্রাই ফ্রুটস ও খাঁটি মশলা।",
+      "url": "https://rokomariponnohari.com",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://ishopbd.com/logo.png",
+        "url": "https://rokomariponnohari.com/logo.png",
         "width": 200,
         "height": 200
       },
-      "image": "https://ishopbd.com/logo.png",
+      "image": "https://rokomariponnohari.com/logo.png",
       "priceRange": "৳৳",
       "currenciesAccepted": "BDT",
-      "paymentAccepted": "Cash on Delivery, bKash, Nagad, Card",
+      "paymentAccepted": "Cash on Delivery, bKash, Nagad",
       "areaServed": {
         "@type": "Country",
         "name": "Bangladesh"
       },
-      "sameAs": [
-        "https://www.facebook.com/ishopbd",
-        "https://www.instagram.com/ishopbd"
-      ],
       "contactPoint": {
         "@type": "ContactPoint",
         "contactType": "customer service",
@@ -181,26 +119,18 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What is i SHOP BD?",
+          "name": "রকমারি পণ্য হাড়ি কী ধরনের পণ্য সরবরাহ করে?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "i SHOP BD (ishopbd.com) is a premier online gadget and lifestyle store in Bangladesh offering authentic wireless microphones, power banks, rechargeable fans, creator gadgets, as well as lifestyle accessories like watches and wallets."
+            "text": "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) ১০০% খাঁটি প্রাকৃতিক মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, মদিনার মরিয়ম খেজুর, প্রিমিয়াম ড্রাই ফ্রুটস, চিয়া সিড, কালোজিরা তেল ও খাঁটি মসলা সরবরাহ করে।"
           }
         },
         {
           "@type": "Question",
-          "name": "What gadget brands and products are available at i SHOP BD?",
+          "name": "রকমারি পণ্য হাড়ি কি সারাদেশে ক্যাশ অন ডেলিভারি দেয়?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "i SHOP BD sells DJI, BOYA, Hollyland, Ulanzi, RODE microphones, Awei, GEEOO, Ven-Dens fast charging power banks, JYSUPER rechargeable fans, UURIG & PLOKAMA mounts, Bluetooth neckbands, and premium watches & wallets."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "Does i SHOP BD provide cash on delivery in Bangladesh?",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "Yes, i SHOP BD provides fast nationwide Cash on Delivery (COD) service across all 64 districts in Bangladesh."
+            "text": "হ্যাঁ, রকমারি পণ্য হাড়ি বাংলাদেশের সকল ৬৪ জেলায় দ্রুত ক্যাশ অন ডেলিভারি সুবিধা প্রদান করে।"
           }
         }
       ]
@@ -208,7 +138,7 @@
     </script>
     <!-- PWA Setup -->
     <link rel="manifest" href="/manifest.json?v=2" />
-    <meta name="theme-color" content="#ff4d4f" />
+    <meta name="theme-color" content="#5C6E6C" />
     <link rel="apple-touch-icon" href="/icon-192x192.png" />
 
     <!-- Google tag (gtag.js) -->
@@ -252,21 +182,21 @@
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          background-color: #ffffff;
+          background-color: #F4F3EF;
           z-index: 99999;
           font-family: system-ui, -apple-system, sans-serif;
         }
         .loader-spinner {
           width: 50px;
           height: 50px;
-          border: 4px solid #ffe5e5;
-          border-top: 4px solid #ff4d4f;
+          border: 4px solid #A6B7AA;
+          border-top: 4px solid #5C6E6C;
           border-radius: 50%;
           animation: spin 1s linear infinite;
           margin-bottom: 20px;
         }
         .loader-text {
-          color: #ff4d4f;
+          color: #5C6E6C;
           font-size: 1.2rem;
           font-weight: 600;
           letter-spacing: 1px;
@@ -283,7 +213,7 @@
       </style>
       <div id="initial-loader">
         <div class="loader-spinner"></div>
-        <div class="loader-text">i SHOP BD...</div>
+        <div class="loader-text">রকমারি পণ্য হাড়ি...</div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
@@ -291,37 +221,13 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered: ', registration);
+            registration.update();
+            console.log('SW registered & updated: ', registration);
           }).catch(registrationError => {
             console.log('SW registration failed: ', registrationError);
           });
         });
       }
-
-      // Security: Prevent code inspection
-      document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-      });
-      document.addEventListener('keydown', function(e) {
-        if (e.keyCode == 123) { // F12
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 73) { // Ctrl+Shift+I
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 67) { // Ctrl+Shift+C
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 74) { // Ctrl+Shift+J
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.keyCode == 85) { // Ctrl+U
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.keyCode == 83) { // Ctrl+S
-          e.preventDefault();
-        }
-      });
     </script>
   </body>
 </html>

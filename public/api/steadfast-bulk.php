@@ -1,5 +1,26 @@
 <?php
-header('Content-Type: application/json');
+$allowedOrigins = [
+    'https://ishopbd.com',
+    'https://www.ishopbd.com',
+    'https://ishopbd.online',
+    'https://www.ishopbd.online',
+    'http://localhost:5173',
+    'http://localhost:3000',
+];
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+if (in_array($origin, $allowedOrigins)) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    header("Access-Control-Allow-Origin: https://ishopbd.com");
+}
+header("Access-Control-Allow-Headers: Content-Type, X-Admin-Token");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header('Content-Type: application/json; charset=UTF-8');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit(0);
+}
 
 // Enable error reporting for debugging
 ini_set('display_errors', 0);
@@ -69,7 +90,7 @@ foreach ($orders as $order) {
         'recipient_phone' => isset($order['recipient_phone']) ? $order['recipient_phone'] : '',
         'recipient_address' => isset($order['recipient_address']) ? $order['recipient_address'] : '',
         'cod_amount' => isset($order['cod_amount']) ? floatval($order['cod_amount']) : 0,
-        'note' => isset($order['note']) ? $order['note'] : 'Sent from i SHOP BD'
+        'note' => isset($order['note']) ? $order['note'] : 'Sent from Rokomari Ponno Hari'
     ];
 
     $ch = curl_init('https://portal.packzy.com/api/v1/create_order');

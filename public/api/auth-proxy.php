@@ -12,7 +12,7 @@ header('Expires: 0');
 $path = isset($_GET['path']) ? $_GET['path'] : '';
 
 // The target Firebase default URL
-$targetBaseUrl = 'https://i-shop-bd.firebaseapp.com/__/auth/';
+$targetBaseUrl = 'https://rokomariponnohari-c6017.firebaseapp.com/__/auth/';
 $targetUrl = $targetBaseUrl . $path;
 
 // Forward query parameters if present

@@ -20,6 +20,7 @@ service cloud.firestore {
     // Master accounts for bootstrap and recovery
     function isMaster() {
       return isSignedIn() && 'email' in request.auth.token && (
+        request.auth.token.email.lower() == "rokomariponnohari@gmail.com" ||
         request.auth.token.email.lower() == "bonieaminrony@gmail.com" ||
         request.auth.token.email.lower() == "islamicsoktitv@gmail.com" ||
         request.auth.token.email.lower() == "ishopbd.online@gmail.com" ||
@@ -230,6 +231,7 @@ service cloud.firestore {
       );
       
       allow delete: if isMaster() || (isAdmin() && 
+        adminId != "rokomariponnohari@gmail.com" && 
         adminId != "bonieaminrony@gmail.com" && 
         adminId != "islamicsoktitv@gmail.com" && 
         adminId != "ishopbd.online@gmail.com" && 

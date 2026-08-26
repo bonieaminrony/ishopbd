@@ -11,11 +11,16 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      dedupe: ['react', 'react-dom', 'react-helmet-async'],
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-helmet-async'],
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
           manualChunks: {

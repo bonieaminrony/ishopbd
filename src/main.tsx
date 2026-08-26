@@ -11,16 +11,19 @@ import './index.css';
 
 // Prevent QuotaExceededError from crashing the app due to local storage limits or private browsing
 try {
-  const originalSetItem = window.localStorage.setItem;
-  window.localStorage.setItem = function (key, value) {
-    try {
-      originalSetItem.call(window.localStorage, key, value);
-    } catch (e) {
-      console.warn("localStorage.setItem failed silently (quota/private browsing limit):", e);
-    }
-  };
+  if (typeof window !== 'undefined' && window.Storage) {
+    const proto = Storage.prototype;
+    const originalSetItem = proto.setItem;
+    proto.setItem = function (key: string, value: string) {
+      try {
+        originalSetItem.apply(this, [key, value]);
+      } catch (e) {
+        console.warn("Storage.setItem quota limit exceeded:", e);
+      }
+    };
+  }
 } catch (e) {
-  console.warn("Could not patch localStorage.setItem:", e);
+  console.warn("Could not patch Storage.prototype.setItem:", e);
 }
 
 createRoot(document.getElementById('root')!).render(

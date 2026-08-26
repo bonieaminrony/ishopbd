@@ -44,8 +44,8 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
                     <Truck className="text-primary" size={28} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-black text-secondary uppercase tracking-tight">ডেলিভারি তথ্য</h2>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">পণ্যের ওজন অনুযায়ী চার্জ</p>
+                    <h2 className="text-2xl font-black text-secondary uppercase tracking-tight">Delivery Information</h2>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Charges Based on Product Weight</p>
                   </div>
                 </div>
                 <div className="grid gap-6">
@@ -53,15 +53,15 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
                   <div className="p-6 rounded-3xl bg-blue-50 border border-blue-100 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <h3 className="font-black text-secondary text-lg uppercase tracking-tight">ঢাকার মধ্যে</h3>
+                      <h3 className="font-black text-secondary text-lg uppercase tracking-tight">Inside Dhaka</h3>
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center bg-white/70 p-4 rounded-xl border border-white">
-                        <span className="text-sm font-bold text-gray-700">১ কেজি পর্যন্ত</span>
-                        <span className="font-black text-secondary text-xl">৳৮০</span>
+                        <span className="text-sm font-bold text-gray-700">Up to 1 KG</span>
+                        <span className="font-black text-secondary text-xl">৳80</span>
                       </div>
                       <p className="text-xs font-bold text-blue-700 italic px-1 mt-1 leading-relaxed">
-                        * পরবর্তী প্রতি কেজিতে ২০ টাকা করে অতিরিক্ত যুক্ত হবে।
+                        * Additional ৳20 will be added for each extra KG.
                       </p>
                     </div>
                   </div>
@@ -69,31 +69,31 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
                   <div className="p-6 rounded-3xl bg-amber-50 border border-amber-100 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <div className="w-3 h-3 rounded-full bg-amber-500" />
-                      <h3 className="font-black text-secondary text-lg uppercase tracking-tight">ঢাকার বাইরে</h3>
+                      <h3 className="font-black text-secondary text-lg uppercase tracking-tight">Outside Dhaka</h3>
                     </div>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center bg-white/70 p-5 rounded-xl border border-white">
-                        <span className="text-sm font-bold text-gray-700 leading-tight">১ কেজি পর্যন্ত (অগ্রিম ১১২/১৩৫)</span>
-                        <span className="font-black text-secondary text-xl text-right ml-4">৳১১৫/৳১৩৫</span>
+                        <span className="text-sm font-bold text-gray-700 leading-tight">Up to 1 KG</span>
+                        <span className="font-black text-secondary text-xl text-right ml-4">৳120</span>
                       </div>
                       <p className="text-xs font-bold text-amber-700 italic px-1 mt-1 leading-relaxed">
-                        * পরবর্তী প্রতি কেজিতে ২০ টাকা করে অতিরিক্ত যুক্ত হবে।
+                        * Additional ৳20 will be added for each extra KG.
                       </p>
                     </div>
                   </div>
                 </div>
-                      <div className="mt-8 p-5 bg-white rounded-2xl border border-dashed border-gray-300 shadow-sm">
-                        <p className="text-xs font-bold text-gray-600 text-center leading-relaxed">
-                          বিঃদ্রঃ ওজনের সঠিকতা নিশ্চিত করতে আমরা প্রতিটি পণ্য শিপিংয়ের আগে ওজন করে থাকি। কোনো তথ্যের জন্য আমাদের সরাসরি কল করতে পারেন।
-                        </p>
-                      </div>
-                      <button onClick={() => setIsDeliveryInfoOpen(false)} className="w-full mt-8 py-5 rounded-2xl bg-secondary text-white font-black text-sm hover:brightness-110 shadow-lg shadow-secondary/10 transition-all uppercase tracking-widest active:scale-95">
-                        ঠিক আছে
-                      </button>
-                    </div>
-                  </motion.div>
+                <div className="mt-8 p-5 bg-white rounded-2xl border border-dashed border-gray-300 shadow-sm">
+                  <p className="text-xs font-bold text-gray-600 text-center leading-relaxed">
+                    Note: To ensure weight accuracy, all parcels are weighed before shipping. Please feel free to call our helpline for any questions.
+                  </p>
                 </div>
-              )}
+                <button onClick={() => setIsDeliveryInfoOpen(false)} className="w-full mt-8 py-5 rounded-2xl bg-secondary text-white font-black text-sm hover:brightness-110 shadow-lg shadow-secondary/10 transition-all uppercase tracking-widest active:scale-95">
+                  Got It
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
     </>
   );
 }

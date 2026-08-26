@@ -9,3 +9,6 @@ coverage/
 service-account.json
 api/service-account.json
 public/api/service-account.json
+scratch/
+.gemini/
+*.tmp

@@ -10,6 +10,7 @@ import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from '
 import { db } from '../lib/firebase';
 import { Product } from '../types';
 import toast from 'react-hot-toast';
+import { formatEnglishDateTime } from '../utils/helpers';
 
 export interface POSProps {
   products: Product[];
@@ -106,10 +107,10 @@ export default function POS({
         addToCart(product);
       }
       playBeep();
-      toast.success(`${product.name} যোগ করা হয়েছে!`);
+      toast.success(`${product.name} added to cart!`);
       setIsCameraScannerOpen(false);
     } else {
-      toast.error(`"${code}" কোডের কোনো প্রোডাক্ট পাওয়া যায়নি!`);
+      toast.error(`No product found for code "${code}"!`);
     }
   };
 
@@ -134,7 +135,7 @@ export default function POS({
         }
         playBeep();
         setSearchQuery('');
-        toast.success(`${exactMatch.name} যোগ করা হয়েছে!`);
+        toast.success(`${exactMatch.name} added to cart!`);
       } else if (filteredProducts.length > 0) {
         const topProd = filteredProducts[0];
         if ((topProd.variants && topProd.variants.length > 0) || (topProd.colors && topProd.colors.length > 0)) {
@@ -146,9 +147,9 @@ export default function POS({
         }
         playBeep();
         setSearchQuery('');
-        toast.success(`${topProd.name} যোগ করা হয়েছে!`);
+        toast.success(`${topProd.name} added to cart!`);
       } else {
-        toast.error("কোনো প্রোডাক্ট পাওয়া যায়নি!");
+        toast.error("No product found!");
       }
     }
   };
@@ -177,7 +178,7 @@ export default function POS({
       () => {}
     ).catch(err => {
       console.error("Scanner start error:", err);
-      toast.error("ক্যামেরা চালু করতে সমস্যা হয়েছে!");
+      toast.error("Failed to start camera!");
       setIsCameraScannerOpen(false);
     });
     
@@ -257,7 +258,7 @@ export default function POS({
     } else {
       addToCart(product);
       playBeep();
-      toast.success(`${product.name} যোগ হয়েছে`, { duration: 1200 });
+      toast.success(`${product.name} added`, { duration: 1200 });
     }
   };
 
@@ -265,7 +266,7 @@ export default function POS({
     if (!variantModalProduct) return;
     addToCart(variantModalProduct, tempVariant, tempColor);
     playBeep();
-    toast.success(`${variantModalProduct.name} যোগ হয়েছে`, { duration: 1200 });
+    toast.success(`${variantModalProduct.name} added`, { duration: 1200 });
     setVariantModalProduct(null);
     setTempVariant('');
     setTempColor('');
@@ -310,7 +311,7 @@ export default function POS({
     setCustomerPhone('');
     setCustomerAddress('');
     setOrderNotes('');
-    toast.success('কার্ট খালি করা হয়েছে');
+    toast.success('Cart cleared');
   };
 
   // Calculations
@@ -333,15 +334,15 @@ export default function POS({
   const printThermalReceipt = (orderData: any) => {
     const printWindow = window.open('', '_blank', 'width=380,height=600');
     if (!printWindow) {
-      toast.error('পপ-আপ উইন্ডো ব্লক করা আছে! অনুগ্রহ করে ব্রাউজার থেকে Pop-up allow করুন।');
+      toast.error('Pop-up blocked! Please allow pop-ups in your browser.');
       return;
     }
 
-    const storeName = siteConfig?.siteName || 'i SHOP BD';
-    const storeAddress = siteConfig?.address || 'ঢাকা, বাংলাদেশ';
-    const storePhone = siteConfig?.supportPhone1 || siteConfig?.phone || '01777-600844';
+    const storeName = siteConfig?.siteName || 'রকমারি পণ্য হাড়ি';
+    const storeAddress = siteConfig?.address || 'Jessore, Bangladesh';
+    const storePhone = siteConfig?.supportPhone1 || siteConfig?.phone || '01738-364268';
     const invoiceNo = String(orderData.shortId || orderData.orderId || orderData.id || '').slice(-6).toUpperCase();
-    const orderDate = orderData.date || new Date().toLocaleString('bn-BD');
+    const orderDate = formatEnglishDateTime(orderData.date || orderData.createdAt || new Date());
 
     const itemsHtml = orderData.items.map((it: any) => {
       const pName = it.product?.name || 'Item';
@@ -400,19 +401,19 @@ export default function POS({
         <div class="text-center">
           <div class="store-title">${storeName}</div>
           <div style="font-size: 10px;">${storeAddress}</div>
-          <div style="font-size: 10px; font-weight: bold;">হটলাইন: ${storePhone}</div>
-          <div style="font-size: 10px; color: #444; margin-top: 2px;">*** আউটলেট ক্যাশ মেমো ***</div>
+          <div style="font-size: 10px; font-weight: bold;">Hotline: ${storePhone}</div>
+          <div style="font-size: 10px; color: #444; margin-top: 2px;">*** OUTLET CASH MEMO ***</div>
         </div>
 
         <div class="divider"></div>
 
         <div class="meta-row">
-          <span>মেমো নং: <b>#${invoiceNo}</b></span>
+          <span>Invoice No: <b>#${invoiceNo}</b></span>
           <span>${orderDate}</span>
         </div>
         <div class="meta-row">
-          <span>গ্রাহক: <b>${orderData.customerName || 'Walk-in'}</b></span>
-          <span>মোবাইল: <b>${orderData.customerPhone || 'N/A'}</b></span>
+          <span>Customer: <b>${orderData.customerName || 'Walk-in'}</b></span>
+          <span>Mobile: <b>${orderData.customerPhone || 'N/A'}</b></span>
         </div>
 
         <div class="divider"></div>
@@ -420,8 +421,8 @@ export default function POS({
         <table>
           <thead>
             <tr style="border-bottom: 1px solid #000; font-size: 10px;">
-              <th style="text-align: left; padding-bottom: 3px;">পণ্য</th>
-              <th style="text-align: right; padding-bottom: 3px;">মূল্য</th>
+              <th style="text-align: left; padding-bottom: 3px;">Item</th>
+              <th style="text-align: right; padding-bottom: 3px;">Price</th>
             </tr>
           </thead>
           <tbody>
@@ -432,16 +433,16 @@ export default function POS({
         <div class="divider"></div>
 
         <div class="totals-row">
-          <span>মোট আইটেম:</span>
-          <span><b>${orderData.items?.length || 0} টি</b></span>
+          <span>Total Items:</span>
+          <span><b>${orderData.items?.length || 0} pcs</b></span>
         </div>
         <div class="totals-row">
-          <span>সাবটোটাল:</span>
+          <span>Subtotal:</span>
           <span>৳${orderData.subtotal || 0}</span>
         </div>
         ${orderData.discount ? `
           <div class="totals-row">
-            <span>ডিসকাউন্ট:</span>
+            <span>Discount:</span>
             <span>-৳${orderData.discount}</span>
           </div>
         ` : ''}
@@ -449,29 +450,29 @@ export default function POS({
         <div class="double-divider"></div>
 
         <div class="totals-row grand-total">
-          <span>সর্বমোট বিল:</span>
+          <span>Grand Total:</span>
           <span>৳${orderData.total || 0}</span>
         </div>
 
         <div class="divider"></div>
 
         <div class="totals-row">
-          <span>পেমেন্ট মাধ্যম:</span>
+          <span>Payment Method:</span>
           <span style="text-transform: uppercase;"><b>${orderData.paymentMethod || 'Cash'}</b></span>
         </div>
         <div class="totals-row">
-          <span>জমা টাকা:</span>
+          <span>Paid Amount:</span>
           <span>৳${orderData.paidAmount || orderData.total || 0}</span>
         </div>
         ${Number(orderData.dueAmount) > 0 ? `
           <div class="totals-row" style="color: #c00; font-weight: bold;">
-            <span>বাকি (Due):</span>
+            <span>Due:</span>
             <span>৳${orderData.dueAmount}</span>
           </div>
         ` : ''}
         ${Number(orderData.changeAmount) > 0 ? `
           <div class="totals-row" style="font-weight: bold;">
-            <span>ফেরত (Change):</span>
+            <span>Change:</span>
             <span>৳${orderData.changeAmount}</span>
           </div>
         ` : ''}
@@ -479,9 +480,9 @@ export default function POS({
         <div class="divider"></div>
 
         <div class="text-center" style="margin-top: 8px; font-size: 9px; line-height: 1.4;">
-          <div class="bold">ধন্যবাদ আবার আসবেন!</div>
-          <div>পণ্য পরিবর্তনের জন্য ক্যাশ মেমো সাথে রাখুন (৩ দিনের মধ্যে)।</div>
-          <div style="margin-top: 4px; font-weight: bold;">www.ishopbd.com</div>
+          <div class="bold">Thank you for choosing Rokomari Ponno Hari!</div>
+          <div>১০০% খাঁটি ও অর্গানিক পণ্যের বিশ্বস্ত প্রতিষ্ঠান।</div>
+          <div style="margin-top: 4px; font-weight: bold;">www.rokomariponnohari.com</div>
         </div>
 
         <script>
@@ -504,7 +505,7 @@ export default function POS({
   // Submit / Complete Checkout
   const handleCheckout = async (autoPrint: boolean = false) => {
     if (cartItems.length === 0) {
-      toast.error('কার্টে কোনো পণ্য নেই!');
+      toast.error('Cart is empty!');
       return;
     }
     setIsSubmitting(true);
@@ -521,8 +522,9 @@ export default function POS({
           buyingPrice: Number(item.buyingPrice || item.product.buyingPrice || 0),
           image: item.product.image || "",
           code: item.product.code || "",
-          smsName: item.product.smsName || item.product.name
+          smsName: (item.product.smsName || '').trim()
         },
+        smsName: (item.product.smsName || '').trim(),
         quantity: item.quantity,
         variant: item.selectedVariant || null,
         color: item.selectedColor || null,
@@ -550,7 +552,7 @@ export default function POS({
         orderType: "pos",
         deliveryFee: 0,
         createdAt: serverTimestamp(),
-        date: new Date().toLocaleString("bn-BD"),
+        date: new Date().toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
         items: itemsForDb,
         smsSent: false
       };
@@ -596,10 +598,15 @@ export default function POS({
       const cleanPhone = customerPhone.replace(/\D/g, '');
       if (isSmsConfirmEnabled !== false && cleanPhone.length >= 11 && !cleanPhone.startsWith('01000000000')) {
         try {
-          const productNames = itemsForDb.map(i => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
-          const start = (smsTemplateStart || '').trim() || 'প্রিয় গ্রাহক, আপনার কেনাকাটা সম্পন্ন হয়েছে';
-          const end = (smsTemplateEnd || '').trim() || 'iShop BD থেকে কেনাকাটার জন্য ধন্যবাদ!';
-          const message = `${start}\n${productNames}\nঅর্ডার নাম্বার: #${shortId}\nমোট বিল: ৳${total}\n${end}`;
+          const productNames = itemsForDb.map(i => {
+            const directSms = (i.smsName || i.product?.smsName || '').trim();
+            if (directSms) return directSms;
+            const fallback = (i.product?.name || i.name || '').trim();
+            return fallback.length > 25 ? fallback.substring(0, 25) + '...' : fallback;
+          }).filter(Boolean).join(', ');
+          const start = (smsTemplateStart || '').trim() || 'Dear Customer, your purchase is complete.';
+          const end = (smsTemplateEnd || '').trim() || 'Thank you for shopping at Rokomari Ponno Hari!';
+          const message = `${start}\n${productNames}\nInvoice: #${shortId}\nTotal: ৳${total}\n${end}`;
           
           fetch("/api/send-sms", {
             method: "POST",
@@ -614,7 +621,7 @@ export default function POS({
         }
       }
 
-      toast.success(`বিক্রয় সম্পন্ন হয়েছে! মেমো নং #${shortId} 🎉`, { duration: 3000 });
+      toast.success(`Sale completed! Invoice #${shortId} 🎉`, { duration: 3000 });
       setLastCompletedOrder(createdOrderWithId);
 
       // Auto Print if requested
@@ -635,7 +642,7 @@ export default function POS({
 
     } catch (error: any) {
       console.error("Error creating POS sale:", error);
-      toast.error("বিক্রয় রেকর্ড করতে সমস্যা হয়েছে: " + (error.message || "Unknown error"));
+      toast.error("Failed to record sale: " + (error.message || "Unknown error"));
     } finally {
       setIsSubmitting(false);
     }
@@ -663,12 +670,12 @@ export default function POS({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-gray-900 tracking-tight">POS — পয়েন্ট অব সেল</h1>
+              <h1 className="text-lg font-black text-gray-900 tracking-tight">POS — Point of Sale</h1>
               <span className="bg-emerald-100 text-emerald-700 text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> লাইভ আউটলেট
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Live Outlet
               </span>
             </div>
-            <p className="text-xs text-gray-500 font-medium">ইন-স্টোর ও সরাসরি কাউন্টার সেলস টার্মিনাল</p>
+            <p className="text-xs text-gray-500 font-medium">In-store & Direct Counter Sales Terminal</p>
           </div>
         </div>
 
@@ -682,7 +689,7 @@ export default function POS({
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            <ShoppingCart size={15} /> সেলস টার্মিনাল
+            <ShoppingCart size={15} /> Sales Terminal
           </button>
           
           <button
@@ -693,16 +700,16 @@ export default function POS({
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            <Receipt size={15} /> সাম্প্রতিক মেমো ({recentPosOrders.length})
+            <Receipt size={15} /> Recent Invoices ({recentPosOrders.length})
           </button>
 
           {cartItems.length > 0 && (
             <button
               onClick={clearCart}
               className="px-3 py-2 rounded-xl text-xs font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-1.5"
-              title="কার্ট খালি করুন"
+              title="Clear Cart"
             >
-              <Trash2 size={15} /> <span className="hidden sm:inline">খালি করুন</span>
+              <Trash2 size={15} /> <span className="hidden sm:inline">Clear</span>
             </button>
           )}
         </div>
@@ -724,7 +731,7 @@ export default function POS({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  placeholder="পণ্য বা কোড খুঁজুন (যেমন: T-Shirt, 1024)... [Enter প্রেস করুন]"
+                  placeholder="Search product or code (e.g. T-Shirt, 1024)... [Press Enter]"
                   className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 placeholder-gray-400 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
                 />
                 {searchQuery && (
@@ -741,7 +748,7 @@ export default function POS({
                 onClick={() => setIsCameraScannerOpen(true)}
                 className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shrink-0 active:scale-95"
               >
-                <Camera size={16} /> বারকোড স্ক্যানার
+                <Camera size={16} /> Barcode Scanner
               </button>
             </div>
 
@@ -755,7 +762,7 @@ export default function POS({
                     : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
                 }`}
               >
-                সব পণ্য ({products.filter(p => !p.deleted).length})
+                All Products ({products.filter(p => !p.deleted).length})
               </button>
               {categories.map((cat: any) => {
                 const catCount = products.filter(p => !p.deleted && (p.category === cat.name || (p as any).subcategory === cat.name)).length;
@@ -781,8 +788,8 @@ export default function POS({
               {filteredProducts.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-gray-400 bg-white rounded-2xl border border-dashed border-gray-300 p-8 text-center">
                   <Package size={42} className="mb-2 text-gray-300" />
-                  <p className="font-bold text-gray-600 text-sm">কোনো পণ্য পাওয়া যায়নি</p>
-                  <p className="text-xs text-gray-400 mt-1">অন্য নাম বা কোড দিয়ে সার্চ করে দেখুন</p>
+                  <p className="font-bold text-gray-600 text-sm">No products found</p>
+                  <p className="text-xs text-gray-400 mt-1">Try searching with a different name or code</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 pb-8">
@@ -823,15 +830,15 @@ export default function POS({
                             <div className="absolute top-1.5 left-1.5">
                               {!inStock ? (
                                 <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">
-                                  স্টক শেষ
+                                  Out of Stock
                                 </span>
                               ) : isLowStock ? (
                                 <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">
-                                  স্টক: {effStock}
+                                  Stock: {effStock}
                                 </span>
                               ) : (
                                 <span className="bg-gray-900/80 backdrop-blur-xs text-white text-[10px] font-black px-2 py-0.5 rounded-md">
-                                  স্টক: {effStock}
+                                  Stock: {effStock}
                                 </span>
                               )}
                             </div>
@@ -840,7 +847,7 @@ export default function POS({
                             {hasVariants && (
                               <div className="absolute top-1.5 right-1.5">
                                 <span className="bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-0.5">
-                                  <Layers size={10} /> ভ্যারিয়েন্ট
+                                  <Layers size={10} /> Variant
                                 </span>
                               </div>
                             )}
@@ -882,15 +889,15 @@ export default function POS({
             <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="text-purple-700" size={18} />
-                <h2 className="text-sm font-black text-gray-900">অর্ডার কার্ট ({cartItems.reduce((acc, it) => acc + it.quantity, 0)} টি আইটেম)</h2>
+                <h2 className="text-sm font-black text-gray-900">Order Cart ({cartItems.reduce((acc, it) => acc + it.quantity, 0)} Items)</h2>
               </div>
               {lastCompletedOrder && (
                 <button
                   onClick={() => printThermalReceipt(lastCompletedOrder)}
                   className="text-[11px] font-bold text-purple-700 bg-white border border-purple-200 px-2 py-1 rounded-lg hover:bg-purple-50 flex items-center gap-1 transition-colors shadow-2xs"
-                  title="সর্বশেষ ক্যাশ মেমো পুনরায় প্রিন্ট করুন"
+                  title="Reprint Latest Invoice"
                 >
-                  <Printer size={12} /> মেমো #{lastCompletedOrder.shortId}
+                  <Printer size={12} /> Invoice #{lastCompletedOrder.shortId}
                 </button>
               )}
             </div>
@@ -902,8 +909,8 @@ export default function POS({
                   <div className="w-14 h-14 rounded-full bg-purple-50 text-purple-300 flex items-center justify-center mb-2">
                     <ShoppingBag size={26} />
                   </div>
-                  <p className="text-xs font-bold text-gray-600">কার্ট খালি রয়েছে</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">বাম পাশ থেকে পণ্য ক্লিক করুন বা সার্চ করুন</p>
+                  <p className="text-xs font-bold text-gray-600">Cart is empty</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Click products on the left or search to add</p>
                 </div>
               ) : (
                 cartItems.map(item => (
@@ -924,7 +931,7 @@ export default function POS({
                           <p className="text-xs font-bold text-gray-900 truncate leading-tight">{item.product.name}</p>
                           {(item.selectedVariant || item.selectedColor) && (
                             <p className="text-[10px] font-bold text-purple-600">
-                              ভ্যারিয়েন্ট: {item.selectedVariant || item.selectedColor}
+                              Variant: {item.selectedVariant || item.selectedColor}
                             </p>
                           )}
                         </div>
@@ -933,7 +940,7 @@ export default function POS({
                       <button
                         onClick={() => removeFromCart(item.cartItemId)}
                         className="text-gray-400 hover:text-red-600 p-1 transition-colors"
-                        title="মুছে ফেলুন"
+                        title="Remove"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -944,7 +951,7 @@ export default function POS({
                       
                       {/* Editable Price */}
                       <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-gray-400 font-bold">দর: ৳</span>
+                        <span className="text-[10px] text-gray-400 font-bold">Rate: ৳</span>
                         <input
                           type="number"
                           value={item.price}
@@ -993,17 +1000,17 @@ export default function POS({
               {/* Customer Inputs */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] font-bold text-gray-600 block mb-1">কাস্টমার নাম</label>
+                  <label className="text-[10px] font-bold text-gray-600 block mb-1">Customer Name</label>
                   <input
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="সরাসরি ক্রেতা"
+                    placeholder="Walk-in Customer"
                     className="w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-semibold focus:border-purple-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-gray-600 block mb-1">মোবাইল (SMS এর জন্য)</label>
+                  <label className="text-[10px] font-bold text-gray-600 block mb-1">Customer Phone (for SMS)</label>
                   <input
                     type="tel"
                     value={customerPhone}
@@ -1017,18 +1024,18 @@ export default function POS({
               {/* Pricing & Discount */}
               <div className="bg-white p-3 rounded-xl border border-gray-200 space-y-2">
                 <div className="flex justify-between items-center text-xs font-bold text-gray-600">
-                  <span>সাবটোটাল</span>
+                  <span>Subtotal</span>
                   <span>৳{subtotal.toLocaleString()}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs font-bold text-gray-600">
                   <div className="flex items-center gap-1.5">
-                    <span>ডিসকাউন্ট</span>
+                    <span>Discount</span>
                     <button
                       onClick={() => setDiscountType(prev => prev === 'flat' ? 'percent' : 'flat')}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200"
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold"
                     >
-                      {discountType === 'flat' ? '৳ ফিক্সড' : '% শতাংশ'}
+                      {discountType === 'flat' ? '৳ Fixed' : '% Percent'}
                     </button>
                   </div>
                   <div className="flex items-center gap-1 w-24">
@@ -1045,21 +1052,21 @@ export default function POS({
                 <div className="h-px bg-gray-100 my-1"></div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-black text-gray-900">সর্বমোট প্রদেয়</span>
+                  <span className="text-sm font-black text-gray-900">Total Payable</span>
                   <span className="text-lg font-black text-purple-700">৳{total.toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Payment Methods */}
               <div>
-                <label className="text-[10px] font-bold text-gray-600 block mb-1.5">পেমেন্ট মাধ্যম</label>
+                <label className="text-[10px] font-bold text-gray-600 block mb-1.5">Payment Method</label>
                 <div className="grid grid-cols-5 gap-1">
                   {[
-                    { id: 'cash', label: 'নগদ ক্যাশ' },
-                    { id: 'bkash', label: 'বিকাশ' },
-                    { id: 'nagad', label: 'নগদ' },
-                    { id: 'card', label: 'কার্ড' },
-                    { id: 'due', label: 'বাকি' },
+                    { id: 'cash', label: 'Cash' },
+                    { id: 'bkash', label: 'bKash' },
+                    { id: 'nagad', label: 'Nagad' },
+                    { id: 'card', label: 'Card' },
+                    { id: 'due', label: 'Due' },
                   ].map(m => (
                     <button
                       key={m.id}
@@ -1079,7 +1086,7 @@ export default function POS({
               {/* Cash Received & Change Calculator */}
               <div className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-xl border border-gray-200">
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 block mb-0.5">টাকা গ্রহণ (৳)</label>
+                  <label className="text-[10px] font-bold text-gray-500 block mb-0.5">Paid Amount (৳)</label>
                   <input
                     type="number"
                     value={paidAmount}
@@ -1090,7 +1097,7 @@ export default function POS({
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 block mb-0.5">
-                    {dueAmount > 0 ? 'বাকি (Due)' : 'ফেরত (Change)'}
+                    {dueAmount > 0 ? 'Due Amount' : 'Change Due'}
                   </label>
                   <div className={`px-2 py-1 rounded font-black text-xs ${
                     dueAmount > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
@@ -1105,17 +1112,17 @@ export default function POS({
                 <button
                   onClick={() => handleCheckout(false)}
                   disabled={isSubmitting || cartItems.length === 0}
-                  className="w-full py-3 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-98"
+                  className="w-full py-3 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-98 cursor-pointer"
                 >
-                  <Check size={16} /> {isSubmitting ? 'অপেক্ষা করুন...' : 'অর্ডার সংরক্ষণ'}
+                  <Check size={16} /> {isSubmitting ? 'Please wait...' : 'Save Order'}
                 </button>
 
                 <button
                   onClick={() => handleCheckout(true)}
                   disabled={isSubmitting || cartItems.length === 0}
-                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-98"
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-98 cursor-pointer"
                 >
-                  <Printer size={16} /> সম্পন্ন ও মেমো প্রিন্ট
+                  <Printer size={16} /> Complete & Print Invoice
                 </button>
               </div>
             </div>
@@ -1127,14 +1134,14 @@ export default function POS({
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-gray-900">সাম্প্রতিক আউটলেট বিক্রয়সমূহ</h2>
-                <p className="text-xs text-gray-500">ইন-স্টোর ও কাউন্টার বিক্রয়ের তালিকা ও রিসিট প্রিন্ট</p>
+                <h2 className="text-base font-bold text-gray-900">Recent Outlet Sales</h2>
+                <p className="text-xs text-gray-500">List of in-store & counter sales with receipt printing</p>
               </div>
               <button
                 onClick={() => setActiveTab('terminal')}
-                className="px-3 py-1.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700 flex items-center gap-1"
+                className="px-3 py-1.5 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700 flex items-center gap-1 cursor-pointer"
               >
-                <Plus size={14} /> নতুন বিক্রয় শুরু করুন
+                <Plus size={14} /> Start New Sale
               </button>
             </div>
 
@@ -1142,20 +1149,20 @@ export default function POS({
               {recentPosOrders.length === 0 ? (
                 <div className="text-center py-16 text-gray-400">
                   <Receipt size={40} className="mx-auto mb-2 text-gray-300" />
-                  <p className="font-bold text-gray-600 text-sm">কোনো আউটলেট বিক্রয় রেকর্ড নেই</p>
-                  <p className="text-xs text-gray-400 mt-1">টার্মিনাল থেকে বিক্রয় সম্পন্ন করলে এখানে দেখা যাবে</p>
+                  <p className="font-bold text-gray-600 text-sm">No outlet sales recorded yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Completed sales from terminal will appear here</p>
                 </div>
               ) : (
                 <table className="w-full text-left text-xs">
                   <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200">
                     <tr>
-                      <th className="p-3.5">মেমো নং</th>
-                      <th className="p-3.5">তারিখ ও সময়</th>
-                      <th className="p-3.5">গ্রাহক</th>
-                      <th className="p-3.5">পণ্য তালিকা</th>
-                      <th className="p-3.5">পেমেন্ট</th>
-                      <th className="p-3.5 text-right">মোট বিল</th>
-                      <th className="p-3.5 text-center">অ্যাকশন</th>
+                      <th className="p-3.5">Invoice #</th>
+                      <th className="p-3.5">Date & Time</th>
+                      <th className="p-3.5">Customer</th>
+                      <th className="p-3.5">Items List</th>
+                      <th className="p-3.5">Payment</th>
+                      <th className="p-3.5 text-right">Total Bill</th>
+                      <th className="p-3.5 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -1164,8 +1171,8 @@ export default function POS({
                         <td className="p-3.5 font-mono font-bold text-purple-700">
                           #{String(order.shortId || order.orderId || order.id).slice(-6).toUpperCase()}
                         </td>
-                        <td className="p-3.5 text-gray-600 font-medium">
-                          {order.date || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('bn-BD') : 'N/A')}
+                        <td className="p-3.5 text-gray-600 font-medium whitespace-nowrap">
+                          {formatEnglishDateTime(order.date || order.createdAt)}
                         </td>
                         <td className="p-3.5">
                           <div className="font-bold text-gray-900">{order.customerName || 'Walk-in'}</div>
@@ -1192,18 +1199,18 @@ export default function POS({
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => printThermalReceipt(order)}
-                              className="px-2.5 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors"
-                              title="থার্মাল ক্যাশ মেমো প্রিন্ট করুন"
+                              className="px-2.5 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Print Thermal Receipt"
                             >
-                              <Printer size={13} /> মেমো প্রিন্ট
+                              <Printer size={13} /> Print Receipt
                             </button>
                             {handlePrintInvoice && (
                               <button
                                 onClick={() => handlePrintInvoice(order)}
-                                className="px-2 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors"
-                                title="ফুল ইনভয়েস দেখুন"
+                                className="px-2 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="View Full Invoice"
                               >
-                                <FileText size={13} /> ইনভয়েস
+                                <FileText size={13} /> Invoice
                               </button>
                             )}
                           </div>
@@ -1223,10 +1230,10 @@ export default function POS({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-sm w-full animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm font-black text-gray-900">ভ্যারিয়েন্ট নির্বাচন করুন</h3>
+              <h3 className="text-sm font-black text-gray-900">Select Variant</h3>
               <button 
                 onClick={() => setVariantModalProduct(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1249,13 +1256,13 @@ export default function POS({
             {/* Variants options */}
             {variantModalProduct.variants && variantModalProduct.variants.length > 0 && (
               <div className="mb-3">
-                <label className="text-xs font-bold text-gray-700 block mb-1.5">সাইজ / ভ্যারিয়েন্ট</label>
+                <label className="text-xs font-bold text-gray-700 block mb-1.5">Size / Variant</label>
                 <div className="flex flex-wrap gap-1.5">
                   {variantModalProduct.variants.map((v: any) => (
                     <button
                       key={v.name || v.id}
                       onClick={() => setTempVariant(v.name)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                         tempVariant === v.name
                           ? 'bg-purple-600 text-white border-purple-600'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
@@ -1271,13 +1278,13 @@ export default function POS({
             {/* Colors options */}
             {variantModalProduct.colors && variantModalProduct.colors.length > 0 && (
               <div className="mb-4">
-                <label className="text-xs font-bold text-gray-700 block mb-1.5">রং (Color)</label>
+                <label className="text-xs font-bold text-gray-700 block mb-1.5">Color</label>
                 <div className="flex flex-wrap gap-1.5">
                   {variantModalProduct.colors.map((c: string) => (
                     <button
                       key={c}
                       onClick={() => setTempColor(c)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                         tempColor === c
                           ? 'bg-purple-600 text-white border-purple-600'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
@@ -1293,15 +1300,15 @@ export default function POS({
             <div className="grid grid-cols-2 gap-2 mt-4">
               <button
                 onClick={() => setVariantModalProduct(null)}
-                className="py-2.5 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-50"
+                className="py-2.5 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-50 cursor-pointer"
               >
-                বাতিল
+                Cancel
               </button>
               <button
                 onClick={handleConfirmVariantAdd}
-                className="py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md shadow-purple-600/20"
+                className="py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md shadow-purple-600/20 cursor-pointer"
               >
-                কার্টে যোগ করুন
+                Add to Cart
               </button>
             </div>
           </div>
@@ -1313,10 +1320,10 @@ export default function POS({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs font-sans">
           <div className="bg-white rounded-2xl p-5 shadow-2xl w-full max-w-sm overflow-hidden relative flex flex-col items-center">
             <div className="flex justify-between items-center w-full mb-3">
-              <h3 className="text-sm font-bold text-gray-900">বারকোড স্ক্যানার</h3>
+              <h3 className="text-sm font-bold text-gray-900">Barcode Scanner</h3>
               <button 
                 onClick={() => setIsCameraScannerOpen(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors"
+                className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -1330,7 +1337,7 @@ export default function POS({
             </div>
             
             <p className="text-[11px] text-gray-500 font-medium text-center leading-relaxed">
-              প্রোডাক্টের বারকোডটি ক্যামেরার সামনে ধরুন। এটি স্বয়ংক্রিয়ভাবে স্ক্যান করে কার্টে যোগ করে দেবে।
+              Hold the product barcode in front of the camera. It will automatically scan and add it to the cart.
             </p>
           </div>
         </div>

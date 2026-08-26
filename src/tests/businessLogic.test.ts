@@ -159,3 +159,74 @@ describe('Order ID Validation', () => {
     expect(isValidOrderId('order#123')).toBe(false);
   });
 });
+
+import { slugify, getProductSlug, getProductPath, findProductBySlugOrId } from '../utils/helpers';
+
+describe('Professional Product URL Generation & Resolution', () => {
+  it('generates clean, short SEO slug from product name with short ID suffix', () => {
+    const product = {
+      id: '1740523491298',
+      name: 'Awei PA-103 30000mAh 22.5W Fast Charging Power Bank (Black & White)'
+    };
+    const slug = getProductSlug(product);
+    expect(slug).toContain('awei-pa-103');
+    expect(slug).toContain('491298');
+    expect(getProductPath(product)).toBe(`/p/${slug}`);
+  });
+
+  it('handles custom slug if provided', () => {
+    const product = {
+      id: 'p103',
+      name: 'Generic Power Bank',
+      slug: 'awei-p103-custom'
+    };
+    expect(getProductSlug(product)).toBe('awei-p103-custom');
+    expect(getProductPath(product)).toBe('/p/awei-p103-custom');
+  });
+
+  it('resolves product by direct ID, full slug, trailing ID, or custom slug', () => {
+    const products = [
+      { id: '1740523491298', name: 'Awei PA-103 30000mAh Power Bank' },
+      { id: 'rem-k9', name: 'K9 Wireless Microphone Dual Type-C & Lightning', slug: 'k9-wireless-mic' }
+    ];
+
+    // Direct ID
+    expect(findProductBySlugOrId(products, '1740523491298')?.id).toBe('1740523491298');
+    
+    // Custom slug
+    expect(findProductBySlugOrId(products, 'k9-wireless-mic')?.id).toBe('rem-k9');
+
+    // Generated slug
+    const generatedSlug = getProductSlug(products[0]);
+    expect(findProductBySlugOrId(products, generatedSlug)?.id).toBe('1740523491298');
+
+    // Short path or decoded param
+    expect(findProductBySlugOrId(products, 'awei-pa-103-491298')?.id).toBe('1740523491298');
+
+    // Facebook / Social click with trailing slash or query params
+    expect(findProductBySlugOrId(products, 'awei-pa-103-491298/')?.id).toBe('1740523491298');
+    expect(findProductBySlugOrId(products, 'awei-pa-103-30000mah-22.5w-power-bank-1740523491298')?.id).toBe('1740523491298');
+  });
+
+  it('correctly extracts product ID from various Facebook and Deep Link URLs', () => {
+    // Test URL formats
+    const extractTest = (path: string, search: string) => {
+      const urlParams = new URLSearchParams(search);
+      const queryId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing') || urlParams.get('id');
+      if (queryId) return queryId;
+      if (path.startsWith('/product/')) return path.replace(/^\/product\//, '').replace(/\/+$/, '').split('/')[0].split('?')[0];
+      if (path.startsWith('/p/')) return path.replace(/^\/p\//, '').replace(/\/+$/, '').split('/')[0].split('?')[0];
+      return null;
+    };
+
+    // Facebook clicked link with fbclid
+    expect(extractTest('/product/awei-pa-103-30000mah-1740523491298', '?fbclid=IwAR234567')).toBe('awei-pa-103-30000mah-1740523491298');
+    
+    // Facebook link with trailing slash & fbclid
+    expect(extractTest('/product/awei-pa-103-30000mah-1740523491298/', '?fbclid=IwAR234567')).toBe('awei-pa-103-30000mah-1740523491298');
+
+    // Query param style with fbclid (?p=...&fbclid=...)
+    expect(extractTest('/', '?p=1740523491298&fbclid=IwAR234567')).toBe('1740523491298');
+    expect(extractTest('/', '?product=1740523491298&utm_source=facebook')).toBe('1740523491298');
+  });
+});

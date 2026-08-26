@@ -57,8 +57,8 @@ if (empty($to) || empty($subject) || empty($message)) {
     exit;
 }
 
-$emailUser = getEnvVar('EMAIL_USER', 'ishopbd.online@gmail.com');
-$headers = "From: i SHOP BD <" . $emailUser . ">\r\n" .
+$emailUser = getEnvVar('EMAIL_USER', 'rokomariponnohari@gmail.com');
+$headers = "From: Rokomari Ponno Hari <" . $emailUser . ">\r\n" .
            "Reply-To: " . $emailUser . "\r\n" .
            "Content-Type: text/plain; charset=UTF-8\r\n" .
            "X-Mailer: PHP/" . phpversion();

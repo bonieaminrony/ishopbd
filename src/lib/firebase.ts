@@ -21,18 +21,35 @@ export const storage = getStorage(app);
 export const auth = getAuth(app);
 import { memoryLocalCache } from 'firebase/firestore';
 
-const isProblematicBrowser = typeof window !== 'undefined' && (
-  navigator.userAgent.includes("FBAV") || 
-  navigator.userAgent.includes("FBAN") ||
-  navigator.userAgent.includes("Instagram")
+const isMobileOrInApp = typeof window !== 'undefined' && (
+  /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  /FBAN|FBAV|FB_IAB|Messenger|Instagram|Line|WhatsApp/i.test(navigator.userAgent) ||
+  /WebKit.*Mobile/i.test(navigator.userAgent)
 );
 
-export const db = initializeFirestore(app, {
-  localCache: isProblematicBrowser 
-    ? memoryLocalCache() 
-    : persistentLocalCache({tabManager: persistentMultipleTabManager()}),
-  ignoreUndefinedProperties: true
-}, (firebaseConfig as any).firestoreDatabaseId);
+let firestoreInstance: any;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: isMobileOrInApp 
+      ? memoryLocalCache() 
+      : persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    ignoreUndefinedProperties: true
+  });
+} catch (err1) {
+  try {
+    firestoreInstance = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      ignoreUndefinedProperties: true
+    });
+  } catch (err2) {
+    try {
+      firestoreInstance = getFirestore(app);
+    } catch (err3) {
+      console.error("Firestore init fallback error:", err3);
+    }
+  }
+}
+export const db = firestoreInstance;
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -136,14 +153,31 @@ export {
   DocumentReference
 };
 
-export const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
+let messagingInstance: any = null;
+try {
+  if (
+    typeof window !== 'undefined' && 
+    'serviceWorker' in navigator && 
+    'PushManager' in window && 
+    'Notification' in window
+  ) {
+    messagingInstance = getMessaging(app);
+  }
+} catch (err) {
+  console.warn('Firebase Messaging not supported in this browser context:', err);
+}
+
+export const messaging = messagingInstance;
 
 export const requestPushPermission = async (userId: string) => {
   if (!messaging) return;
   try {
+    if (typeof Notification === 'undefined') return;
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
-      const token = await getToken(messaging, { vapidKey: 'BAoWsjG0WV_UiRrgRBqtZX4dfenDwM2tE5ow6Xci1IYcM8XOOpUid1vZjFBILsxcZPZ9mGFS4fskELv5S_9Nb5M' });
+      const token = await getToken(messaging, { 
+        vapidKey: 'BAoWsjG0WV_UiRrgRBqtZX4dfenDwM2tE5ow6Xci1IYcM8XOOpUid1vZjFBILsxcZPZ9mGFS4fskELv5S_9Nb5M' 
+      });
       if (token) {
         await updateDoc(doc(db, 'users', userId), { fcmToken: token });
       }

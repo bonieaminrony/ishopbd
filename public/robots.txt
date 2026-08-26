@@ -10,4 +10,4 @@ User-agent: Googlebot-Image
 Allow: /
 
 # Sitemap location
-Sitemap: https://ishopbd.com/sitemap.xml
+Sitemap: https://rokomariponnohari.com/sitemap.xml

@@ -1,0 +1,9 @@
+﻿{
+  "projectId": "your-new-firebase-project-id",
+  "appId": "1:000000000000:web:0000000000000000000000",
+  "apiKey": "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "authDomain": "your-new-firebase-project-id.firebaseapp.com",
+  "storageBucket": "your-new-firebase-project-id.firebasestorage.app",
+  "messagingSenderId": "000000000000",
+  "measurementId": "G-XXXXXXXXXX"
+}
