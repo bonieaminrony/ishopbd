@@ -2279,10 +2279,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
 
   // SEO: Dynamic URL, Meta Tags, Open Graph, Schema.org
   useEffect(() => {
-    const SITE_NAME = "i SHOP BD";
-    const SITE_URL = "https://ishopbd.com";
-    const SITE_DESC = "বাংলাদেশের সেরা অনলাইন শপিং | গ্যাজেট, ইলেকট্রনিক্স, হোম এক্সেসরিজ সবচেয়ে কম দামে দ্রুত হোম ডেলিভারি।";
-    const DEFAULT_OG_IMAGE = `${SITE_URL}/logo.png`;
+    const SITE_NAME = "রকমারি পণ্য হাড়ি";
+    const SITE_URL = "https://rokomariponnohari.com";
+    const SITE_DESC = "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক সুন্দরবনের মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম খেজুর ও অর্গানিক খাদ্যপণ্যের বিশ্বস্ত অনলাইন শপ।";
+    const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
 
     const setMeta = (selector: string, attr: string, value: string) => {
       let el = document.querySelector(selector) as HTMLMetaElement | null;
@@ -2346,7 +2346,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
 
       // Keywords
       setMeta('meta[name="keywords"]', 'content', 
-        `${productName}, ${productName} price in Bangladesh, ${productName} price in BD, ${productName} buy online Bangladesh, ${productName} দাম বাংলাদেশ, i SHOP BD, ishopbd`
+        `${productName}, ${productName} price in Bangladesh, ${productName} price in BD, ${productName} buy online Bangladesh, ${productName} দাম বাংলাদেশ, রকমারি পণ্য হাড়ি, rokomari ponno hari`
       );
 
       // Open Graph
@@ -2403,7 +2403,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       // === CATEGORY PAGE ===
       document.title = `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
       setMeta('meta[name="description"]', 'content', `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`);
-      setMeta('meta[name="keywords"]', 'content', `${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy ${selectedCategory} online Bangladesh, i SHOP BD`);
+      setMeta('meta[name="keywords"]', 'content', `${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy ${selectedCategory} online Bangladesh, রকমারি পণ্য হাড়ি, rokomari ponno hari`);
       setMeta('meta[property="og:type"]', 'content', 'website');
       setMeta('meta[property="og:title"]', 'content', `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`);
       setMeta('meta[property="og:description"]', 'content', `Shop the best ${selectedCategory} at lowest prices in Bangladesh.`);
@@ -2422,16 +2422,16 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
 
     } else {
       // === HOMEPAGE ===
-      document.title = `${SITE_NAME} | Best Online Shopping in Bangladesh`;
+      document.title = `${SITE_NAME} - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ`;
       setMeta('meta[name="description"]', 'content', SITE_DESC);
-      setMeta('meta[name="keywords"]', 'content', 'i SHOP BD, আই শপ বিডি, ishopbd, online shopping Bangladesh, best price Bangladesh, gadgets Bangladesh, electronics BD, home delivery Bangladesh, rechargeable fan price BD, air cooler price Bangladesh');
+      setMeta('meta[name="keywords"]', 'content', 'রকমারি পণ্য হাড়ি, rokomari ponno hari, খাঁটি মধু, সুন্দরবনের মধু, সরিষার তেল, গাওয়া ঘি, মরিয়ম খেজুর, ড্রাই ফ্রুটস, চিয়া সিড, organic food bangladesh, rokomariponnohari');
       setMeta('meta[property="og:type"]', 'content', 'website');
-      setMeta('meta[property="og:title"]', 'content', `${SITE_NAME} | Best Online Shopping in Bangladesh`);
+      setMeta('meta[property="og:title"]', 'content', `${SITE_NAME} - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ`);
       setMeta('meta[property="og:description"]', 'content', SITE_DESC);
       setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
       setMeta('meta[property="og:url"]', 'content', SITE_URL);
       setMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
-      setMeta('meta[name="twitter:title"]', 'content', `${SITE_NAME} | Best Online Shopping in Bangladesh`);
+      setMeta('meta[name="twitter:title"]', 'content', `${SITE_NAME} - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ`);
       setMeta('meta[name="twitter:description"]', 'content', SITE_DESC);
       setMeta('meta[name="twitter:image"]', 'content', DEFAULT_OG_IMAGE);
       setLink('canonical', SITE_URL);
@@ -4821,7 +4821,7 @@ Rules:
         id: "ai_" + Date.now().toString(),
         text: aiResponseText,
         senderId: "ai_assistant",
-        senderName: "i SHOP BD AI",
+        senderName: "রকমারি পণ্য হাড়ি AI",
         isAdmin: true,
         createdAt: new Date().toISOString(),
         reactions: {}
@@ -4953,7 +4953,7 @@ Rules:
             const aiMessage = {
               text: "আপনার ভয়েস মেসেজ পাওয়া গেছে। আমরা শীঘ্রই এটি শুনে আপনার সাথে যোগাযোগ করব।",
               senderId: "ai_assistant",
-              senderName: "i SHOP BD AI",
+              senderName: "রকমারি পণ্য হাড়ি AI",
               isAdmin: true,
               createdAt: new Date().toISOString(),
             };
@@ -4998,7 +4998,7 @@ Rules:
         const aiMessage = {
           text: "আপনার ছবি পাওয়া গেছে। আমাদের টিম শীঘ্রই এটি রিভিউ করে আপনার সাথে যোগাযোগ করবে।",
           senderId: "ai_assistant",
-          senderName: "i SHOP BD AI",
+          senderName: "রকমারি পণ্য হাড়ি AI",
           isAdmin: true,
           createdAt: new Date().toISOString(),
         };
@@ -6212,8 +6212,8 @@ const handleSaveQuickEdit = async () => {
     return (
       <div className="min-h-screen bg-cream flex flex-col font-sans relative overflow-x-hidden">
         <Helmet>
-          <title>i SHOP BD (আই শপ বিডি) - Online Shopping in Bangladesh | Gadgets & Electronics</title>
-          <meta name="description" content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের সেরা অনলাইন শপিং শপ। এখানে পাবেন লেটেস্ট গ্যাজেট, ইলেকট্রনিক্স এবং হোম এক্সেসরিজ সবচেয়ে কম দামে। দ্রুত হোম ডেলিভারি ও গুণগত মানের নিশ্চয়তা।" />
+          <title>রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ</title>
+          <meta name="description" content="রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - বাংলাদেশের সেরা অনলাইন শপ। এখানে পাবেন সুন্দরবনের খাঁটি মধু, সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম খেজুর ও অর্গানিক খাদ্যপণ্য সবচেয়ে ভালো মানে ও সুলভ মূল্যে।" />
         </Helmet>
         <Toaster position="top-right" reverseOrder={false} />
         
@@ -6221,7 +6221,7 @@ const handleSaveQuickEdit = async () => {
         <header className="sticky top-0 z-[100] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-sm border-b border-gray-100 dark:border-slate-800 transition-all text-secondary dark:text-white">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
             <a href="/" className="flex items-center hover:opacity-90 transition-opacity cursor-pointer">
-              <img src="/logo.png" alt="i SHOP BD Logo" className="h-8 md:h-9 object-contain" />
+              <img src="/logo.png" alt="রকমারি পণ্য হাড়ি Logo" className="h-8 md:h-9 object-contain" />
             </a>
             <button
               onClick={() => {
@@ -6672,7 +6672,7 @@ const handleSaveQuickEdit = async () => {
         </section>
         {/* Footer */}
         <footer className="bg-[#1a1a1a] text-white/60 text-center py-8 border-t border-gray-800 text-xs font-bold">
-          <p>Â© {new Date().getFullYear()} i SHOP BD. All Rights Reserved.</p>
+          <p>© {new Date().getFullYear()} রকমারি পণ্য হাড়ি. All Rights Reserved.</p>
         </footer>
         {/* Order Receipt Modal (Reused) */}
         <AnimatePresence>
@@ -6784,18 +6784,18 @@ const handleSaveQuickEdit = async () => {
       <Helmet>
         {selectedCategory && selectedCategory !== "all" && selectedCategory !== "All" ? (
           <>
-            <title>{`${selectedCategory} Price in Bangladesh - ${selectedCategory} কিনুন সেরা দামে | i SHOP BD`}</title>
-            <meta name="description" content={`সেরা দামে আসল ${selectedCategory} কিনুন i SHOP BD থেকে। 100% অথেনটিক গ্যাজেট, অফিসিয়াল ওয়ারেন্টি ও ক্যাশ অন হোম ডেলিভারি!`} />
-            <link rel="canonical" href={`https://ishopbd.com${getCategoryPath(selectedCategory)}`} />
-            <meta property="og:title" content={`${selectedCategory} Price in Bangladesh | i SHOP BD`} />
-            <meta property="og:description" content={`সেরা দামে আসল ${selectedCategory} কিনুন i SHOP BD থেকে। 100% অথেনটিক গ্যাজেট ও ক্যাশ অন হোম ডেলিভারি!`} />
-            <meta property="og:url" content={`https://ishopbd.com${getCategoryPath(selectedCategory)}`} />
+            <title>{`${selectedCategory} Price in Bangladesh - ${selectedCategory} কিনুন সেরা দামে | রকমারি পণ্য হাড়ি`}</title>
+            <meta name="description" content={`সেরা দামে খাঁটি ${selectedCategory} কিনুন রকমারি পণ্য হাড়ি থেকে। ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক খাদ্যপণ্য এবং ক্যাশ অন হোম ডেলিভারি!`} />
+            <link rel="canonical" href={`https://rokomariponnohari.com${getCategoryPath(selectedCategory)}`} />
+            <meta property="og:title" content={`${selectedCategory} Price in Bangladesh | রকমারি পণ্য হাড়ি`} />
+            <meta property="og:description" content={`সেরা দামে খাঁটি ${selectedCategory} কিনুন রকমারি পণ্য হাড়ি থেকে। ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক খাদ্যপণ্য এবং ক্যাশ অন হোম ডেলিভারি!`} />
+            <meta property="og:url" content={`https://rokomariponnohari.com${getCategoryPath(selectedCategory)}`} />
           </>
         ) : (
           <>
-            <title>i SHOP BD (আই শপ বিডি) - Online Gadgets, Charger Fan & Electronics Shopping in BD</title>
-            <meta name="description" content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের বিশ্বস্ত গ্যাজেট ও ইলেকট্রনিক্স শপ। চার্জার ফ্যান, পাওয়ার ব্যাংক, স্মার্ট ওয়াচ, হেডফোন সহ প্রিমিয়াম গ্যাজেট সেরা দামে কিনুন।" />
-            <link rel="canonical" href="https://ishopbd.com/" />
+            <title>রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক পণ্যের অনলাইন শপ</title>
+            <meta name="description" content="রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - খাঁটি সুন্দরবনের মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম মরিয়ম খেজুর, ড্রাই ফ্রুটস, চিয়া সিড ও অর্গানিক খাদ্যপণ্যের বিশ্বস্ত অনলাইন শপ। সারাদেশে ক্যাশ অন ডেলিভারি!" />
+            <link rel="canonical" href="https://rokomariponnohari.com/" />
           </>
         )}
       </Helmet>
@@ -6906,9 +6906,9 @@ const handleSaveQuickEdit = async () => {
                 setIsNotifOpen(false);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              title="i SHOP BD Home"
+              title="রকমারি পণ্য হাড়ি Home"
             >
-              <img src="/logo.png" alt="i SHOP BD Logo" className="h-9 md:h-11 object-contain" />
+              <img src="/logo.png" alt="রকমারি পণ্য হাড়ি Logo" className="h-9 md:h-11 object-contain" />
             </div>
           </div>
           {/* Search Bar - Desktop */}
@@ -7403,7 +7403,7 @@ const handleSaveQuickEdit = async () => {
                     src={activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.image}
                     className="w-full h-full object-cover block absolute inset-0"
                     loading="eager"
-                    alt={`i SHOP BD ব্যানার ${currentBanner + 1}`}
+                    alt={`রকমারি পণ্য হাড়ি ব্যানার ${currentBanner + 1}`}
                   />
                   <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
                     <div className="max-w-md">
@@ -9313,7 +9313,7 @@ const handleSaveQuickEdit = async () => {
               <Download className="text-primary" size={24} />
             </div>
             <div>
-              <h4 className="text-sm font-black text-secondary">i SHOP BD অ্যাপ ডাউনলোড করুন</h4>
+              <h4 className="text-sm font-black text-secondary">রকমারি পণ্য হাড়ি অ্যাপ ডাউনলোড করুন</h4>
               <p className="text-xs text-gray-500 font-bold mt-1">অফলাইনে শপিং করতে এবং দ্রুত অর্ডারের জন্য হোম স্ক্রিনে যোগ করুন।</p>
             </div>
           </div>
