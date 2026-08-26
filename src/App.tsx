@@ -6158,13 +6158,13 @@ const handleSaveQuickEdit = async () => {
     document.body.removeChild(link);
   };
   useEffect(() => {
+    const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
+    if (heroBanners.length <= 1) return;
     const timer = setInterval(() => {
-      if (activeBanners.length > 0) {
-        setCurrentBanner((prev) => (prev + 1) % activeBanners.length);
-      }
-    }, 5000);
+      setCurrentBanner((prev) => (prev + 1) % heroBanners.length);
+    }, 4500);
     return () => clearInterval(timer);
-  }, [activeBanners.length]);
+  }, [activeBanners]);
   const campaignParam = urlParams.get("campaign");
   const isCampaignLoading = !!campaignParam && !activeCampaign && campaigns.length === 0;
   if (landingProduct) {
@@ -7384,74 +7384,109 @@ const handleSaveQuickEdit = async () => {
           </div>
         </nav>
       )}
-      {/* 3. Hero Banner Slider - Full Width */}
-      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && activeBanners.length > 0 && (
-        <section className="container mx-auto px-4 mt-4 relative group">
-          <div className="w-full relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl border border-gray-100 bg-white min-h-[220px] md:min-h-[400px]">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentBanner}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.5 }}
-                className={`relative w-full h-full min-h-[220px] md:min-h-[400px] ${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
-                onClick={() => {
-                  const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
-                  const banner = heroBanners[currentBanner % (heroBanners.length || 1)];
-                  if (banner?.linkedProductId) {
-                    const product = products.find((p) => p.id === banner.linkedProductId);
-                    if (product) openProductDetails(product);
-                  }
-                }}
+      {/* 3. Hero Banner Slider - Smooth Sliding Carousel (No Flash) */}
+      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && activeBanners.length > 0 && (() => {
+        const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
+        if (heroBanners.length === 0) return null;
+        const activeIdx = currentBanner % heroBanners.length;
+
+        return (
+          <section className="container mx-auto px-4 mt-4 relative group">
+            <div className="w-full relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl border border-gray-100 bg-stone-900 min-h-[240px] md:min-h-[420px]">
+              {/* Horizontal Sliding Track (Smooth Right-to-Left Slide) */}
+              <div 
+                className="flex w-full h-full min-h-[240px] md:min-h-[420px] transition-transform duration-700 ease-in-out"
+                style={{ transform: `translateX(-${activeIdx * 100}%)` }}
               >
-                <img 
-                  src={activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.image}
-                  className="w-full h-full object-cover block absolute inset-0"
-                  loading="eager"
-                  alt={`রকমারি পণ্য হাড়ি ব্যানার ${currentBanner + 1}`}
-                />
-                <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
-                  <div className="max-w-xl">
-                    {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title) && (
-                      <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleSize || 'text-2xl md:text-5xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
-                          activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleFont || 'font-ador'
-                        } ${
-                          activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
-                        }`}>
-                        {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title}
-                      </motion.h2>
-                    )}
-                    {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle) && (
-                      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-                        className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleSize || 'text-sm md:text-lg'} opacity-90 text-white/90 drop-shadow-lg ${
-                          activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleFont || 'font-ador'
-                        }`}>
-                        {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle}
-                      </motion.p>
-                    )}
+                {heroBanners.map((banner, idx) => (
+                  <div
+                    key={banner.id || idx}
+                    className={`w-full h-full min-h-[240px] md:min-h-[420px] shrink-0 relative ${banner?.linkedProductId ? "cursor-pointer" : ""}`}
+                    onClick={() => {
+                      if (banner?.linkedProductId) {
+                        const product = products.find((p) => p.id === banner.linkedProductId);
+                        if (product) openProductDetails(product);
+                      }
+                    }}
+                  >
+                    <img 
+                      src={banner.image}
+                      className="w-full h-full object-cover block absolute inset-0"
+                      loading={idx === 0 ? "eager" : "lazy"}
+                      alt={banner.title || `রকমারি পণ্য হাড়ি ব্যানার ${idx + 1}`}
+                    />
+                    <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-gradient-to-r from-black/75 via-black/35 to-transparent">
+                      <div className="max-w-xl">
+                        {banner.title && (
+                          <h2
+                            className={`${banner.titleSize || 'text-2xl md:text-5xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
+                              banner.titleFont || 'font-ador'
+                            } ${
+                              banner.titleWeight === 'black' ? 'font-black' : 'font-bold'
+                            }`}>
+                            {banner.title}
+                          </h2>
+                        )}
+                        {banner.subtitle && (
+                          <p
+                            className={`${banner.subtitleSize || 'text-sm md:text-lg'} opacity-90 text-white/90 drop-shadow-lg ${
+                              banner.subtitleFont || 'font-ador'
+                            }`}>
+                            {banner.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              {/* Prev / Next Arrows */}
+              {heroBanners.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setCurrentBanner(prev => (prev - 1 + heroBanners.length) % heroBanners.length)}
+                    className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 p-2.5 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer shadow-lg active:scale-95"
+                    aria-label="Previous Slide"
+                  >
+                    <ChevronLeft size={24} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentBanner(prev => (prev + 1) % heroBanners.length)}
+                    className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 p-2.5 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer shadow-lg active:scale-95"
+                    aria-label="Next Slide"
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                </>
+              )}
+
+              {/* Bottom 1, 2, 3 Numbered Indicators */}
+              {heroBanners.length > 1 && (
+                <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 shadow-lg">
+                  {heroBanners.map((_, dotIdx) => {
+                    const isActive = activeIdx === dotIdx;
+                    return (
+                      <button
+                        key={dotIdx}
+                        onClick={() => setCurrentBanner(dotIdx)}
+                        className={`transition-all duration-300 flex items-center justify-center font-bold text-xs cursor-pointer ${
+                          isActive
+                            ? "bg-[#6FA838] text-white px-3 py-0.5 rounded-full shadow-md scale-105"
+                            : "bg-white/20 hover:bg-white/40 text-white/90 w-6 h-6 rounded-full"
+                        }`}
+                        title={`Slide ${dotIdx + 1}`}
+                      >
+                        {toBengaliNumber(dotIdx + 1)}
+                      </button>
+                    );
+                  })}
                 </div>
-              </motion.div>
-            </AnimatePresence>
-            {activeBanners.filter(b => (b.type || 'hero') === 'hero').length > 1 && (
-              <>
-                <button
-                  onClick={() => setCurrentBanner(prev => (prev - 1 + activeBanners.filter(b => (b.type || 'hero') === 'hero').length) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer">
-                  <ChevronLeft size={24} />
-                </button>
-                <button
-                  onClick={() => setCurrentBanner(prev => (prev + 1) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer">
-                  <ChevronRight size={24} />
-                </button>
-              </>
-            )}
-          </div>
-        </section>
-      )}
+              )}
+            </div>
+          </section>
+        );
+      })()}
       {(selectedCategory !== "all" ||
         selectedBrand !== "all" ||
         searchQuery) && (
