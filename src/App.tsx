@@ -7285,11 +7285,11 @@ const handleSaveQuickEdit = async () => {
           );
         })()}
       </header>
-      {/* 2. Category Menu - Hide on Mobile since it's integrated in header now */}
+      {/* 2. Category Menu - Clean Horizontal Scrollable Bar */}
       {!activeCampaign && !campaignParam && (
-        <nav className="bg-gray-50/10 border-y border-gray-200/80 hidden md:block">
+        <nav className="bg-white/90 backdrop-blur-md border-y border-gray-150 hidden md:block shadow-xs sticky top-[57px] md:top-[65px] z-30">
           <div className="container mx-auto px-4">
-            <div className="flex divide-x divide-gray-200/80 border-x border-gray-200/80 w-full">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2.5">
               <button
                 onClick={() => {
                   setSelectedCategory("all");
@@ -7298,18 +7298,19 @@ const handleSaveQuickEdit = async () => {
                   setIsProductDetailsOpen(false);
                   setSelectedProduct(null);
                 }}
-                className={`flex-1 px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1 ${
+                className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all shrink-0 cursor-pointer shadow-xs ${
                   selectedCategory === "all"
-                    ? "bg-white text-primary"
-                    : "text-gray-600 hover:bg-white/80 hover:text-primary"
+                    ? "bg-[#6FA838] text-white shadow-[#6FA838]/25"
+                    : "bg-gray-100/80 text-gray-700 hover:bg-gray-200/80 hover:text-[#6FA838]"
                 }`}
               >
                 {t("সবগুলো", "All")}
               </button>
               {categories.map((cat) => {
                 const subcats = cat.subcategories || [];
+                const isSelected = selectedCategory === cat.name;
                 return (
-                  <div key={cat.id} className="flex-1 relative group flex">
+                  <div key={cat.id} className="relative group shrink-0">
                     <a
                       href={getCategoryPath(cat.name)}
                       onClick={(e) => {
@@ -7320,21 +7321,21 @@ const handleSaveQuickEdit = async () => {
                         setIsProductDetailsOpen(false);
                         setSelectedProduct(null);
                       }}
-                      className={`cursor-pointer w-full px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
-                        selectedCategory === cat.name
-                          ? "bg-white text-primary"
-                          : "text-gray-600 hover:bg-white/80 hover:text-primary"
+                      className={`cursor-pointer px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shadow-xs ${
+                        isSelected
+                          ? "bg-[#6FA838] text-white shadow-[#6FA838]/25"
+                          : "bg-gray-100/80 text-gray-700 hover:bg-gray-200/80 hover:text-[#6FA838]"
                       }`}
                     >
-                      {tc(cat.name)}
+                      <span>{tc(cat.name)}</span>
                       {subcats.length > 0 && (
-                        <ChevronDown size={14} className="transition-transform group-hover:rotate-180 duration-300" />
+                        <ChevronDown size={13} className="transition-transform group-hover:rotate-180 duration-200 opacity-70" />
                       )}
                     </a>
                     
                     {subcats.length > 0 && (
-                      <div className="absolute left-1/2 -translate-x-1/2 top-full pt-2 w-56 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300 ease-out z-[999]">
-                        <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-gray-100 shadow-xl p-2.5 flex flex-col gap-1 ring-1 ring-black/5">
+                      <div className="absolute left-0 top-full pt-1.5 w-52 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-200 ease-out z-[999]">
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-xl p-2 flex flex-col gap-0.5 ring-1 ring-black/5">
                           <a
                             href={getCategoryPath(cat.name)}
                             onClick={(e) => {
@@ -7345,15 +7346,15 @@ const handleSaveQuickEdit = async () => {
                               setIsProductDetailsOpen(false);
                               setSelectedProduct(null);
                             }}
-                            className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
+                            className={`text-left text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
                               selectedCategory === cat.name && selectedSubcategory === "all"
-                                ? "bg-primary/5 text-primary"
+                                ? "bg-[#6FA838]/10 text-[#6FA838]"
                                 : "text-gray-700 hover:bg-gray-50"
                             }`}
                           >
                             All {tc(cat.name)}
                           </a>
-                          <div className="h-[1px] bg-gray-100 my-1" />
+                          <div className="h-[1px] bg-gray-100 my-0.5" />
                           {subcats.map((sub, sIdx) => (
                             <button
                               key={sIdx}
@@ -7364,9 +7365,9 @@ const handleSaveQuickEdit = async () => {
                                 setIsProductDetailsOpen(false);
                                 setSelectedProduct(null);
                               }}
-                              className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
+                              className={`text-left text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
                                 selectedCategory === cat.name && selectedSubcategory === sub
-                                  ? "bg-primary/5 text-primary"
+                                  ? "bg-[#6FA838]/10 text-[#6FA838]"
                                   : "text-gray-700 hover:bg-gray-50"
                               }`}
                             >
