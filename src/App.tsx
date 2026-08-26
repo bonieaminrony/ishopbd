@@ -7384,122 +7384,71 @@ const handleSaveQuickEdit = async () => {
           </div>
         </nav>
       )}
-      {/* 3. Hero Banner Slider */}
+      {/* 3. Hero Banner Slider - Full Width */}
       {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && activeBanners.length > 0 && (
         <section className="container mx-auto px-4 mt-4 relative group">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
-            {/* Left Slider Column (3/4 width) */}
-            <div className="md:col-span-3 relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl border border-gray-100 bg-white min-h-[220px] md:min-h-[380px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentBanner}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.5 }}
-                  className={`relative w-full h-full min-h-[220px] md:min-h-[380px] ${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
-                  onClick={() => {
-                    const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
-                    const banner = heroBanners[currentBanner % (heroBanners.length || 1)];
-                    if (banner?.linkedProductId) {
-                      const product = products.find((p) => p.id === banner.linkedProductId);
-                      if (product) openProductDetails(product);
-                    }
-                  }}
-                >
-                  <img 
-                    src={activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.image}
-                    className="w-full h-full object-cover block absolute inset-0"
-                    loading="eager"
-                    alt={`রকমারি পণ্য হাড়ি ব্যানার ${currentBanner + 1}`}
-                  />
-                  <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
-                    <div className="max-w-md">
-                      {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title) && (
-                        <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                          className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleSize || 'text-2xl md:text-4xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
-                            activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleFont || 'font-ador'
-                          } ${
-                            activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
-                          }`}>
-                          {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title}
-                        </motion.h2>
-                      )}
-                      {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle) && (
-                        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-                          className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleSize || 'text-sm md:text-base'} opacity-90 text-white/90 drop-shadow-lg ${
-                            activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleFont || 'font-ador'
-                          }`}>
-                          {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle}
-                        </motion.p>
-                      )}
-                    </div>
+          <div className="w-full relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl border border-gray-100 bg-white min-h-[220px] md:min-h-[400px]">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentBanner}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
+                className={`relative w-full h-full min-h-[220px] md:min-h-[400px] ${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
+                onClick={() => {
+                  const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
+                  const banner = heroBanners[currentBanner % (heroBanners.length || 1)];
+                  if (banner?.linkedProductId) {
+                    const product = products.find((p) => p.id === banner.linkedProductId);
+                    if (product) openProductDetails(product);
+                  }
+                }}
+              >
+                <img 
+                  src={activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.image}
+                  className="w-full h-full object-cover block absolute inset-0"
+                  loading="eager"
+                  alt={`রকমারি পণ্য হাড়ি ব্যানার ${currentBanner + 1}`}
+                />
+                <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
+                  <div className="max-w-xl">
+                    {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title) && (
+                      <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                        className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleSize || 'text-2xl md:text-5xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
+                          activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleFont || 'font-ador'
+                        } ${
+                          activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
+                        }`}>
+                        {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title}
+                      </motion.h2>
+                    )}
+                    {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle) && (
+                      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+                        className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleSize || 'text-sm md:text-lg'} opacity-90 text-white/90 drop-shadow-lg ${
+                          activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleFont || 'font-ador'
+                        }`}>
+                        {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle}
+                      </motion.p>
+                    )}
                   </div>
-                </motion.div>
-              </AnimatePresence>
-              {activeBanners.filter(b => (b.type || 'hero') === 'hero').length > 1 && (
-                <>
-                  <button
-                    onClick={() => setCurrentBanner(prev => (prev - 1 + activeBanners.filter(b => (b.type || 'hero') === 'hero').length) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button
-                    onClick={() => setCurrentBanner(prev => (prev + 1) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
-                    <ChevronRight size={24} />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Right Side Static Banners Column (1/4 width) */}
-            <div className="col-span-1 md:flex hidden flex-col sm:flex-row md:flex-col gap-4">
-              {/* Top Banner */}
-              <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b1 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
-                {(() => {
-                  const bTop = activeBanners.find(b => b.type === 'right_top');
-                  return (
-                    <div 
-                      className="w-full h-full relative cursor-pointer"
-                      onClick={() => {
-                        setIsAppDownloadModalOpen(true);
-                      }}
-                    >
-                      <img 
-                        src={bTop?.image || '/default_right_top.png'} 
-                        className="w-full h-full object-cover group-hover/b1:scale-105 transition-transform duration-500 absolute inset-0"
-                        alt="Promo Banner Top"
-                      />
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Bottom Banner (Flash Sale link) */}
-              <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b2 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
-                {(() => {
-                  const bBottom = activeBanners.find(b => b.type === 'right_bottom');
-                  return (
-                    <div 
-                      className="w-full h-full relative cursor-pointer"
-                      onClick={() => {
-                        const el = document.getElementById('flash-sale-section');
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth' });
-                        }
-                      }}
-                    >
-                      <img 
-                        src={bBottom?.image || '/default_right_bottom.png'} 
-                        className="w-full h-full object-cover group-hover/b2:scale-105 transition-transform duration-500 absolute inset-0"
-                        alt="Flash Sale Banner"
-                      />
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+            {activeBanners.filter(b => (b.type || 'hero') === 'hero').length > 1 && (
+              <>
+                <button
+                  onClick={() => setCurrentBanner(prev => (prev - 1 + activeBanners.filter(b => (b.type || 'hero') === 'hero').length) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer">
+                  <ChevronLeft size={24} />
+                </button>
+                <button
+                  onClick={() => setCurrentBanner(prev => (prev + 1) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer">
+                  <ChevronRight size={24} />
+                </button>
+              </>
+            )}
           </div>
         </section>
       )}
