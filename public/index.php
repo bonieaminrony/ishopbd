@@ -62,6 +62,10 @@ function fetchFirestoreDoc($docId) {
     return null;
 }
 
+// Fast Path: Check if the request is from a Social Media Crawler or SEO Bot
+$userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$isBot = (bool)preg_match('/(facebookexternalhit|Facebot|WhatsApp|Twitterbot|TelegramBot|Pinterest|LinkedInBot|Googlebot|bingbot|Baiduspider|YandexBot|Slackbot|Discordbot)/i', $userAgent);
+
 // 1. Check for Product URL
 $productIdentifier = isset($_GET['p']) ? $_GET['p'] : (isset($_GET['product']) ? $_GET['product'] : (isset($_GET['landing']) ? $_GET['landing'] : null));
 if (!$productIdentifier) {
@@ -74,7 +78,9 @@ if (!$productIdentifier) {
 $productFields = null;
 $resolvedProductId = null;
 
-if ($productIdentifier) {
+// Only fetch external Firestore REST API if it is a Social Media Bot or SEO Crawler
+// Regular human visitors run React SPA and get instant 0.01s HTML response without server wait
+if ($isBot && $productIdentifier) {
     $cleanIdent = trim((string)$productIdentifier);
     $parts = explode('-', $cleanIdent);
     $lastPart = end($parts);
