@@ -519,7 +519,7 @@ function App() {
           }
           try {
             const productNames = newOrder.items.map((i: any) => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
-            const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${newOrder.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
+            const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${newOrder.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: rokomariponnohari.com ধন্যবাদ!`;
             fetch("/api/send-sms", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -697,7 +697,7 @@ function App() {
           
           try {
             const productNames = orderData.items.map((i: any) => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
-            const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderData.orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${orderData.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
+            const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderData.orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${orderData.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: rokomariponnohari.com ধন্যবাদ!`;
             fetch("/api/send-sms", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -2075,7 +2075,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOTP(code);
     try {
-      const message = `নিরাপদ শপ বিডি এডমিন প্যানেল এ লগইন এর জন্য আপনার ভেরিফিকেশন কোডটি হলো: ${code}`;
+      const message = `রকমারি পণ্য হাড়ি এডমিন প্যানেলে লগইন এর জন্য আপনার ভেরিফিকেশন কোডটি হলো: ${code}`;
       const response = await fetch("/api/send-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3492,35 +3492,28 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   };
   const handleDeleteBanner = async (id: any) => {
-    console.log("Delete banner request for ID:", id);
     if (!id) {
-      alert("⚠️ ব্যানার আইডি পাওয়া যায়নি, স্যার!");
+      toast.error("ব্যানার আইডি পাওয়া যায়নি।");
       return;
     }
     const bannerId = String(id);
-    const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই ব্যানারটি ডিলিট করতে চান, স্যার?");
+    const conf = window.confirm("Are you sure you want to delete this banner?");
     if (!conf) return;
     try {
-      console.log("Log", bannerId);
-      const bannerRef = doc(db, "banners", bannerId);
-      await deleteDoc(bannerRef);
-      console.log("Log", bannerId);
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      await deleteDoc(doc(db, "banners", bannerId));
+      setActiveBanners((prev) => prev.filter((b) => String(b.id) !== bannerId));
+      toast.success("ব্যানার সফলভাবে ডিলিট করা হয়েছে।");
       if (editingBanner && String(editingBanner.id) === bannerId) {
         setEditingBanner(null);
       }
     } catch (err: any) {
-      console.error(" Banner delete error details:", err);
-      if (err.code === "permission-denied") {
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-      } else {
-        alert("ছবি প্রসেস করতে সমস্যা হয়েছে।");
-      }
+      console.error("Banner delete error details:", err);
+      toast.error("ব্যানার ডিলিট করতে সমস্যা হয়েছে: " + (err?.message || "Permission error"));
     }
   };
   const handleAddAdmin = async () => {
     if (!newAdminEmail || !newAdminPassword) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("ইমেইল এবং পাসওয়ার্ড আবশ্যক।");
       return;
     }
     try {
@@ -3539,10 +3532,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       setNewAdminEmail("");
       setNewAdminPassword("");
       setNewAdminPhone("");
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.success("নতুন অ্যাডমিন সফলভাবে যোগ করা হয়েছে।");
     } catch (err) {
       console.error(err);
-      alert("সেভ করতে সমস্যা হয়েছে।");
+      toast.error("অ্যাডমিন যোগ করতে সমস্যা হয়েছে।");
     }
   };
   const handleUpdateAdmin = async () => {
@@ -3564,7 +3557,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   };
   const handleDeleteAdmin = async (id: any) => {
     if (!id) {
-      alert("ইমেইল এবং পাসওয়ার্ড উভয়ই লিখুন।");
+      toast.error("অ্যাডমিন আইডি পাওয়া যায়নি।");
       return;
     }
     const adminId = String(id);
@@ -3573,21 +3566,17 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     try {
       console.log("Deleting admin:", adminId);
       await deleteDoc(doc(db, "admins", adminId));
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.success("অ্যাডমিন সফলভাবে ডিলিট করা হয়েছে।");
     } catch (err: any) {
       console.error("Admin delete error:", err);
-      if (err.code === "permission-denied") {
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-      } else {
-        alert("ছবি প্রসেস করতে সমস্যা হয়েছে।");
-      }
+      toast.error("অ্যাডমিন ডিলিট করতে সমস্যা হয়েছে: " + (err?.message || "Permission error"));
     }
   };
   const handleAdminMultiImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
     if ((editingProduct?.images?.length || 0) + files.length > 6) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("একটি প্রোডাক্টে সর্বোচ্চ ৬টি ছবি আপলোড করা যাবে।");
       return;
     }
     Array.from(files).forEach(async (file: File) => {
@@ -4437,11 +4426,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       });
       const result = await response.json();
       if (result.success) {
-        alert("SMS sent successfully!");
+        toast.success("এসএমএস সফলভাবে পাঠানো হয়েছে!");
         setIndividualSmsOrder(null);
         setIndividualSmsMessage("");
       } else {
-        alert("ছবি প্রসেস করতে সমস্যা হয়েছে।");
+        toast.error("এসএমএস পাঠাতে সমস্যা হয়েছে।");
       }
     } catch (err: any) {
       alert("Error sending SMS: " + err.message);
@@ -5483,7 +5472,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       // Send automated confirmation SMS to customer's phone
       try {
         const productNames = landingProduct.smsName || landingProduct.name;
-        const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
+        const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: rokomariponnohari.com ধন্যবাদ!`;
         fetch("/api/send-sms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
