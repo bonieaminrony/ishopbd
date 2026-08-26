@@ -61,8 +61,16 @@ async function uploadToDir(client, targetDir) {
     await client.uploadFrom(path.join(__dirname, 'dist', 'server.cjs.map'), `${targetDir}/server.cjs.map`);
   }
 
-  // 6. Upload assets folder
-  console.log('  📤 Uploading dist/assets folder...');
+  // 6. Purge old assets and upload new dist/assets folder
+  console.log('  🧹 Cleaning and uploading dist/assets folder...');
+  try {
+    const remoteAssets = await client.list(`${targetDir}/assets`);
+    for (const file of remoteAssets) {
+      if (!file.isDirectory) {
+        await client.remove(`${targetDir}/assets/${file.name}`).catch(() => {});
+      }
+    }
+  } catch (e) {}
   await client.uploadFromDir(path.join(__dirname, 'dist', 'assets'), `${targetDir}/assets`);
 
   // 7. Upload public/api directory
