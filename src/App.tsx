@@ -4023,41 +4023,32 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`);
     }
   };
-  const deleteProduct = async (id: any) => {
-    console.log("Delete product attempt for ID:", id);
+    const deleteProduct = async (id: any) => {
     if (!id) {
-      alert("⚠️ অ্যাডমিন আইডি পাওয়া যায়নি, স্যার।");
+      toast.error("প্রোডাক্ট আইডি পাওয়া যায়নি।");
       return;
     }
     const productId = String(id);
-    const conf = window.confirm("⚠️ আপনি কি নিশ্চিতভাবে এই প্রোডাক্টটি ডিলিট করতে চান, স্যার?");
+    const conf = window.confirm("⚠️ আপনি কি নিশ্চিতভাবে এই প্রোডাক্টটি ডিলিট করতে চান?");
     if (!conf) return;
     try {
-      console.log("Log", productId);
       const productRef = doc(db, "products", productId);
       await deleteDoc(productRef);
       await touchProductsTimestamp();
-      console.log("Log", productId);
       
-      // Optimistic delete for cache/quota issues
-      const updatedProducts = products.filter(p => p.id !== productId);
+      // Optimistic delete for state & cache
+      const updatedProducts = products.filter(p => String(p.id) !== productId);
       setProducts(updatedProducts);
       localStorage.setItem("cached_products", JSON.stringify(updatedProducts));
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.success("প্রোডাক্টটি সফলভাবে ডিলিট করা হয়েছে।");
       if (editingProduct && String(editingProduct.id) === productId) {
         setEditingProduct(null);
       }
     } catch (err: any) {
-      console.error(" Product delete error details:", err);
+      console.error("Product delete error details:", err);
       const isQuota = err.message?.includes("Quota exceeded") || err.message === "QUOTA_EXCEEDED";
       if (isQuota) setIsQuotaExceeded(true);
-      if (err.code === "permission-denied") {
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-      } else if (isQuota) {
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-      } else {
-        alert("ছবি প্রসেস করতে সমস্যা হয়েছে।");
-      }
+      toast.error("প্রোডাক্ট ডিলিট করতে সমস্যা হয়েছে: " + (err?.message || "Permission error"));
     }
   };
   const togglePublishStatus = async (product: Product) => {
@@ -4660,11 +4651,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     if (!user || !userProfile) return;
     const amount = parseInt(depositAmount);
     if (isNaN(amount) || amount <= 0) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("সঠিক টাকার পরিমাণ লিখুন।");
       return;
     }
     if (!depositTrxId) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("Transaction ID প্রদান করুন।");
       return;
     }
     setIsPaymentSimulating(true);
@@ -4964,7 +4955,7 @@ Rules:
         setIsRecording(true);
       } catch (err) {
         console.error("Mic access denied", err);
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+        toast.error("মাইক্রোফোনের এক্সেস পাওয়া যায়নি!");
       }
     }
   };
@@ -5148,7 +5139,7 @@ Rules:
   };
   const proceedToCheckoutFromMulti = () => {
     if (cartItems.length === 0) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("আপনার কার্ট খালি!");
       return;
     }
     setCheckoutItems([...cartItems]);
@@ -5186,7 +5177,7 @@ Rules:
     const files = e.target.files;
     if (!files) return;
     if (reviewForm.images.length + files.length > 5) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      toast.error("সর্বোচ্চ ৫টি ছবি আপলোড করা যাবে।");
       return;
     }
     for (let i = 0; i < files.length; i++) {
