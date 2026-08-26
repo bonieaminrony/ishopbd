@@ -1500,44 +1500,8 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     return enText;
   };
   const detectLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      setLocationError("অবস্থান খুঁজে পাওয়া যায়নি। দয়া করে লোকেশন পারমিশন দিন।");
-      return;
-    }
-    setIsDetectingLocation(true);
-    setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        // Dhaka boundaries: Lat 23.65 - 23.95, Lon 90.30 - 90.55
-        if (
-          latitude >= 23.65 &&
-          latitude <= 23.95 &&
-          longitude >= 90.30 &&
-          longitude <= 90.55
-        ) {
-          setDeliveryArea("inside");
-        } else {
-          setDeliveryArea("outside");
-        }
-        setIsDetectingLocation(false);
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        // Fallback to inside Dhaka as a default if fails, or outside? 
-        // Let's default to inside and show error message
-        setLocationError("অবস্থান খুঁজে পাওয়া যায়নি। দয়া করে লোকেশন পারমিশন দিন।");
-        setIsDetectingLocation(false);
-      },
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+    // Geolocation popup disabled for seamless non-intrusive checkout
   }, []);
-  // Category translation helper
-  useEffect(() => {
-    if (isCheckoutOpen) {
-      detectLocation();
-    }
-  }, [isCheckoutOpen, detectLocation]);
   const tc = (name: string) => {
 const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান", en: "Charger Fan", ar: "مروحة شحن", ur: "چارجر پنکھا" }, "Handheld Fan": { bn: "হ্যান্ডহোল্ড ফ্যান", en: "Handheld Fan", ar: "مروحة محمولة", ur: "ہینڈ ہیلڈ پنکھا" }, "Smart Watch": { bn: "স্মার্ট ওয়াচ", en: "Smart Watch", ar: "ساعة ذكية", ur: "سمارٹ واچ" }, "Headphone": { bn: "হেডফোন", en: "Headphone", ar: "سماعة رأس", ur: "ہیڈ فون" }, "Earbuds": { bn: "ইয়ারবাডস", en: "Earbuds", ar: "سماعات أذن", ur: "ایئربڈز" }, "Mobile Accessories": { bn: "মোবাইল এক্সেসরিজ", en: "Mobile Accessories", ar: "إكسسوارات الجوال", ur: "موبائل لوازمات" }, "Gadgets": { bn: "গ্যাজেটস", en: "Gadgets", ar: "أدوات ذكية", ur: "گیجٹس" } };
     const entry = maps[name];
@@ -5125,7 +5089,7 @@ Rules:
     setCheckoutItems(itemsToAdd);
     setIsProductDetailsOpen(false); // Close details modal when checking out
     setIsCheckoutOpen(true);
-    detectLocation();
+    // detectLocation();
   }, [detectLocation, setIsProductDetailsOpen, addToCartInternal]);
   const openCartCheckout = () => {
     if (cartItems.length === 0) {
@@ -5145,7 +5109,7 @@ Rules:
     setCheckoutItems([...cartItems]);
     setIsMultiOrderSelectionOpen(false);
     setIsCheckoutOpen(true);
-    detectLocation();
+    // detectLocation();
   };
   // Helper to calculate tiered price
   useEffect(() => {
@@ -9285,7 +9249,7 @@ const handleSaveQuickEdit = async () => {
                           setCheckoutItems([...cartItems]);
                           setIsCartDrawerOpen(false);
                           setIsCheckoutOpen(true);
-                          detectLocation();
+                          // detectLocation();
                         }}
                         className="w-full bg-primary hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 text-xs text-center"
                       >
