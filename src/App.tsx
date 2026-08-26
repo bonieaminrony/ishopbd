@@ -1280,22 +1280,22 @@ function App() {
       if (snap.exists()) {
         const data = snap.data();
         setSiteConfig({
-          couponCode: data.couponCode || "ISHOPBD5",
+          couponCode: data.couponCode || "ROKOMARI5",
           isCouponPublic: data.isCouponPublic || false,
-          whatsappNumber: data.whatsappNumber || "8801777600844",
-          bkashNumber: data.bkashNumber || "01777600844",
-          nagadNumber: data.nagadNumber || "01777600844",
-          rocketNumber: data.rocketNumber || "01777600844-0",
+          whatsappNumber: data.whatsappNumber || "8801738364268",
+          bkashNumber: data.bkashNumber || "01738364268",
+          nagadNumber: data.nagadNumber || "01738364268",
+          rocketNumber: data.rocketNumber || "01738364268-0",
           bankDetails: data.bankDetails || "Bank: DBBL, A/C: 123456789",
-          aboutUs: data.aboutUs || "i SHOP BD (আই শপ বিডি) - আপনার বিশ্বস্ত অনলাইন প্ল্যাটফর্ম।",
-          privacyPolicy: data.privacyPolicy || "আপনার ব্যক্তিগত গোপনীয়তাকে আমরা সম্মান করি। আমাদের ওয়েবসাইটে দেওয়া আপনার সকল তথ্য (যেমন: নাম, ফোন নাম্বার, ঠিকানা) সম্পূর্ণ নিরাপদ।",
-          refundPolicy: data.refundPolicy || "পণ্য হাতে পাওয়ার পর কোনো সমস্যা থাকলে ২৪ ঘন্টার মধ্যে জানান...",
-          termsAndConditions: data.termsAndConditions || "আমাদের ওয়েবসাইট ব্যবহার করার জন্য আপনাকে ধন্যবাদ। অর্ডার করার মাধ্যমে আমরা আমাদের ডেলিভারি ও পেমেন্ট শর্তাবলীর সাথে একমত পোষণ করেছেন",
+          aboutUs: data.aboutUs || "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - আপনার বিশ্বস্ত অনলাইন প্ল্যাটফর্ম। আমরা সুলভ মূল্যে সর্বোচ্চ মানের খাঁটি মধু, কাঠের ঘানি ভাঙা তেল, গাওয়া ঘি, প্রিমিয়াম খেজুর ও ১০০% খাঁটি অর্গানিক খাদ্যপণ্য নিশ্চিত করি।",
+          privacyPolicy: data.privacyPolicy || "আপনার ব্যক্তিগত গোপনীয়তাকে আমরা সম্মান করি। আমাদের ওয়েবসাইটে দেওয়া আপনার সকল তথ্য (যেমন: নাম, ফোন নাম্বার, ঠিকানা) সম্পূর্ণ নিরাপদ ও সংরক্ষিত থাকে।",
+          refundPolicy: data.refundPolicy || "পণ্য হাতে পাওয়ার পর কোনো সমস্যা বা অমিল থাকলে ডেলিভারি ম্যানের সামনে বা ২৪ ঘণ্টার মধ্যে আমাদের সাথে যোগাযোগ করুন। সঠিক প্রমাণ সাপেক্ষে আমরা দ্রুত রিফান্ড বা এক্সচেঞ্জ নিশ্চিত করে থাকি।",
+          termsAndConditions: data.termsAndConditions || "রকমারি পণ্য হাড়ি ওয়েবসাইট ব্যবহার করার জন্য আপনাকে ধন্যবাদ। অর্ডার করার মাধ্যমে আপনি আমাদের ডেলিভারি ও পেমেন্ট শর্তাবলীর সাথে একমত পোষণ করেছেন।",
 checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarningText : "প্রিয় গ্রাহক, ক্যাশ অন ডেলিভারিতে অর্ডার করার আগে দয়া করে নিশ্চিত হোন যে প্রোডাক্টটি আপনার প্রয়োজন এবং আপনি তা রিসিভ করবেন। অনাকাঙ্ক্ষিত রিটার্ন এড়াতে আপনার সহযোগিতা আমাদের একান্ত কাম্য।",
-          supportPhone1: data.supportPhone1 || "01777-600844",
-          supportPhone2: data.supportPhone2 || "01977-600844",
+          supportPhone1: data.supportPhone1 || "01738-364268",
+          supportPhone2: data.supportPhone2 || "01738-364268",
           isAiEnabled: data.isAiEnabled !== undefined ? data.isAiEnabled : false,
-          facebookUrl: data.facebookUrl || "https://facebook.com/ishopbd",
+          facebookUrl: data.facebookUrl || "https://facebook.com/rokomariponnohari",
           isCodEnabled: data.isCodEnabled !== undefined ? data.isCodEnabled : true,
           isBkashEnabled: data.isBkashEnabled !== undefined ? data.isBkashEnabled : true,
           isNagadEnabled: data.isNagadEnabled !== undefined ? data.isNagadEnabled : true,
@@ -1313,26 +1313,26 @@ checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarni
         });
       } else {
         const defaultConfig = {
-          couponCode: "ISHOPBD5",
+          couponCode: "ROKOMARI5",
           isCouponPublic: false,
-          whatsappNumber: "8801777600844",
-          bkashNumber: "01777600844",
-          nagadNumber: "01777600844",
-          rocketNumber: "01777600844-0",
+          whatsappNumber: "8801738364268",
+          bkashNumber: "01738364268",
+          nagadNumber: "01738364268",
+          rocketNumber: "01738364268-0",
           bankDetails: "Bank: DBBL, A/C: 123456789",
           isCodEnabled: true,
           isBkashEnabled: true,
           isNagadEnabled: true,
           isRocketEnabled: true,
           isBankEnabled: true,
-          aboutUs: "i SHOP BD (আই শপ বিডি) - আপনার বিশ্বস্ত অনলাইন প্ল্যাটফর্ম। আমরা সুলভ মূল্যে সর্বোচ্চ মানের ইলেকট্রনিক গ্যাজেট, স্মার্ট এক্সেসরিজ এবং হোম অ্যাপ্লায়েন্স নিশ্চিত করি।",
-          privacyPolicy: "আপনার ব্যক্তিগত গোপনীয়তাকে আমরা সম্মান করুন আমাদের ওয়েবসাইটে দেওয়া আপনার সকল তথ্য (যেমন: নাম, ফোন নাম্বার, ঠিকানা) সম্পূর্ণ নিরাপদ।",
-          refundPolicy: "পণ্য হাতে পাওয়া পর কোনো সমস্যা থাকলে ২৪ ঘন্টার মধ্যে আমাদের সাথে যোগাযোগ করুন। সঠিক প্রমাণ সাপেক্ষে আমরা দ্রুত রিফান্ড বা এক্সচেঞ্জ করে থাকি",
-          termsAndConditions: "আমাদের ওয়েবসাইট ব্যবহার করুন জন্য আপনাকে ধন্যবাদ। অর্ডার করুন মাধ্যমে আমরা আমাদের ডেলিভারি ও পেমেন্ট শর্তাবলীর সাথে একমত পোষণ করেছেন",
+          aboutUs: "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - আপনার বিশ্বস্ত অনলাইন প্ল্যাটফর্ম। আমরা সুলভ মূল্যে সর্বোচ্চ মানের খাঁটি মধু, কাঠের ঘানি ভাঙা তেল, গাওয়া ঘি, প্রিমিয়াম খেজুর ও ১০০% খাঁটি অর্গানিক খাদ্যপণ্য নিশ্চিত করি।",
+          privacyPolicy: "আপনার ব্যক্তিগত গোপনীয়তাকে আমরা সম্মান করি। আমাদের ওয়েবসাইটে দেওয়া আপনার সকল তথ্য (যেমন: নাম, ফোন নাম্বার, ঠিকানা) সম্পূর্ণ নিরাপদ ও সংরক্ষিত থাকে।",
+          refundPolicy: "পণ্য হাতে পাওয়ার পর কোনো সমস্যা বা অমিল থাকলে ডেলিভারি ম্যানের সামনে বা ২৪ ঘণ্টার মধ্যে আমাদের সাথে যোগাযোগ করুন। সঠিক প্রমাণ সাপেক্ষে আমরা দ্রুত রিফান্ড বা এক্সচেঞ্জ নিশ্চিত করে থাকি।",
+          termsAndConditions: "রকমারি পণ্য হাড়ি ওয়েবসাইট ব্যবহার করার জন্য আপনাকে ধন্যবাদ। অর্ডার করার মাধ্যমে আপনি আমাদের ডেলিভারি ও পেমেন্ট শর্তাবলীর সাথে একমত পোষণ করেছেন।",
 checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন ডেলিভারিতে অর্ডার করার আগে দয়া করে নিশ্চিত হোন যে প্রোডাক্টটি আপনার প্রয়োজন এবং আপনি তা রিসিভ করবেন। অনাকাঙ্ক্ষিত রিটার্ন এড়াতে আপনার সহযোগিতা আমাদের একান্ত কাম্য।",
-          supportPhone1: "01777-600844",
-          supportPhone2: "01977-600844",
-          facebookUrl: "https://facebook.com/ishopbd",
+          supportPhone1: "01738-364268",
+          supportPhone2: "01738-364268",
+          facebookUrl: "https://facebook.com/rokomariponnohari",
           isAiEnabled: false,
           smsTemplateStart: "",
           smsTemplateEnd: "",
@@ -4769,10 +4769,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         parts: [{ text: m.text || "(Media)" }]
       }));
       rawContents.push({ role: "user", parts: [{ text: userText || "(Media)" }] });
-      const aiPrompt = `You are a helpful customer support AI for an e-commerce shop in Bangladesh called 'i SHOP BD'. Answer briefly and politely in Bengali.
+      const aiPrompt = `You are a helpful customer support AI for an organic e-commerce shop in Bangladesh called 'রকমারি পণ্য হাড়ি' (Rokomari Ponno Hari). Answer briefly and politely in Bengali.
       
 Shop Info:
-- Support Phone: ${siteConfig?.supportPhone1 || "01777-600844"}
+- Support Phone: ${siteConfig?.supportPhone1 || "01738-364268"}
 - Delivery: Inside Dhaka 80 Tk, Outside Dhaka 120 Tk. (Usually 1-3 days).
 Available Products:
 ${products.map(p => `- ${p.name}: ৳${p.price} (Stock: ${p.stock > 0 ? 'Yes' : 'No'})`).join('\n')}
@@ -5358,8 +5358,8 @@ Rules:
       toast.error("Please enter a coupon code!");
       return;
     }
-    // Default to ISHOPBD5 if config not loaded
-    const VALID_CODE = siteConfig?.couponCode || "ISHOPBD5";
+    // Default to ROKOMARI5 if config not loaded
+    const VALID_CODE = siteConfig?.couponCode || "ROKOMARI5";
     if (code === VALID_CODE) {
       setAppliedCoupon(VALID_CODE);
       setCouponError("");
@@ -5372,8 +5372,8 @@ Rules:
     }
   };
   const handleWhatsAppOrder = () => {
-    const whatsappNumber = siteConfig?.whatsappNumber || "8801777600844";
-    const shopName = "i SHOP BD";
+    const whatsappNumber = siteConfig?.whatsappNumber || "8801738364268";
+    const shopName = "রকমারি পণ্য হাড়ি";
 let message = `আসসালামু আলাইকুম, আমি ${shopName} থেকে এই পণ্যগুলো অর্ডার করতে চাই:\n\n`;
     
     checkoutItems.forEach((item, idx) => {
@@ -5656,8 +5656,8 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     }
     const orderId = String(order.orderId || order.id).slice(-6).toUpperCase();
     
-    let startPart = (siteConfig?.smsTemplateStart || '').trim() || 'প্রিয় গ্রাহক, আপনার অর্ডারটি অর্ডার হয়েছে?';
-    const endPart = (siteConfig?.smsTemplateEnd || '').trim() || 'iShop BD ব্যবহার করুন জন্য ধন্যবাদ।';
+    let startPart = (siteConfig?.smsTemplateStart || '').trim() || 'প্রিয় গ্রাহক, রকমারি পণ্য হাড়িতে আপনার অর্ডারটি সফলভাবে গৃহীত হয়েছে।';
+    const endPart = (siteConfig?.smsTemplateEnd || '').trim() || 'রকমারি পণ্য হাড়ি ব্যবহার করার জন্য ধন্যবাদ।';
     
     // Replace "" with actual name if available
     if (startPart.includes('') && order.customerName) {
@@ -8778,14 +8778,14 @@ const handleSaveQuickEdit = async () => {
             {/* Brand/About */}
             <div className="col-span-2 md:col-span-1">
               <h2 className="text-2xl font-extrabold text-primary mb-6">
-                i SHOP BD (আই শপ বিডি)
+                রকমারি পণ্য হাড়ি
               </h2>
               <p className="text-sm text-gray-400 leading-relaxed mb-6">
-                {siteConfig?.aboutUs || "i SHOP BD (আই শপ বিডি) - আপনার বিশ্বস্ত অনলাইন শপিং প্ল্যাটফর্ম। আমরা সুলভ মূল্যে সর্বোচ্চ মানের ইলেকট্রিক গ্যাজেট, স্মার্ট এক্সেসরিজ এবং হোম এপ্লায়েন্স নিশ্চিত করি।"}
+                {siteConfig?.aboutUs || "রকমারি পণ্য হাড়ি (Rokomari Ponno Hari) - আপনার বিশ্বস্ত অনলাইন প্ল্যাটফর্ম। আমরা সুলভ মূল্যে সর্বোচ্চ মানের খাঁটি মধু, কাঠের ঘানি ভাঙা সরিষার তেল, গাওয়া ঘি, প্রিমিয়াম খেজুর ও ১০০% খাঁটি অর্গানিক খাদ্যপণ্য নিশ্চিত করি।"}
               </p>
               <div className="flex gap-4">
                 <a
-                  href={siteConfig?.facebookUrl || "https://www.facebook.com/online.ishopbd/"}
+                  href={siteConfig?.facebookUrl || "https://facebook.com/rokomariponnohari"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 bg-gray-800 rounded-full hover:bg-primary transition-colors"
@@ -8794,7 +8794,7 @@ const handleSaveQuickEdit = async () => {
                   <Facebook size={20} />
                 </a>
                 <a
-                  href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01777600844"}`}
+                  href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01738364268"}`}
                   className="p-2 bg-gray-800 rounded-full hover:bg-primary transition-colors"
                   title="Call Us"
                 >
@@ -8853,7 +8853,7 @@ const handleSaveQuickEdit = async () => {
               <h4 className="font-bold mb-6">কাস্টমার কেয়ার</h4>
               <div className="flex items-center gap-3 mb-4">
                 <a
-                  href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01777600844"}`}
+                  href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01738364268"}`}
                   className="p-2 bg-primary/20 rounded-lg text-primary hover:bg-primary/30 transition-colors"
                   title="Call Now"
                 >
@@ -8861,27 +8861,29 @@ const handleSaveQuickEdit = async () => {
                 </a>
                 <div>
                   <p className="text-xs text-gray-400">
-                    হেল্পলাইন (সকাল ৯টা - রাত ৯টা)
+                    হেল্পলাইন (সকাল ৯টা - রাত ১০টা)
                   </p>
                   <div className="flex flex-col">
                     <a
-                      href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01777600844"}`}
+                      href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01738364268"}`}
                       className="text-sm font-bold hover:text-primary transition-colors"
                     >
-                      {siteConfig?.supportPhone1 || "01777-600844"}
+                      {siteConfig?.supportPhone1 || "01738-364268"}
                     </a>
-                    <a
-                      href={`tel:${siteConfig?.supportPhone2?.replace(/[^0-9]/g, '') || "01977600844"}`}
-                      className="text-sm font-bold hover:text-primary transition-colors"
-                    >
-                      {siteConfig?.supportPhone2 || "01977-600844"}
-                    </a>
+                    {siteConfig?.supportPhone2 && siteConfig.supportPhone2 !== siteConfig.supportPhone1 && (
+                      <a
+                        href={`tel:${siteConfig.supportPhone2.replace(/[^0-9]/g, '')}`}
+                        className="text-sm font-bold hover:text-primary transition-colors"
+                      >
+                        {siteConfig.supportPhone2}
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <a
-                  href={siteConfig?.facebookUrl || "https://www.facebook.com/online.ishopbd/"}
+                  href={siteConfig?.facebookUrl || "https://facebook.com/rokomariponnohari"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 bg-blue-500/20 rounded-lg text-blue-500 hover:bg-blue-500/30 transition-colors"
@@ -8890,14 +8892,14 @@ const handleSaveQuickEdit = async () => {
                   <Facebook size={20} />
                 </a>
                 <div>
-<p className="text-xs text-gray-400">ফেসবুক মেসেঞ্জার</p>
+                  <p className="text-xs text-gray-400">ফেসবুক পেজ</p>
                   <a
-                    href={siteConfig?.facebookUrl || "https://www.facebook.com/online.ishopbd/"}
+                    href={siteConfig?.facebookUrl || "https://facebook.com/rokomariponnohari"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm font-bold hover:text-primary transition-colors"
                   >
-                    i SHOP BD Official
+                    রকমারি পণ্য হাড়ি Official
                   </a>
                 </div>
               </div>
@@ -8925,9 +8927,9 @@ const handleSaveQuickEdit = async () => {
             </div>
           </div>
           <div className="text-center text-xs text-gray-500">
-            <p>Â© ২০২৪ i SHOP BD | সকল স্বত্ব সংরক্ষিত।</p>
+            <p>© {new Date().getFullYear()} রকমারি পণ্য হাড়ি | সকল স্বত্ব সংরক্ষিত।</p>
             <p className="mt-1">
-              Developed for the best shopping experience in Bangladesh.
+              ১০০% খাঁটি ও প্রাকৃতিক অর্গানিক খাদ্যপণ্যের বিশ্বস্ত অনলাইন শপ।
             </p>
           </div>
         </div>
@@ -9115,7 +9117,7 @@ const handleSaveQuickEdit = async () => {
                 {activePolicy === "about" && (
                   <div className="space-y-4">
                     <p className="font-bold text-lg text-primary">
-i SHOP BD - বাংলাদেশের অন্যতম জনপ্রিয় শপ
+                      রকমারি পণ্য হাড়ি - আপনার বিশ্বস্ত অনলাইন খাদ্যপণ্যের প্ল্যাটফর্ম
                     </p>
                     <div className="whitespace-pre-wrap leading-relaxed">
                       {siteConfig?.aboutUs}
