@@ -2015,11 +2015,11 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   }, [orderHistory]);
 
   const masterEmails = useMemo(() => [
-    "islamicsoktitv@gmail.com", 
+    "rokomariponnohari@gmail.com",
     "bonieaminrony@gmail.com",
+    "islamicsoktitv@gmail.com", 
     "ishopbd.online@gmail.com",
     "ifilmbd2025@gmail.com",
-    "ifilmbd2025@gmail.com".toLowerCase().trim() // redundant but safe
   ], []);
   const [isAdminDocLoading, setIsAdminDocLoading] = useState(true);
   const [myAdminDoc, setMyAdminDoc] = useState<AdminUser | null>(null);
