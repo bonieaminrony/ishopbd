@@ -16,14 +16,31 @@ export default defineConfig(({ mode }) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom'],
-            'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
-            'lucide-icons': ['lucide-react'],
-            'ui-vendor': ['motion', 'react-hot-toast'],
-            'utils-vendor': ['axios', 'browser-image-compression', 'html-to-image', 'react-helmet-async']
+          manualChunks(id) {
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+              return 'react-vendor';
+            }
+            if (id.includes('node_modules/browser-image-compression') || id.includes('node_modules/html-to-image')) {
+              return 'heavy-tools';
+            }
+            if (id.includes('node_modules/firebase/storage')) {
+              return 'firebase-storage';
+            }
+            if (id.includes('node_modules/firebase/')) {
+              return 'firebase-vendor';
+            }
+            if (id.includes('node_modules/lucide-react/')) {
+              return 'lucide-icons';
+            }
+            if (id.includes('node_modules/motion/') || id.includes('node_modules/react-hot-toast/')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('node_modules/axios') || id.includes('node_modules/react-helmet-async')) {
+              return 'utils-vendor';
+            }
           }
         }
       }

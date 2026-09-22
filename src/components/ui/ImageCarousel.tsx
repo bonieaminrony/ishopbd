@@ -40,6 +40,8 @@ export function ImageCarousel({ images, autoPlayInterval = 3000, className = "as
         <img
           src={images[0]}
           alt="Product"
+          decoding="async"
+          fetchPriority="high"
           className="w-full h-full object-cover"
         />
       </div>
@@ -61,6 +63,7 @@ export function ImageCarousel({ images, autoPlayInterval = 3000, className = "as
           key={currentIndex}
           src={images[currentIndex]}
           alt={`Slide ${currentIndex + 1}`}
+          decoding="async"
           variants={slideVariants}
           initial={direction === 1 ? 'hiddenRight' : 'hiddenLeft'}
           animate="visible"

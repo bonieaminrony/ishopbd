@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
 import { FlashSaleCountdown } from './FlashSaleCountdown';
 import { Zap, ChevronRight, Star, X, LayoutGrid, ChevronDown, ChevronLeft } from 'lucide-react';
@@ -157,110 +157,16 @@ export default function ShopList(props: ShopListProps) {
             </div>
           </div>
         )}
-        {/* 4.5 Featured & New Arrivals Section (Only on Homepage) */}
+        {/* 4.5 Featured Section (Only on Homepage) */}
         {selectedCategory === "all" && !searchQuery && !activeCampaign && !isTrendingFilterActive && (
           <div className="space-y-6 mb-6">
-            {/* New Arrivals Horizontal Scroll */}
-            {isLoading && newArrivals.length === 0 ? (
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Zap className="text-primary" size={24} />
-                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
-                      {t("নতুন পণ্য", "New Arrivals")}
-                    </h3>
-                  </div>
-                </div>
-                <div className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth px-4 md:px-0">
-                  <div className="flex gap-2.5 md:gap-4 pb-4">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={`na-skel-${i}`} className="w-[160px] sm:w-[175px] md:w-[calc(20%-12.8px)] shrink-0">
-                        <ProductSkeleton />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            ) : newArrivals.length > 0 ? (
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Zap className="text-primary" size={24} />
-                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
-                      {t("নতুন পণ্য", "New Arrivals")}
-                    </h3>
-                  </div>
-                  <button 
-                    onClick={() => {
-                        // Just scroll to products and show all if they want
-                        document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    className="text-primary text-sm font-bold hover:underline flex items-center gap-1"
-                  >
-                    {t("সব দেখুন", "View All")} <ChevronRight size={16} />
-                  </button>
-                </div>
-                <div className="relative group">
-                  {/* Left Arrow Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const container = document.getElementById("scroll-container-new-arrivals");
-                      if (container) {
-                        container.scrollBy({ left: -350, behavior: "smooth" });
-                      }
-                    }}
-                    className="absolute -left-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
-                    title="Previous"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-
-                  <div 
-                    id="scroll-container-new-arrivals"
-                    className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth px-4 md:px-0"
-                  >
-                    <div className="flex gap-2.5 md:gap-4 pb-4">
-                      {newArrivals.map((product) => (
-                        <div key={product.id} className="w-[160px] sm:w-[175px] md:w-[calc(20%-12.8px)] shrink-0">
-                          <ProductCard 
-                            product={product}
-                            openProductDetails={openProductDetails}
-                            t={t}
-                            handleBuyNow={handleBuyNow}
-                            handleLikeProduct={handleLikeProduct}
-                            isLiked={likedProducts.includes(product.id)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Right Arrow Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const container = document.getElementById("scroll-container-new-arrivals");
-                      if (container) {
-                        container.scrollBy({ left: 350, behavior: "smooth" });
-                      }
-                    }}
-                    className="absolute -right-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
-                    title="Next"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              </section>
-            ) : null}
             {/* Featured Products Grid */}
             {isLoading && featuredProducts.length === 0 ? (
               <section className="mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <Star className="text-amber-500 fill-amber-500" size={24} />
                     <h3 className="text-xl md:text-2xl font-bold text-secondary">
-                      {t("সেরা পণ্য", "Featured Products")}
+                      {t("জনপ্রিয় পণ্য", "Popular Products")}
                     </h3>
                   </div>
                 </div>
@@ -278,9 +184,8 @@ export default function ShopList(props: ShopListProps) {
               <section className="mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <Star className="text-amber-500 fill-amber-500" size={24} />
                     <h3 className="text-xl md:text-2xl font-bold text-secondary">
-                      {t("সেরা পণ্য", "Featured Products")}
+                      {t("জনপ্রিয় পণ্য", "Popular Products")}
                     </h3>
                   </div>
                 </div>
@@ -355,7 +260,6 @@ export default function ShopList(props: ShopListProps) {
           </div>
         )}
         {/* Flash Sale Section */}
-        {console.log("Flash sale render - cache bust v7")}
         {!isProductDetailsOpen && !activeCampaign && flashSaleProducts.length > 0 && (
           <section id="flash-sale-section" className="mb-10 relative p-[2px] rounded-[2.6rem] overflow-hidden shadow-2xl shadow-red-500/10 transform-gpu">
             {/* Running Border Effect Background */}
@@ -603,3 +507,6 @@ export default function ShopList(props: ShopListProps) {
     </>
   );
 }
+
+export const MemoizedShopList = React.memo(ShopList);
+

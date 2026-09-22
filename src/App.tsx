@@ -1,36 +1,45 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-import ShopList from './components/ShopList';
-import ProductDetails from './components/ProductDetails';
-import FilterMenuModal from './components/FilterMenuModal';
-import InlineDistrictModal from './components/InlineDistrictModal';
-import LandingDistrictModal from './components/LandingDistrictModal';
-import LangModal from './components/LangModal';
-import DeliveryInfoModal from './components/DeliveryInfoModal';
-import NotifModal from './components/NotifModal';
-import AuthModal from './components/AuthModal';
-import DepositModal from './components/DepositModal';
-import MultiOrderSelectionModal from './components/MultiOrderSelectionModal';
-import ChatModal from './components/ChatModal';
-import CourierHistoryModal from './components/CourierHistoryModal';
-import TrackingModal from './components/TrackingModal';
-import CheckoutModal from './components/CheckoutModal';
-import AdminPanel from './components/AdminPanel';
-import AppDownloadModal from './components/AppDownloadModal';
-import axios from 'axios';
 import React, {
   useState,
   useEffect,
   useRef,
   useMemo,
   useCallback,
+  lazy,
+  Suspense,
   MouseEvent,
   FormEvent,
   ChangeEvent,
 } from "react";
+import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
+import ShopList from './components/ShopList';
+
+// Dynamic Code-Splitting for Heavy / Secondary Modals
+const ProductDetails = lazy(() => import('./components/ProductDetails'));
+const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
+const FilterMenuModal = lazy(() => import('./components/FilterMenuModal'));
+const InlineDistrictModal = lazy(() => import('./components/InlineDistrictModal'));
+const LandingDistrictModal = lazy(() => import('./components/LandingDistrictModal'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+const TrackingModal = lazy(() => import('./components/TrackingModal'));
+const ChatModal = lazy(() => import('./components/ChatModal'));
+const CourierHistoryModal = lazy(() => import('./components/CourierHistoryModal'));
+const AppDownloadModal = lazy(() => import('./components/AppDownloadModal'));
+const AuthModal = lazy(() => import('./components/AuthModal'));
+const DepositModal = lazy(() => import('./components/DepositModal'));
+const MultiOrderSelectionModal = lazy(() => import('./components/MultiOrderSelectionModal'));
+const NotifModal = lazy(() => import('./components/NotifModal'));
+const DeliveryInfoModal = lazy(() => import('./components/DeliveryInfoModal'));
+const LangModal = lazy(() => import('./components/LangModal'));
+const PolicyModal = lazy(() => import('./components/PolicyModal'));
+const CartDrawerModal = lazy(() => import('./components/CartDrawerModal'));
+const AdminPasswordModal = lazy(() => import('./components/AdminPasswordModal'));
+const ProfileModal = lazy(() => import('./components/ProfileModal'));
+const OrderDetailsModal = lazy(() => import('./components/OrderDetailsModal'));
+const ReceiptModal = lazy(() => import('./components/ReceiptModal'));
+const LandingPageEditorModal = lazy(() => import('./components/LandingPageEditorModal'));
+const MobileCategoryDrawer = lazy(() => import('./components/MobileCategoryDrawer').then(m => ({ default: m.MobileCategoryDrawer })));
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { Moon, Sun, PackageOpen } from "lucide-react";
 import {Edit3,
   Printer,
@@ -121,10 +130,7 @@ import {Edit3,
   MoreVertical
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import imageCompression from "browser-image-compression";
-import { toPng } from 'html-to-image';
 import { Product, Category, AdminUser, Review, Campaign, Expense } from "./types.ts";
-import ProfitAnalysis from "./components/ProfitAnalysis";
 import { ImageCarousel } from "./components/ui/ImageCarousel";
 // GoogleGenAI removed - server-side only SDK, use /api/chat endpoint instead
 import {
@@ -163,12 +169,12 @@ import {
   requestPushPermission,
 } from "./lib/firebase";
 // Mock Data in Bengali - Gadget Focused (Moved to state for dynamic loading)
-import { districtThanaMap, ALL_DISTRICTS, DEFAULT_CATEGORIES as default_categories, DEFAULT_PRODUCTS as default_products, DEFAULT_BANNERS as banners, BENGALI_FONTS } from './constants/data';
+import { districtThanaMap, ALL_DISTRICTS, DEFAULT_CATEGORIES as default_categories, DEFAULT_PRODUCTS as default_products, DEFAULT_BANNERS as banners, BENGALI_FONTS, STORAGE_KEYS, purgeLegacyCaches } from './constants/data';
 import { ProductSkeleton } from './components/ProductSkeleton';
 import { ProductCard } from './components/ProductCard';
 import ZoomableImage from './components/ui/ZoomableImage';
 import toast, { Toaster } from 'react-hot-toast';
-import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug } from './utils/helpers';
+import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, getProductIdFromUrl, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug, saveProductsToCache, safeSetLocalStorage, safeGetLocalStorage } from './utils/helpers';
 import { FlashSaleCountdown } from './components/FlashSaleCountdown';
 import { useUIContext } from './context/UIContext';
 import { useAuthContext } from './context/AuthContext';
@@ -176,7 +182,7 @@ import { useCartContext } from "./context/CartContext";
 import { useProductContext } from "./context/ProductContext";
 
 // Notification sound URL
-const NOTIF_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+const NOTIF_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3";
 const notifyAdminsOnNewOrder = async (orderId: string, total: number) => {
   try {
     const q = query(collection(db, "users"), where("isAdmin", "==", true));
@@ -203,6 +209,12 @@ const notifyAdminsOnNewOrder = async (orderId: string, total: number) => {
     console.warn("Failed to notify admins:", err);
   }
 };
+
+const compressImageFile = async (file: File, options: any) => {
+  const imageCompression = (await import('browser-image-compression')).default;
+  return imageCompression(file, options);
+};
+
 function App() {
 
 
@@ -251,51 +263,168 @@ function App() {
 
     const [trackingError, setTrackingError] = useState("");
 
-    const handleTrackOrder = async () => {
-        if (!trackingInput.trim()) return;
+    const handleTrackOrder = async (searchOverride?: string) => {
+        const rawInput = (typeof searchOverride === "string" && searchOverride.trim()) ? searchOverride.trim() : trackingInput.trim();
+        if (!rawInput) return;
         setIsTrackingLoading(true);
         setTrackingError("");
         setTrackingResult(null);
 
         try {
           const ordersRef = collection(db, "orders");
-          const searchVal = trackingInput.trim().replace(/^#/, "");
-          let foundOrder = null;
+          
+          // Normalize Bengali numerals to English digits and clean prefixes
+          const normalizedInput = rawInput
+            .replace(/[০-৯]/g, (d: string) => "০১২৩৪৫৬৭৮৯".indexOf(d).toString())
+            .trim();
+          const searchVal = normalizedInput.replace(/^[#\s]+/, "").trim();
+          const searchValUpper = searchVal.toUpperCase();
+          let foundOrder: any = null;
 
-          if (searchVal.startsWith("01") || searchVal.startsWith("+8801")) {
-            const q = query(ordersRef, where("customerPhone", "==", searchVal));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-              const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              orders.sort((a: any, b: any) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-              foundOrder = orders[0];
+          // 1. Fast in-memory lookup from orderHistory if available
+          if (Array.isArray(orderHistory) && orderHistory.length > 0) {
+            const memoryMatch = orderHistory.find((o: any) => {
+              if (searchVal.startsWith("01") || searchVal.startsWith("+8801") || searchVal.startsWith("8801")) {
+                const cleanInputPhone = searchVal.replace(/\D/g, "");
+                const cleanOrderPhone = String(o.customerPhone || "").replace(/\D/g, "");
+                return cleanOrderPhone.endsWith(cleanInputPhone) || cleanInputPhone.endsWith(cleanOrderPhone);
+              }
+              const sId = String(o.shortId || "").toUpperCase();
+              const oId = String(o.orderId || "").toUpperCase();
+              const docId = String(o.id || "").toUpperCase();
+              const cTrack = String(o.couriers?.trackingId || "").toUpperCase();
+              const cCons = String(o.couriers?.consignmentId || "").toUpperCase();
+
+              return (
+                sId === searchValUpper ||
+                oId === searchValUpper ||
+                docId === searchValUpper ||
+                oId.endsWith(searchValUpper) ||
+                docId.endsWith(searchValUpper) ||
+                cTrack === searchValUpper ||
+                cCons === searchValUpper
+              );
+            });
+            if (memoryMatch) {
+              foundOrder = { ...memoryMatch };
             }
-          } else {
-            // Since Firebase blocks fetching all orders, we use the shortId field for new orders
-            const q = query(ordersRef, where("shortId", "==", searchVal.toUpperCase()));
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-              const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-              orders.sort((a: any, b: any) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-              foundOrder = orders[0];
+          }
+
+          // 2. Query Firestore if not found in memory
+          if (!foundOrder) {
+            if (searchVal.startsWith("01") || searchVal.startsWith("+8801") || searchVal.startsWith("8801")) {
+              const cleanPhone = searchVal.replace(/^\+?88/, "");
+              const phoneQueries = [
+                query(ordersRef, where("customerPhone", "==", cleanPhone)),
+                query(ordersRef, where("customerPhone", "==", "+88" + cleanPhone)),
+                query(ordersRef, where("customerPhone", "==", searchVal))
+              ];
+
+              for (const pq of phoneQueries) {
+                const snap = await getDocs(pq);
+                if (!snap.empty) {
+                  const orders = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                  orders.sort((a: any, b: any) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                  foundOrder = orders[0];
+                  break;
+                }
+              }
             } else {
-               // Fallback check full orderId if they happen to enter it
-               const qFull = query(ordersRef, where("orderId", "==", searchVal));
-               const snapFull = await getDocs(qFull);
-               if(!snapFull.empty) {
+              // 2a. Direct doc ID lookup
+              try {
+                const directDocRef = doc(db, "orders", searchVal);
+                const directDocSnap = await getDoc(directDocRef);
+                if (directDocSnap.exists()) {
+                  foundOrder = { id: directDocSnap.id, ...directDocSnap.data() };
+                }
+              } catch (e) {}
+
+              // 2b. Check indexed shortId
+              if (!foundOrder) {
+                const q = query(ordersRef, where("shortId", "==", searchValUpper));
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                  const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                  orders.sort((a: any, b: any) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                  foundOrder = orders[0];
+                }
+              }
+
+              // 2c. Check indexed orderId
+              if (!foundOrder) {
+                const qFull = query(ordersRef, where("orderId", "==", searchVal));
+                const snapFull = await getDocs(qFull);
+                if (!snapFull.empty) {
                   const ordersFull = snapFull.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                   foundOrder = ordersFull[0];
-               }
+                }
+              }
+
+              // 2d. Check displayId
+              if (!foundOrder) {
+                const qDisplay = query(ordersRef, where("displayId", "==", searchVal));
+                const snapDisplay = await getDocs(qDisplay);
+                if (!snapDisplay.empty) {
+                  const ordersDisplay = snapDisplay.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                  foundOrder = ordersDisplay[0];
+                }
+              }
+
+              // 2e. Check courier tracking ID
+              if (!foundOrder) {
+                const qCourier = query(ordersRef, where("couriers.trackingId", "==", searchVal));
+                const snapCourier = await getDocs(qCourier);
+                if (!snapCourier.empty) {
+                  foundOrder = { id: snapCourier.docs[0].id, ...snapCourier.docs[0].data() };
+                }
+              }
+
+              // 2f. Fallback Scan: Search recent orders for suffix / short ID matches
+              // (Ensures older orders or orders without explicit shortId field in DB are found when searched by 6-digit shortId)
+              if (!foundOrder && searchVal.length >= 4) {
+                try {
+                  const qRecent = query(ordersRef, orderBy("createdAt", "desc"), limit(300));
+                  const snapRecent = await getDocs(qRecent);
+                  const matchedDoc = snapRecent.docs.find(d => {
+                    const data = d.data() as any;
+                    const docId = String(d.id || "").toUpperCase();
+                    const oId = String(data.orderId || "").toUpperCase();
+                    const sId = String(data.shortId || "").toUpperCase();
+                    const cTrack = String(data.couriers?.trackingId || "").toUpperCase();
+                    const cCons = String(data.couriers?.consignmentId || "").toUpperCase();
+
+                    return (
+                      sId === searchValUpper ||
+                      docId === searchValUpper ||
+                      oId === searchValUpper ||
+                      docId.endsWith(searchValUpper) ||
+                      oId.endsWith(searchValUpper) ||
+                      cTrack === searchValUpper ||
+                      cCons === searchValUpper ||
+                      docId.slice(-6) === searchValUpper ||
+                      oId.slice(-6) === searchValUpper
+                    );
+                  });
+                  if (matchedDoc) {
+                    foundOrder = { id: matchedDoc.id, ...matchedDoc.data() };
+                  }
+                } catch (errFallback) {
+                  console.warn("Tracking fallback scan error:", errFallback);
+                }
+              }
             }
           }
 
           if (!foundOrder) {
-            setTrackingError("No orders found. Please use your phone number for old orders.");
+            setTrackingError("অর্ডারটি খুঁজে পাওয়া যায়নি। সঠিক ফোন নাম্বার বা অর্ডার আইডি দিন।");
             setIsTrackingLoading(false);
             return;
           }
 
-          const order = foundOrder;
+          const order = {
+            ...foundOrder,
+            shortId: foundOrder.shortId || String(foundOrder.orderId || foundOrder.id).slice(-6).toUpperCase()
+          };
 
           if (order.couriers && order.couriers.trackingId && order.couriers.service === "Steadfast") {
             try {
@@ -411,6 +540,7 @@ function App() {
         const totalAmount = subtotal + deliveryCharge - pointsDiscount;
         const newOrder: any = {
           orderId,
+          shortId: String(orderId).slice(-6).toUpperCase(),
           customerName: customerName || (userProfile?.displayName || "Guest"),
           customerPhone: customerPhone || (userProfile?.phone || "N/A"),
           address: finalAddress,
@@ -425,15 +555,18 @@ function App() {
           items: checkoutItems.map((item) => {
             const itemColor = (item.color && item.color !== "N/A") ? item.color : undefined;
             const itemSize = (item.size && item.size !== "N/A") ? item.size : undefined;
+            const directSmsName = (item.product?.smsName || item.product?.sms_name || '').trim();
             return {
               product: {
                 id: item.product.id,
                 name: item.product.name,
+                smsName: directSmsName,
                 price: getProductPrice(item.product, item.quantity),
                 buyingPrice: item.product.buyingPrice || 0,
                 image: item.product.image,
                 isComingSoon: !!item.product.isComingSoon,
               },
+              smsName: directSmsName,
               quantity: item.quantity,
               color: itemColor,
               size: itemSize,
@@ -506,19 +639,19 @@ function App() {
           } catch (e) {
             console.warn("Failed to save orders to localStorage:", e);
           }
-          // Notify Admin via backend
+          // Notify Admin via sound / realtime
           try {
-          notifyAdminsOnNewOrder(orderId, newOrder.total);
-            fetch("/api/confirm-order", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newOrder),
-            }).catch(err => console.warn("Admin notification email failed:", err));
+            notifyAdminsOnNewOrder(orderId, newOrder.total);
           } catch (e) {
-            console.warn("API call failed:", e);
+            console.warn("Notification failed:", e);
           }
           try {
-            const productNames = newOrder.items.map((i: any) => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
+            const productNames = newOrder.items.map((i: any) => {
+              const directSms = (i.smsName || i.product?.smsName || '').trim();
+              if (directSms) return directSms;
+              const fallback = (i.product?.name || i.name || '').trim();
+              return fallback.length > 25 ? fallback.substring(0, 25) + '...' : fallback;
+            }).filter(Boolean).join(', ');
             const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${newOrder.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
             fetch("/api/send-sms", {
               method: "POST",
@@ -639,6 +772,7 @@ function App() {
             note: inlineOrderNote,
             items: [{
               product: selectedProduct,
+              smsName: (selectedProduct?.smsName || '').trim(),
               quantity: tempSelectedQty,
               color: tempSelectedColor,
               size: tempSelectedSize,
@@ -696,7 +830,12 @@ function App() {
           } catch(e) {}
           
           try {
-            const productNames = orderData.items.map((i: any) => (i.product?.smsName || i.smsName || i.product?.name || i.name || '').trim()).filter(Boolean).join(', ');
+            const productNames = orderData.items.map((i: any) => {
+              const directSms = (i.smsName || i.product?.smsName || '').trim();
+              if (directSms) return directSms;
+              const fallback = (i.product?.name || i.name || '').trim();
+              return fallback.length > 25 ? fallback.substring(0, 25) + '...' : fallback;
+            }).filter(Boolean).join(', ');
             const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderData.orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${orderData.total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
             fetch("/api/send-sms", {
               method: "POST",
@@ -943,10 +1082,10 @@ function App() {
     const path = prod ? getProductPath(prod) : `/product/${productId}`;
     const shareUrl = `${window.location.origin}${path}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
-      toast.success("প্রোডাক্ট পেজ লিংক কপি হয়েছে!");
+      toast.success("Product link copied to clipboard!");
     }).catch(err => {
       console.error("Copy failed", err);
-      toast.error("লিংক কপি করা সম্ভব হয়নি।");
+      toast.error("Failed to copy product link.");
     });
   };
   const openLandingEditor = (product: any) => {
@@ -1059,8 +1198,18 @@ function App() {
   
   const liveSearchResults = useMemo(() => {
     if (!searchInput.trim() || products.length === 0) return [];
-    const q = searchInput.toLowerCase();
-    return products.filter(p => p.name?.toLowerCase().includes(q) && p.published !== false && !p.deleted).slice(0, 5);
+    const q = searchInput.trim().toLowerCase();
+    return products
+      .filter((p) => {
+        if (p.deleted || p.isPublished === false) return false;
+        const name = (p.name || "").toLowerCase();
+        const code = (p.code || "").toLowerCase();
+        const category = (p.category || "").toLowerCase();
+        const brand = (p.brand || "").toLowerCase();
+        const tags = (p.tags || "").toLowerCase();
+        return name.includes(q) || code.includes(q) || category.includes(q) || brand.includes(q) || tags.includes(q);
+      })
+      .slice(0, 8);
   }, [searchInput, products]);
   
   // Reward Points State
@@ -1194,6 +1343,7 @@ function App() {
     if (!receiptRef.current) return;
     try {
       setIsDownloadingReceipt(true);
+      const { toPng } = await import('html-to-image');
       const node = receiptRef.current;
       const dataUrl = await toPng(node, {
         quality: 1.0,
@@ -1221,15 +1371,29 @@ function App() {
     useState(false);
   const [activeBanners, setActiveBanners] = useState<any[]>(() => {
     try {
-      const cached = localStorage.getItem("cached_banners");
+      const cached = localStorage.getItem(STORAGE_KEYS.BANNERS);
       return cached ? JSON.parse(cached) : [];
     } catch {
       return [];
     }
   });
+  const heroBanners = useMemo(() => activeBanners.filter(b => (b.type || 'hero') === 'hero'), [activeBanners]);
+  const secondaryBanners = useMemo(() => activeBanners.filter(b => b.type === 'secondary'), [activeBanners]);
+  const rightTopBanner = useMemo(() => activeBanners.find(b => b.type === 'right_top'), [activeBanners]);
+  const rightBottomBanner = useMemo(() => activeBanners.find(b => b.type === 'right_bottom'), [activeBanners]);
+  const productsByCategory = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const p of products) {
+      if (p.category && !p.deleted && p.isPublished !== false) {
+        if (!map[p.category]) map[p.category] = [];
+        map[p.category].push(p);
+      }
+    }
+    return map;
+  }, [products]);
   const [adminList, setAdminList] = useState<AdminUser[]>(() => {
     try {
-      const cached = localStorage.getItem("cached_admins");
+      const cached = localStorage.getItem(STORAGE_KEYS.ADMINS);
       return cached ? JSON.parse(cached) : [];
     } catch {
       return [];
@@ -1272,11 +1436,12 @@ function App() {
     promoPopupEnabled?: boolean;
     promoPopupImage?: string;
     promoPopupLink?: string;
+    productsUpdatedAt?: string;
   } | null>(null);
   // Sync Site Config
   useEffect(() => {
     if (isQuotaExceeded) return;
-    const unsub = onSnapshot(doc(db, "config", "site"), (snap) => {
+    const unsub = onSnapshot(doc(db, "config", "siteConfig"), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         setSiteConfig({
@@ -1310,6 +1475,7 @@ checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarni
           promoPopupEnabled: data.promoPopupEnabled || false,
           promoPopupImage: data.promoPopupImage || "",
           promoPopupLink: data.promoPopupLink || "",
+          productsUpdatedAt: data.productsUpdatedAt || "",
         });
       } else {
         const defaultConfig = {
@@ -1343,11 +1509,12 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
           promoPopupEnabled: false,
           promoPopupImage: "",
           promoPopupLink: "",
+          productsUpdatedAt: "",
         } as any;
         setSiteConfig(defaultConfig);
       }
     }, (err) => {
-       handleFirestoreError(err, OperationType.GET, "config/site");
+       handleFirestoreError(err, OperationType.GET, "config/siteConfig");
        // Silently handle permission denied for config if it's not crucial, or log it
        console.warn("Config sync error:", err);
     });
@@ -1474,30 +1641,14 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
       setLoadingCourierReports(prev => ({ ...prev, [phone]: false }));
     }
   };
-  type LangCode = "bn" | "en" | "ar" | "ur";
-  const [language, setLanguage] = useState<LangCode>(() => {
-    const saved = localStorage.getItem("app_lang") as LangCode;
-    if (saved && ["bn", "en", "ar", "ur"].includes(saved)) return saved;
-    const browserLang = navigator.language.split("-")[0];
-    if (["bn", "en", "ar", "ur"].includes(browserLang)) return browserLang as LangCode;
-    return "bn";
-  });
+  type LangCode = "en" | "bn";
+  const [language, setLanguage] = useState<LangCode>("en");
   const languageList: { code: LangCode; label: string; native: string }[] = [
-    { code: "bn", label: "Bengali", native: "বাংলা" },
     { code: "en", label: "English", native: "English" },
-    { code: "ar", label: "Arabic", native: "العربية" },
-    { code: "ur", label: "Urdu", native: "اردو" },
+    { code: "bn", label: "Bengali", native: "বাংলা" },
   ];
-  const toggleLanguage = () => {
-    // Basic cycle or we can open a picker. For now, let's allow the UI to open a picker if we add one.
-    // I will replace the card click with an open modal if it's too many, 
-    // but the user asked to "give language" here.
-  };
   const t = (bnText: string, enText: string, arText?: string, urText?: string) => {
-    if (language === "bn") return bnText;
-    if (language === "ar") return arText || enText;
-    if (language === "ur") return urText || enText;
-    return enText;
+    return enText || bnText;
   };
   const detectLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -1999,14 +2150,26 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         }
       }
       if (!orderSearchQuery) return true;
-      let search = orderSearchQuery.toLowerCase();
-      if (search.startsWith('#')) {
-        search = search.substring(1);
-      }
+      const normalizedQuery = orderSearchQuery
+        .replace(/[০-৯]/g, (d: string) => "০১২৩৪৫৬৭৮৯".indexOf(d).toString())
+        .toLowerCase()
+        .replace(/^[#\s]+/, "")
+        .trim();
+
+      if (!normalizedQuery) return true;
+
+      const phone = String(order.customerPhone || "").toLowerCase();
+      const id = String(order.id || "").toLowerCase();
+      const orderId = String(order.orderId || "").toLowerCase();
+      const shortId = String(order.shortId || "").toLowerCase();
+      const name = String(order.customerName || "").toLowerCase();
+
       return (
-        order.customerPhone?.toLowerCase().includes(search) ||
-        order.id?.toLowerCase().includes(search) ||
-        order.customerName?.toLowerCase().includes(search)
+        phone.includes(normalizedQuery) ||
+        id.includes(normalizedQuery) ||
+        orderId.includes(normalizedQuery) ||
+        shortId.includes(normalizedQuery) ||
+        name.includes(normalizedQuery)
       );
     });
   }, [orderHistory, orderSearchQuery, showOnlyPreOrders, adminStartDate, adminEndDate, selectedOrderStatusFilter]);
@@ -2134,9 +2297,26 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         const keysDoc = await getDoc(doc(db, "admin_config", "keys"));
         if (keysDoc.exists() && isMounted) {
           setAdminKeys(keysDoc.data() as any);
+          return;
         }
-      } catch (err) {
-        console.error("Failed to fetch admin keys:", err);
+      } catch (err: any) {
+        // Expected if signed in via password verification rather than Firebase Auth moderator
+        if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
+          try {
+            const res = await fetch("/api/admin/keys");
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && json.keys && isMounted) {
+                setAdminKeys(json.keys);
+                return;
+              }
+            }
+          } catch (apiErr) {
+            console.warn("API admin keys fetch fallback error:", apiErr);
+          }
+        } else {
+          console.error("Failed to fetch admin keys:", err);
+        }
       }
     };
     fetchKeys();
@@ -2640,15 +2820,28 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   }, [isQuotaExceeded, isAdmin, isMasterAdmin]);
   const [isLoading, setIsLoading] = useState(() => {
     try {
-      const cached = localStorage.getItem("cached_products");
-      return !cached;
+      if (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_PRODUCTS__) && (window as any).__INITIAL_PRODUCTS__.length > 0) {
+        return false;
+      }
+      const cached = safeGetLocalStorage(STORAGE_KEYS.PRODUCTS);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return false;
+        }
+      }
+      return true;
     } catch {
       return true;
     }
   });
+
   // Load Data from Firestore with quota-friendly synchronization
   useEffect(() => {
     if (isQuotaExceeded) return;
+    
+    // Always purge legacy cross-project cache keys
+    purgeLegacyCaches();
     
     const urlParams = new URLSearchParams(window.location.search);
     const path = window.location.pathname;
@@ -2659,79 +2852,75 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       categorySlug = path.replace(/^\/c\//, '').split('/')[0];
     }
 
-    const isAdminUser = isMasterAdmin || isAdmin;
-    if (!isAdminUser) {
-      getDocs(collection(db, "categories")).then(snap => {
-        const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
-        setCategories(data);
-        if (categorySlug) {
-          const matched = findCategoryBySlug(data, categorySlug);
-          if (matched) setSelectedCategory(matched.name);
-        }
-        try {
-          localStorage.setItem("cached_categories", JSON.stringify(data));
-        } catch (e) {
-          console.warn("localStorage write failed:", e);
-        }
-      }).catch(err => console.warn("Categories fetch error:", err));
-      getDocs(collection(db, "banners")).then(snap => {
-        const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
-        setActiveBanners(data);
-        try {
-          localStorage.setItem("cached_banners", JSON.stringify(data));
-        } catch (e) {
-          console.warn("localStorage write failed:", e);
-        }
-      }).catch(err => console.warn("Banners fetch error:", err));
-      const cachedProducts = localStorage.getItem("cached_products");
-      const lastFetch = localStorage.getItem("products_last_fetch");
-      const now = Date.now();
-      let productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing') || urlParams.get('id');
-      if (!productId && path.startsWith('/product/')) {
-        productId = path.replace(/^\/product\//, '');
-      } else if (!productId && path.startsWith('/p/')) {
-        productId = path.replace(/^\/p\//, '');
+    const isAdminUser = (isMasterAdmin || isAdmin) && !!user;
+    const targetProdId = getProductIdFromUrl();
+
+    // 1. Fetch Categories & Banners
+    getDocs(collection(db, "categories")).then(snap => {
+      const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
+      setCategories(data);
+      if (categorySlug) {
+        const matched = findCategoryBySlug(data, categorySlug);
+        if (matched) setSelectedCategory(matched.name);
       }
+      safeSetLocalStorage(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
+    }).catch(err => console.warn("Categories fetch error:", err));
+
+    getDocs(collection(db, "banners")).then(snap => {
+      const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+      setActiveBanners(data);
+      safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(data));
+    }).catch(err => console.warn("Banners fetch error:", err));
+
+    // 2. Public Users: Instant Cache Load + Intelligent SWR Fetch
+    if (!isAdminUser) {
+      const cachedProducts = safeGetLocalStorage(STORAGE_KEYS.PRODUCTS);
+      const lastFetch = safeGetLocalStorage(STORAGE_KEYS.PRODUCTS_LAST_FETCH);
+      const now = Date.now();
       
+      let hasValidCached = false;
       if (cachedProducts) {
         try {
           const parsed = JSON.parse(cachedProducts);
-          setProducts(parsed);
-          if (productId) {
-             const prod = findProductBySlugOrId(parsed, productId);
-             if (prod && !prod.deleted && (isAdmin || isMasterAdmin || prod.isPublished !== false)) {
-               setSelectedProduct(prod);
-               setIsProductDetailsOpen(true);
-             }
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            hasValidCached = true;
+            setProducts(parsed);
+            if (targetProdId) {
+               const prod = findProductBySlugOrId(parsed, targetProdId);
+               if (prod && !prod.deleted && prod.isPublished !== false) {
+                 setSelectedProduct(prod);
+                 setModalDisplayImage(prod.image);
+                 setIsProductDetailsOpen(true);
+               }
+            }
+            setIsLoading(false);
           }
-          setIsLoading(false);
         } catch(e) {}
       }
-      if (!cachedProducts || !lastFetch || now - parseInt(lastFetch) > 600000) {
+
+      // If no valid cache or older than 5 minutes, fetch fresh catalog
+      if (!hasValidCached || !lastFetch || now - parseInt(lastFetch) > 300000) {
         fetch("/api/products")
           .then((res) => {
             if (!res.ok) throw new Error("HTTP error " + res.status);
             return res.json();
           })
           .then((prodData) => {
-            setProducts(prodData);
-            try {
-              localStorage.setItem("cached_products", JSON.stringify(prodData));
-              localStorage.setItem("products_last_fetch", now.toString());
-              if (siteConfig?.productsUpdatedAt) {
-                localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
+            if (Array.isArray(prodData) && prodData.length > 0) {
+              setProducts(prodData);
+              saveProductsToCache(prodData, siteConfig?.productsUpdatedAt);
+              if (targetProdId) {
+                 const prod = findProductBySlugOrId(prodData, targetProdId);
+                 if (prod && !prod.deleted && prod.isPublished !== false) {
+                   setSelectedProduct(prod);
+                   setModalDisplayImage(prod.image);
+                   setIsProductDetailsOpen(true);
+                 }
               }
-            } catch (e) {
-              console.warn("localStorage write failed:", e);
+              setIsLoading(false);
+            } else {
+              throw new Error("Empty products array from /api/products");
             }
-            if (productId) {
-               const prod = findProductBySlugOrId(prodData, productId);
-               if (prod && !prod.deleted && (isAdmin || isMasterAdmin || prod.isPublished !== false)) {
-                 setSelectedProduct(prod);
-                 setIsProductDetailsOpen(true);
-               }
-            }
-            setIsLoading(false);
           })
           .catch((err) => {
             console.warn("API products fetch failed, falling back to Firestore SDK:", err);
@@ -2739,46 +2928,56 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
               const prodData = snapshot.docs
                 .map((d) => ({ ...d.data(), id: d.id }) as Product)
                 .filter((p) => !p.deleted);
-              setProducts(prodData);
-              try {
-                localStorage.setItem("cached_products", JSON.stringify(prodData));
-                localStorage.setItem("products_last_fetch", now.toString());
-              } catch (e) {}
-              if (productId) {
-                 const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-                 if (prod) setSelectedProduct(prod);
+              if (prodData.length > 0) {
+                setProducts(prodData);
+                saveProductsToCache(prodData, siteConfig?.productsUpdatedAt);
+                if (targetProdId) {
+                   const prod = findProductBySlugOrId(prodData, targetProdId);
+                   if (prod && !prod.deleted && prod.isPublished !== false) {
+                     setSelectedProduct(prod);
+                     setModalDisplayImage(prod.image);
+                     setIsProductDetailsOpen(true);
+                   }
+                }
               }
               setIsLoading(false);
             }).catch(fsErr => {
-              if (!cachedProducts) {
+              if (!hasValidCached) {
                 handleFirestoreError(fsErr, OperationType.GET, "products");
-                setIsLoading(false);
               }
+              setIsLoading(false);
             });
           });
       }
-      
       return;
     }
-    // Snapshot Listeners for full synchronization for Admins
+
+    // 3. Admin Users: Real-Time Snapshot Listeners
     const unsubCategories = onSnapshot(collection(db, "categories"), (snap) => {
       const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
       setCategories(data);
-      localStorage.setItem("cached_categories", JSON.stringify(data));
+      safeSetLocalStorage(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
     }, (err) => console.warn("Categories sync error:", err));
+
     const unsubBanners = onSnapshot(collection(db, "banners"), (snap) => {
       const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
       setActiveBanners(data);
-      localStorage.setItem("cached_banners", JSON.stringify(data));
+      safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(data));
     }, (err) => console.warn("Banners sync error:", err));
-    const unsubExpenses = isMasterAdmin ? onSnapshot(collection(db, "expenses"), (snap) => {
+
+    const unsubExpenses = (isMasterAdmin && user) ? onSnapshot(collection(db, "expenses"), (snap) => {
       const exp = snap.docs.map(d => ({ ...d.data(), id: d.id }) as Expense);
       setExpenses(exp);
-    }, (err) => console.warn("Expenses sync error:", err)) : () => {};
-    const unsubAdmins = (isMasterAdmin || isAdmin) ? onSnapshot(collection(db, "admins"), (snap) => {
+    }, (err) => {
+      if (err.code !== "permission-denied") {
+        console.warn("Expenses sync error:", err);
+      }
+    }) : () => {};
+
+    const unsubAdmins = ((isMasterAdmin || isAdmin) && user) ? onSnapshot(collection(db, "admins"), (snap) => {
       const admins = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as AdminUser);
       setAdminList(admins);
-      localStorage.setItem("cached_admins", JSON.stringify(admins));
+      safeSetLocalStorage(STORAGE_KEYS.ADMINS, JSON.stringify(admins));
       
       if (user) {
         const userEmail = (user.email || "").toLowerCase().trim();
@@ -2800,11 +2999,8 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           if (sessionVerified) {
             setIsAdminVerified(true);
           } else if (found?.password) {
-            // Already handled by sessionVerified check, if not verified, modal stays
+            // Handled by password verification modal
           } else {
-            // If no password set for this admin in DB, we still want them to verify once via master pass?
-            // Actually, if it's a new admin doc with no pass, maybe bypass?
-            // Existing logic was bypass.
             setIsAdminVerified(true);
           }
         } else {
@@ -2818,20 +3014,25 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         handleFirestoreError(err, OperationType.GET, "admins");
       }
     }) : () => {};
-    // Products listener
-    const unsubProducts = onSnapshot(
+
+    // Products listener for Admins
+    const unsubProducts = ((isMasterAdmin || isAdmin) && user) ? onSnapshot(
       collection(db, "products"),
       (snapshot) => {
         const prodData = snapshot.docs
           .map((d) => ({ ...d.data(), id: d.id }) as Product)
           .filter((p) => !p.deleted);
-        setProducts(prodData);
-        localStorage.setItem("cached_products", JSON.stringify(prodData));
-        const urlParams = new URLSearchParams(window.location.search);
-        const productId = urlParams.get('product') || urlParams.get('p') || urlParams.get('landing');
-        if (productId) {
-           const prod = prodData.find((p: any) => p.id === productId && !p.deleted && (isAdmin || isMasterAdmin || p.isPublished !== false));
-           if (prod) setSelectedProduct(prod);
+        if (prodData.length > 0) {
+          setProducts(prodData);
+          saveProductsToCache(prodData, siteConfig?.productsUpdatedAt);
+        }
+        if (targetProdId) {
+           const prod = findProductBySlugOrId(prodData, targetProdId);
+           if (prod && !prod.deleted) {
+             setSelectedProduct(prod);
+             setModalDisplayImage(prod.image);
+             setIsProductDetailsOpen(true);
+           }
         }
         setIsLoading(false);
       },
@@ -2839,15 +3040,17 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         handleFirestoreError(err, OperationType.GET, "products");
         setIsLoading(false);
       }
-    );
+    ) : () => {};
+
     return () => {
       unsubCategories();
       unsubBanners();
       unsubExpenses();
       if (typeof unsubAdmins === 'function') unsubAdmins();
-      unsubProducts();
+      if (typeof unsubProducts === 'function') unsubProducts();
     };
   }, [user, masterEmails, isQuotaExceeded, isMasterAdmin, isAdmin]);
+
   // Listen for product details close to clean up review listener
   useEffect(() => {
     if (!isProductDetailsOpen && reviewUnsub) {
@@ -2855,25 +3058,22 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       setReviewUnsub(null);
     }
   }, [isProductDetailsOpen]);
-  // Synchronize products cache when database updates occur
+
+  // Reactive Synchronize products cache when database updates occur (Single-doc Version Pointer)
   useEffect(() => {
     if (!siteConfig || !siteConfig.productsUpdatedAt) return;
-    const localUpdatedAt = localStorage.getItem("products_updated_at");
-    if (!localUpdatedAt || localUpdatedAt !== siteConfig.productsUpdatedAt) {
-      console.log("Products cache is outdated, refetching products...");
+    const localUpdatedAt = safeGetLocalStorage(STORAGE_KEYS.PRODUCTS_UPDATED_AT);
+    if (!localUpdatedAt || localUpdatedAt !== siteConfig.productsUpdatedAt || products.length === 0) {
+      console.log("Products cache updated on server, synchronizing...", siteConfig.productsUpdatedAt);
       fetch("/api/products")
         .then((res) => {
           if (!res.ok) throw new Error("HTTP error " + res.status);
           return res.json();
         })
         .then((prodData) => {
-          setProducts(prodData);
-          try {
-            localStorage.setItem("cached_products", JSON.stringify(prodData));
-            localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
-            localStorage.setItem("products_last_fetch", Date.now().toString());
-          } catch (e) {
-            console.warn("localStorage write failed:", e);
+          if (Array.isArray(prodData) && prodData.length > 0) {
+            setProducts(prodData);
+            saveProductsToCache(prodData, siteConfig.productsUpdatedAt);
           }
         })
         .catch((err) => {
@@ -2882,12 +3082,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
             const prodData = snapshot.docs
               .map((d) => ({ ...d.data(), id: d.id }) as Product)
               .filter((p) => !p.deleted);
-            setProducts(prodData);
-            try {
-              localStorage.setItem("cached_products", JSON.stringify(prodData));
-              localStorage.setItem("products_updated_at", siteConfig.productsUpdatedAt);
-              localStorage.setItem("products_last_fetch", Date.now().toString());
-            } catch (e) {}
+            if (prodData.length > 0) {
+              setProducts(prodData);
+              saveProductsToCache(prodData, siteConfig.productsUpdatedAt);
+            }
           }).catch(fsErr => console.warn("Cache refresh fallback products fetch error:", fsErr));
         });
     }
@@ -2913,7 +3111,8 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         window.history.pushState({ category: selectedCategory }, "", targetPath);
       }
     } else {
-      if (path.startsWith("/category/") || path.startsWith("/c/") || path.startsWith("/product/") || path.startsWith("/p/") || isCheckoutParam || window.location.search.includes('p=') || window.location.search.includes('product=') || window.location.search.includes('category=')) {
+      // User is on Home page
+      if (path !== "/" || window.location.search.length > 0) {
         window.history.pushState({}, "", "/");
       }
     }
@@ -2925,13 +3124,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const path = window.location.pathname;
       const urlParams = new URLSearchParams(window.location.search);
       const isCheckout = urlParams.get("checkout") === "true";
-      let productId = urlParams.get("product") || urlParams.get("p") || urlParams.get("landing");
-      if (!productId && path.startsWith("/product/")) {
-        productId = path.replace(/^\/product\//, "");
-      } else if (!productId && path.startsWith("/p/")) {
-        productId = path.replace(/^\/p\//, "");
-      }
-
+      const productId = getProductIdFromUrl();
       let categoryParam = urlParams.get("category") || urlParams.get("cat");
       if (!categoryParam && path.startsWith("/category/")) {
         categoryParam = path.replace(/^\/category\//, "").split("/")[0];
@@ -2946,6 +3139,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         const prod = findProductBySlugOrId(products, productId);
         if (prod) {
           setSelectedProduct(prod);
+          setModalDisplayImage(prod.image);
           setIsProductDetailsOpen(true);
           setIsCheckoutOpen(false);
         }
@@ -3335,25 +3529,25 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         maxWidthOrHeight: 1600,
         useWebWorker: true,
       };
-      const compressedFile = await imageCompression(file, options);
+      const compressedFile = await compressImageFile(file, options);
       const reader = new FileReader();
       reader.onloadend = () => {
         const dataUrl = reader.result as string;
         if (type === "product") {
-          setEditingProduct({
-            ...(editingProduct || {}),
+          setEditingProduct((prev: any) => ({
+            ...(prev || {}),
             image: dataUrl,
-          } as any);
+          }));
         } else if (type === "campaign") {
-          setEditingCampaign({
-            ...(editingCampaign || {}),
+          setEditingCampaign((prev: any) => ({
+            ...(prev || {}),
             image: dataUrl,
-          } as any);
+          }));
         } else {
           if (editingBanner) {
-            setEditingBanner({ ...editingBanner, image: dataUrl });
+            setEditingBanner((prev: any) => ({ ...(prev || {}), image: dataUrl }));
           } else {
-            setNewBanner({ ...newBanner, image: dataUrl });
+            setNewBanner((prev: any) => ({ ...(prev || {}), image: dataUrl }));
           }
         }
       };
@@ -3597,7 +3791,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           maxWidthOrHeight: 1600,
           useWebWorker: true,
         };
-        const compressedFile = await imageCompression(file, options);
+        const compressedFile = await compressImageFile(file, options);
         const reader = new FileReader();
         reader.onloadend = () => {
           setEditingProduct((prev: any) => {
@@ -3615,10 +3809,29 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     });
   };
   const removeImage = (index: number) => {
-    const currentImages = editingProduct?.images || [];
-    setEditingProduct({
-      ...editingProduct,
-      images: currentImages.filter((_, i) => i !== index),
+    setEditingProduct((prev: any) => {
+      const currentImages = prev?.images || [];
+      return {
+        ...(prev || {}),
+        images: currentImages.filter((_: any, i: number) => i !== index),
+      };
+    });
+  };
+  const handleSetPrimaryImage = (index: number) => {
+    setEditingProduct((prev: any) => {
+      if (!prev || !prev.images || !prev.images[index]) return prev;
+      const currentImages = [...(prev.images || [])];
+      const selectedImg = currentImages[index];
+      const previousPrimary = prev.image;
+      currentImages.splice(index, 1);
+      if (previousPrimary) {
+        currentImages.unshift(previousPrimary);
+      }
+      return {
+        ...prev,
+        image: selectedImg,
+        images: currentImages,
+      };
     });
   };
   const handleVariantImageUpload = async (
@@ -3633,7 +3846,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         maxWidthOrHeight: 1600,
         useWebWorker: true,
       };
-      const compressedFile = await imageCompression(file, options);
+      const compressedFile = await compressImageFile(file, options);
       const reader = new FileReader();
       reader.onloadend = () => {
         setEditingProduct((prev: any) => {
@@ -3811,9 +4024,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   // Featured Products slider logic removed as per user request (manual scroll)
   const touchProductsTimestamp = async () => {
     try {
-      await updateDoc(doc(db, "config", "siteConfig"), {
+      await setDoc(doc(db, "config", "siteConfig"), {
         productsUpdatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
+      fetch("/api/invalidate-product-cache", { method: "POST" }).catch(() => {});
     } catch (e) {
       console.warn("Failed to update productsUpdatedAt:", e);
     }
@@ -3822,10 +4036,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   const saveProduct = async (e: FormEvent) => {
     e.preventDefault();
     // Validation
+    const primaryImage = editingProduct?.image || editingProduct?.images?.[0] || editingProduct?.variants?.[0]?.image || "";
     const errors: Record<string, boolean> = {};
     if (!editingProduct?.name) errors.name = true;
     if (!editingProduct?.price) errors.price = true;
-    if (!editingProduct?.image) errors.image = true;
+    if (!primaryImage) errors.image = true;
     if (!editingProduct?.category) errors.category = true;
     if (Object.keys(errors).length > 0) {
       setProductFormErrors(errors);
@@ -3870,7 +4085,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
                 100,
             )
           : 0,
-        image: editingProduct.image,
+        image: primaryImage,
         category: editingProduct.category,
         subcategory: editingProduct.subcategory || "",
         description: editingProduct.description || "",
@@ -3919,7 +4134,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           p.id === editingProduct.id ? { ...productData, id: p.id } as Product : p
         );
         setProducts(updatedProducts);
-        localStorage.setItem("cached_products", JSON.stringify(updatedProducts));
+        saveProductsToCache(updatedProducts, siteConfig?.productsUpdatedAt);
         setEditingProduct(null);
         if (e.target) (e.target as HTMLFormElement).reset();
         alert("Product update successful!");
@@ -3930,7 +4145,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         // Optimistic Update for Quota issues
         const newProducts = [{ ...productData, id: docRef.id } as Product, ...products];
         setProducts(newProducts);
-        localStorage.setItem("cached_products", JSON.stringify(newProducts));
+        saveProductsToCache(newProducts, siteConfig?.productsUpdatedAt);
         setEditingProduct(null);
         if (e.target) (e.target as HTMLFormElement).reset();
         alert("Product added successfully!");
@@ -4053,13 +4268,13 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       // Optimistic delete for cache/quota issues
       const updatedProducts = products.filter(p => p.id !== productId);
       setProducts(updatedProducts);
-      localStorage.setItem("cached_products", JSON.stringify(updatedProducts));
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      saveProductsToCache(updatedProducts, siteConfig?.productsUpdatedAt);
+      alert("প্রোডাক্টটি সফলভাবে ডিলিট করা হয়েছে।");
       if (editingProduct && String(editingProduct.id) === productId) {
         setEditingProduct(null);
       }
     } catch (err: any) {
-      console.error(" Product delete error details:", err);
+      console.error("  Product delete error details:", err);
       const isQuota = err.message?.includes("Quota exceeded") || err.message === "QUOTA_EXCEEDED";
       if (isQuota) setIsQuotaExceeded(true);
       if (err.code === "permission-denied") {
@@ -4083,7 +4298,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         p.id === product.id ? { ...p, isPublished: newStatus } : p
       );
       setProducts(updatedProducts);
-      localStorage.setItem("cached_products", JSON.stringify(updatedProducts));
+      saveProductsToCache(updatedProducts, siteConfig?.productsUpdatedAt);
       toast.success(newStatus ? "Product is now visible on website (Published)" : "Product has been hidden (Unpublished)");
     } catch (err: any) {
       const isQuota = err.message?.includes("Quota exceeded") || err.message === "QUOTA_EXCEEDED";
@@ -4237,9 +4452,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   const [individualSmsMessage, setIndividualSmsMessage] = useState("");
   const [isSendingIndividualSms, setIsSendingIndividualSms] = useState(false);
   const BULK_SMS_PAGE_SIZE = 100;
-  // Notifications Listener
-  const isInitialNotifLoad = useRef(true);
-  
+
   const sendPushToUser = async (userId: string, title: string, body: string, link: string = '/') => {
     try {
       const userDoc = await getDoc(doc(db, 'users', userId));
@@ -4258,8 +4471,55 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   };
   function playNotifSound() {
-    const audio = new Audio(NOTIF_SOUND_URL);
-    audio.play().catch(e => console.log("Sound play error:", e));
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        const now = ctx.currentTime;
+
+        // Warm Low-pass filter to remove any sharpness
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1400, now);
+        filter.connect(ctx.destination);
+
+        // Tone 1: Gentle Warm Chime (523.25Hz - C5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(523.25, now);
+        gain1.gain.setValueAtTime(0, now);
+        gain1.gain.linearRampToValueAtTime(0.025, now + 0.02); // very soft peak
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35); // quick smooth fade
+        osc1.connect(gain1);
+        gain1.connect(filter);
+        osc1.start(now);
+        osc1.stop(now + 0.38);
+
+        // Tone 2: Soft Harmonic Chime (659.25Hz - E5)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(659.25, now + 0.06);
+        gain2.gain.setValueAtTime(0, now + 0.06);
+        gain2.gain.linearRampToValueAtTime(0.02, now + 0.08); // very subtle harmonic
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+        osc2.connect(gain2);
+        gain2.connect(filter);
+        osc2.start(now + 0.06);
+        osc2.stop(now + 0.48);
+        return;
+      }
+    } catch (e) {}
+
+    try {
+      const audio = new Audio(NOTIF_SOUND_URL);
+      audio.volume = 0.08; // extremely light and subtle fallback volume
+      audio.play().catch(e => console.log("Sound play error:", e));
+    } catch (e) {}
   }
   useEffect(() => {
     if (!user || isQuotaExceeded) return;
@@ -4280,6 +4540,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     });
     return () => unsub();
   }, [user, isAdmin, isQuotaExceeded]);
+
+  // Notifications Listener - strictly toasts new real-time additions only once, never on initial load or re-renders
+  const seenNotifIds = useRef<Set<string>>(new Set());
+  const isInitialNotifLoad = useRef(true);
+
   useEffect(() => {
     if (isQuotaExceeded) return;
     // Determine target user IDs for notifications
@@ -4287,6 +4552,9 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     if (user?.uid) {
       targetUserIds.push(user.uid);
     }
+
+    let isFirstBatch = true;
+
     const unsubNotifs = onSnapshot(
       query(
         collection(db, "notifications"), 
@@ -4297,17 +4565,27 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       (snapshot) => {
         const notifs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
         
-        if (!isInitialNotifLoad.current && snapshot.docChanges().length > 0) {
+        if (isFirstBatch) {
+          // Add all existing doc IDs to seen set so they are NEVER toasted
+          snapshot.docs.forEach((d) => seenNotifIds.current.add(d.id));
+          isFirstBatch = false;
+          isInitialNotifLoad.current = false;
+        } else {
+          // Only toast truly NEW docs added in real-time
           snapshot.docChanges().forEach((change) => {
             if (change.type === "added") {
-              const newNotif: any = change.doc.data();
-              if (!newNotif.userId || newNotif.userId === user.uid) {
-                playNotifSound();
-                toast.success(newNotif.title || "নিরাপদ শপ বিডি থেকে নতুন নোটিফিকেশন!", {
-                  icon: "",
-                  duration: 6000,
-                  position: "top-right"
-                });
+              const docId = change.doc.id;
+              if (!seenNotifIds.current.has(docId)) {
+                seenNotifIds.current.add(docId);
+                const newNotif: any = change.doc.data();
+                if (!newNotif.userId || newNotif.userId === "all" || (user?.uid && newNotif.userId === user.uid)) {
+                  playNotifSound();
+                  toast.success(newNotif.title || "নিরাপদ শপ বিডি থেকে নতুন নোটিফিকেশন!", {
+                    icon: "🔔",
+                    duration: 5000,
+                    position: "top-right"
+                  });
+                }
               }
             }
           });
@@ -4317,15 +4595,23 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         let dismissed: string[] = [];
         try { dismissed = JSON.parse(dismissedStr); } catch(e){}
         const filteredNotifs = notifs.filter((n: any) => !dismissed.includes(n.id) && n.title !== 'dgfdb' && n.title !== 'hhh' && n.message !== 'bcvbc' && n.message !== 'hhh');
-        setNotifications(filteredNotifs);
-        isInitialNotifLoad.current = false;
         
-        const lastCheck = userProfile?.lastNotifCheck ? new Date(userProfile.lastNotifCheck).getTime() : (localStorage.getItem("lastNotifCheck") ? Number(localStorage.getItem("lastNotifCheck")) : Date.now() - 86400000); // Default to last 24h for guests
-        const unseen = notifs.filter((n: any) => {
-          const createdAt = n.createdAt?.seconds ? n.createdAt.seconds * 1000 : (n.createdAt ? new Date(n.createdAt).getTime() : Date.now());
-          return createdAt > lastCheck;
-        }).length;
-        setUnseenNotifCount(unseen);
+        // Deduplicate: Each order will have at most ONE notification in the list (the newest one)
+        const seenOrderIds = new Set<string>();
+        const dedupedNotifs: any[] = [];
+        for (const notif of filteredNotifs as any[]) {
+          const orderId = notif.orderId || (notif.title?.match(/#([a-zA-Z0-9_-]+)/)?.[1]) || (notif.message?.match(/#([a-zA-Z0-9_-]+)/)?.[1]);
+          if (orderId) {
+            if (!seenOrderIds.has(orderId)) {
+              seenOrderIds.add(orderId);
+              dedupedNotifs.push(notif);
+            }
+          } else {
+            dedupedNotifs.push(notif);
+          }
+        }
+
+        setNotifications(dedupedNotifs);
       },
       (err) => {
         if (err.code !== "permission-denied") {
@@ -4336,7 +4622,22 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     return () => {
       unsubNotifs();
     };
-  }, [user, userProfile?.lastNotifCheck, isAdmin, masterEmails, isQuotaExceeded]);
+  }, [user?.uid, isQuotaExceeded]);
+
+  // Compute unseen notification badge count independently without re-subscribing Firestore
+  useEffect(() => {
+    const lastCheck = userProfile?.lastNotifCheck 
+      ? new Date(userProfile.lastNotifCheck).getTime() 
+      : (localStorage.getItem("lastNotifCheck") ? Number(localStorage.getItem("lastNotifCheck")) : Date.now() - 86400000);
+    
+    const unseen = notifications.filter((n: any) => {
+      const createdAt = n.createdAt?.seconds 
+        ? n.createdAt.seconds * 1000 
+        : (n.createdAt ? new Date(n.createdAt).getTime() : Date.now());
+      return createdAt > lastCheck;
+    }).length;
+    setUnseenNotifCount(unseen);
+  }, [notifications, userProfile?.lastNotifCheck]);
   const handleDismissNotification = (id: string) => {
     const dismissedStr = localStorage.getItem('dismissedNotifs') || '[]';
     let dismissed: string[] = [];
@@ -4614,7 +4915,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         useWebWorker: true
       };
       
-      const compressedFile = await imageCompression(file, options);
+      const compressedFile = await compressImageFile(file, options);
       const reader = new FileReader();
       reader.readAsDataURL(compressedFile);
       reader.onloadend = async () => {
@@ -4981,7 +5282,7 @@ Rules:
         maxWidthOrHeight: 1200,
         useWebWorker: true,
       };
-      const compressedFile = await imageCompression(file, options);
+      const compressedFile = await compressImageFile(file, options);
       const reader = new FileReader();
       reader.onload = async (event) => {
         const url = event.target?.result as string;
@@ -5069,7 +5370,7 @@ Rules:
     if (!file || !selectedChat) return;
     try {
       const options = { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true };
-      const compressedFile = await imageCompression(file, options);
+      const compressedFile = await compressImageFile(file, options);
       const reader = new FileReader();
       reader.onload = async (event) => {
         const url = event.target?.result as string;
@@ -5190,18 +5491,18 @@ Rules:
     const files = e.target.files;
     if (!files) return;
     if (reviewForm.images.length + files.length > 5) {
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      alert("You can upload a maximum of 5 photos.");
       return;
     }
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
         const options = {
-          maxSizeMB: 0.1,
-          maxWidthOrHeight: 800,
+          maxSizeMB: 0.08,
+          maxWidthOrHeight: 600,
           useWebWorker: true,
         };
-        const compressedFile = await imageCompression(file, options);
+        const compressedFile = await compressImageFile(file, options);
         const reader = new FileReader();
         reader.onloadend = () => {
           const dataUrl = reader.result as string;
@@ -5225,81 +5526,101 @@ Rules:
     }
   };
   const submitReview = async (productId: string) => {
-    const finalUserName = user
-      ? user.displayName || "Anonymous User"
-      : reviewForm.guestName?.trim() || "Guest User";
-    if (!reviewForm.comment.trim() && reviewForm.rating === 5) {
-      // Allow empty comment if rating is provided, but typically a low rating should have a comment
-      // For now, let's just allow it anyway to be safe
+    const targetProdId = String(productId || selectedProduct?.id || "").trim();
+    if (!targetProdId) {
+      toast.error("Product information missing. Please refresh and try again.");
+      return;
     }
+
+    const finalUserName = user
+      ? user.displayName || user.email?.split('@')[0] || "Verified Customer"
+      : reviewForm.guestName?.trim() || "Customer";
+      
     setIsSubmittingReview(true);
     try {
-      const reviewId = Math.random().toString(36).substr(2, 9);
+      const reviewId = `rev_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
       const newReview: Review = {
         id: reviewId,
         userId: user
           ? user.uid
-          : "guest_" + Math.random().toString(36).substr(2, 5),
+          : `guest_${Math.random().toString(36).substr(2, 6)}`,
         userName: finalUserName,
         userPhoto: user ? user.photoURL || null : null,
-        rating: reviewForm.rating,
-        comment: reviewForm.comment,
-        images: reviewForm.images,
+        rating: Math.min(5, Math.max(1, Number(reviewForm.rating) || 5)),
+        comment: reviewForm.comment?.trim() || "",
+        images: reviewForm.images || [],
         createdAt: new Date().toISOString(),
       };
-      // Review record storage
-      const reviewPath = `products/${productId}/reviews/${reviewId}`;
+
+      let submitted = false;
+      let calculatedRating = newReview.rating;
+      let calculatedCount = 1;
+
+      // 1. Try Backend API via Firebase Admin SDK
       try {
-        await setDoc(
-          doc(db, "products", productId, "reviews", reviewId),
-          newReview,
-        );
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, reviewPath);
-        throw err; // re-throw so outer catch handles it
-      }
-      // Update aggregation - handling potential nulls
-      const productRef = doc(db, "products", productId);
-      const productSnap = await getDoc(productRef);
-      if (productSnap.exists()) {
-        const data = productSnap.data();
-        const currentRating = data.rating || 0;
-        const currentCount = data.reviewCount || 0;
-        const newCount = currentCount + 1;
-        const newRating =
-          (currentRating * currentCount + reviewForm.rating) / newCount;
-        try {
-          await updateDoc(productRef, {
-            rating: Number(newRating.toFixed(1)),
-            reviewCount: newCount,
-          });
-        } catch (err) {
-          handleFirestoreError(
-            err,
-            OperationType.UPDATE,
-            `products/${productId}`,
-          );
+        const res = await fetch("/api/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: targetProdId, review: newReview }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            submitted = true;
+            if (data.rating !== undefined) calculatedRating = data.rating;
+            if (data.reviewCount !== undefined) calculatedCount = data.reviewCount;
+          }
         }
-        // Update local UI
-        setActiveReviews((prev) => [newReview, ...prev]);
-        setSelectedProduct((prev) =>
-          prev
-            ? {
-                ...prev,
-                rating: Number(newRating.toFixed(1)),
-                reviewCount: newCount,
-              }
-            : null,
-        );
-        // Also update in main products list
-        setProducts(prev => prev.map(p => p.id === productId ? { ...p, rating: Number(newRating.toFixed(1)), reviewCount: newCount } : p));
+      } catch (apiErr) {
+        console.warn("Backend /api/reviews unreachable, trying direct Firestore...", apiErr);
       }
+
+      // 2. Fallback to direct client Firestore if API was not reachable
+      if (!submitted) {
+        try {
+          const reviewRef = doc(db, "products", targetProdId, "reviews", reviewId);
+          await setDoc(reviewRef, newReview);
+          submitted = true;
+
+          const productRef = doc(db, "products", targetProdId);
+          const productSnap = await getDoc(productRef);
+          if (productSnap.exists()) {
+            const data = productSnap.data();
+            const currentRating = Number(data.rating) || 0;
+            const currentCount = Number(data.reviewCount) || 0;
+            calculatedCount = currentCount + 1;
+            calculatedRating = Number(((currentRating * currentCount + newReview.rating) / calculatedCount).toFixed(1));
+
+            try {
+              await updateDoc(productRef, {
+                rating: calculatedRating,
+                reviewCount: calculatedCount,
+              });
+            } catch (e) {}
+          }
+        } catch (clientErr) {
+          console.warn("Client firestore review save error:", clientErr);
+        }
+      }
+
+      // Update local state instantly so user immediately sees their review
+      setActiveReviews((prev) => [newReview, ...prev.filter(r => r.id !== reviewId)]);
+      setSelectedProduct((prev) =>
+        prev && (prev.id === targetProdId || !prev.id)
+          ? {
+              ...prev,
+              rating: calculatedRating,
+              reviewCount: Math.max(Number(prev.reviewCount || 0) + 1, calculatedCount),
+            }
+          : prev,
+      );
+      setProducts(prev => prev.map(p => p.id === targetProdId ? { ...p, rating: calculatedRating, reviewCount: Math.max(Number(p.reviewCount || 0) + 1, calculatedCount) } : p));
+
       setReviewForm({ rating: 5, comment: "", images: [], guestName: "" });
-      toast.success("রিভিউ সফলভাবে জমা হয়েছে! ধন্যবাদ।");
-    } catch (err) {
-      console.error("Failed to submit review", err);
-      // If it's a JSON string from handleFirestoreError, we've already logged it but let's notify user
-      alert("Failed to submit review. Please try again.");
+      toast.success("Review submitted successfully! Thank you.");
+    } catch (err: any) {
+      console.error("Failed to submit review:", err);
+      toast.error("Failed to submit review. Please try again.");
     } finally {
       setIsSubmittingReview(false);
     }
@@ -5352,6 +5673,38 @@ Rules:
       window.scrollTo({ top: 0, behavior: "smooth" });
     }, 50);
   }, [setIsCheckoutOpen]);
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Automated Deep Link & Facebook/Social URL Product Resolver
+  // Whenever `products` finishes loading or changes, if the URL
+  // points to a specific product (/product/:slug, /p/:id, ?p=...),
+  // seamlessly open that product modal/details page.
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  const hasResolvedInitialUrlRef = useRef(false);
+
+  useEffect(() => {
+    if (!products || products.length === 0) return;
+    if (hasResolvedInitialUrlRef.current) return;
+
+    const targetIdOrSlug = getProductIdFromUrl();
+    if (!targetIdOrSlug) {
+      hasResolvedInitialUrlRef.current = true;
+      return;
+    }
+
+    const isCheckout = new URLSearchParams(window.location.search).get("checkout") === "true";
+    if (isCheckout) {
+      hasResolvedInitialUrlRef.current = true;
+      return;
+    }
+
+    const matched = findProductBySlugOrId(products, targetIdOrSlug);
+    if (matched && !matched.deleted && (isAdmin || isMasterAdmin || matched.isPublished !== false)) {
+      openProductDetails(matched);
+    }
+    hasResolvedInitialUrlRef.current = true;
+  }, [products, openProductDetails, isAdmin, isMasterAdmin]);
+
   const handleApplyCoupon = () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) {
@@ -5462,9 +5815,11 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
             product: {
               id: landingProduct.id,
               name: landingProduct.name + pkgName,
+              smsName: (landingProduct.smsName || '').trim(),
               price: subtotal,
               image: landingProduct.image || ""
             },
+            smsName: (landingProduct.smsName || '').trim(),
             quantity: 1
           }
         ],
@@ -5475,7 +5830,8 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
       
       // Send automated confirmation SMS to customer's phone
       try {
-        const productNames = landingProduct.smsName || landingProduct.name;
+        const directSms = (landingProduct.smsName || '').trim();
+        const productNames = directSms ? directSms : ((landingProduct.name || '').trim().length > 25 ? (landingProduct.name || '').trim().substring(0, 25) + '...' : (landingProduct.name || '').trim());
         const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে\n${productNames}\nঅর্ডার নাম্বার: #${String(orderId).slice(-6).toUpperCase()}\nমোট বিল: ৳${total}\nনতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
         fetch("/api/send-sms", {
           method: "POST",
@@ -5667,7 +6023,8 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     let productDetails = '';
     if (order.items && order.items.length > 0) {
       productDetails = order.items.map((item: any) => {
-        const name = item.product?.smsName || item.product?.name || 'Product';
+        const directSms = (item.smsName || item.product?.smsName || '').trim();
+        const name = directSms ? directSms : ((item.product?.name || item.name || 'Product').trim().length > 25 ? (item.product?.name || item.name || 'Product').trim().substring(0, 25) + '...' : (item.product?.name || item.name || 'Product').trim());
         const qty = item.quantity || 1;
         return `   ${name} (${qty} টি)`;
       }).join('\n');
@@ -5912,42 +6269,51 @@ const handleSaveQuickEdit = async () => {
           }
           await updateDoc(orderRef, updateData);
         const orderData = orderSnap.data();
-        const statusTextMap: Record<string, string> = {
-          pending: "পেন্ডিং (অপেক্ষমান)",
-          confirmed: "কনফার্মড (অনুমোদিত)",
-          processing: "প্রসেসিং হচ্ছে",
-          shipped: "কুরিয়ারে পাঠানো হয়েছে (অন দ্য ওয়ে)",
-          delivered: "সফলভাবে ডেলিভারি সম্পন্ন হয়েছে",
-          cancelled: "বাতিল করা হয়েছে",
-          returned: "রিটার্ন করা হয়েছে"
+        const statusTextMapEn: Record<string, string> = {
+          pending: "Pending",
+          confirmed: "Confirmed",
+          processing: "Processing",
+          shipped: "In Transit",
+          delivered: "Delivered",
+          cancelled: "Cancelled",
+          returned: "Returned"
         };
-        const banglaStatus = statusTextMap[newStatus.toLowerCase()] || newStatus;
+        const statusEn = statusTextMapEn[newStatus.toLowerCase()] || newStatus;
 
-        if (newStatus === "confirmed") {
-          if (orderData && orderData.userId && orderData.userId !== "guest") {
-            try {
-              await addDoc(collection(db, "notifications"), {
-                title: `অর্ডার কনফার্মড (#${orderId})`,
-                message: `প্রিয় ${orderData.customerName || 'গ্রাহক'}, আপনার অর্ডারটি (#${orderId}) সফলভাবে কনফার্ম করা হয়েছে। মোট বিল: ৳${orderData.total}।`,
-                link: "/profile",
-                userId: orderData.userId,
-                userEmail: orderData.customerEmail || "",
-                createdAt: serverTimestamp(),
-                sender: "system",
-                type: "direct"
-              });
-            } catch (err) {
-              console.error("Failed to send in-app confirmation notification:", err);
-            }
-          }
-        }
-        
         if (orderData && orderData.userId && orderData.userId !== "guest") {
+          try {
+            const isConfirming = newStatus === "confirmed";
+            const wasAlreadyConfirmed = !!orderData.confirmedNotifSent;
+
+            // Only mark confirmedNotifSent once
+            if (isConfirming && !wasAlreadyConfirmed) {
+              await updateDoc(orderRef, { confirmedNotifSent: true, confirmedAt: serverTimestamp() });
+            }
+
+            // Always update the single notification document for this order so no duplicate cards accumulate
+            const notifDocRef = doc(db, "notifications", `order_${orderId}`);
+            await setDoc(notifDocRef, {
+              title: `Order ${statusEn} (#${orderId})`,
+              message: `Dear ${orderData.customerName || 'Customer'}, your order (#${orderId}) is ${statusEn.toLowerCase()}. Total Bill: ৳${orderData.total}.`,
+              link: `order:${orderId}`,
+              orderId: orderId,
+              status: newStatus,
+              userId: orderData.userId,
+              userEmail: orderData.customerEmail || "",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              sender: "system",
+              type: "direct"
+            }, { merge: true });
+          } catch (err) {
+            console.error("Failed to send/update in-app notification:", err);
+          }
+
           sendPushToUser(
             orderData.userId, 
-            `অর্ডার আপডেট (#${orderId})`, 
-            `আপনার অর্ডারের বর্তমান অবস্থা: ${banglaStatus}`, 
-            "/profile"
+            `Order Update (#${orderId})`, 
+            `Your order status: ${statusEn}`, 
+            `order:${orderId}`
           );
         }
         if (newStatus === "returned" && orderData.userId && orderData.paymentMethod !== "cod") {
@@ -6781,6 +7147,7 @@ const handleSaveQuickEdit = async () => {
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden relative">
+      <React.Suspense fallback={null}>
       <Helmet>
         {selectedCategory && selectedCategory !== "all" && selectedCategory !== "All" ? (
           <>
@@ -6798,6 +7165,9 @@ const handleSaveQuickEdit = async () => {
             <link rel="canonical" href="https://ishopbd.com/" />
           </>
         )}
+        <link rel="icon" type="image/png" href="/icon-48x48.png?v=2026.1" />
+        <link rel="shortcut icon" href="/favicon.ico?v=2026.1" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png?v=2026.1" />
       </Helmet>
       <Toaster position="top-right" reverseOrder={false} />
       {/* Bulk Action Floating Bar */}
@@ -6896,14 +7266,19 @@ const handleSaveQuickEdit = async () => {
               className="cursor-pointer transition-transform hover:scale-105"
               onClick={() => {
                 setIsProductDetailsOpen(false);
+                setSelectedProduct(null);
                 setIsAdminOpen(false);
                 setActiveCampaign(null);
                 setSelectedCategory("all");
+                setSelectedSubcategory("all");
                 setSearchInput("");
+                setSearchQuery("");
                 setIsChatOpen(false);
                 setIsProfileOpen(false);
                 setIsCheckoutOpen(false);
                 setIsNotifOpen(false);
+                setCurrentPage(1);
+                window.history.pushState({}, "", "/");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               title="i SHOP BD Home"
@@ -6947,8 +7322,8 @@ const handleSaveQuickEdit = async () => {
             {liveSearchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[350px] overflow-y-auto">
                 <div className="p-3 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">অনুসন্ধান ফলাফল ({liveSearchResults.length})</span>
-                  <button onMouseDown={() => setSearchInput("")} className="text-[10px] font-black text-primary hover:underline">ক্লিয়ার করুন</button>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Search Results ({liveSearchResults.length})</span>
+                  <button onMouseDown={() => setSearchInput("")} className="text-[10px] font-black text-primary hover:underline">Clear</button>
                 </div>
                 <div className="divide-y divide-gray-50">
                   {liveSearchResults.map((prod) => (
@@ -6970,9 +7345,9 @@ const handleSaveQuickEdit = async () => {
                             <span className="text-[10px] text-gray-400 line-through">৳{prod.oldPrice}</span>
                           )}
                           {prod.stock <= 0 ? (
-                            <span className="text-[8px] bg-red-100 text-red-600 font-bold px-1.5 py-0.2 rounded">স্টক আউট</span>
+                            <span className="text-[8px] bg-red-100 text-red-600 font-bold px-1.5 py-0.2 rounded">Out of Stock</span>
                           ) : prod.isComingSoon ? (
-                            <span className="text-[8px] bg-amber-100 text-amber-600 font-bold px-1.5 py-0.2 rounded">প্রি-অর্ডার</span>
+                            <span className="text-[8px] bg-amber-100 text-amber-600 font-bold px-1.5 py-0.2 rounded">Pre-Order</span>
                           ) : null}
                         </div>
                       </div>
@@ -6987,10 +7362,10 @@ const handleSaveQuickEdit = async () => {
             <button
               onClick={() => setIsAppDownloadModalOpen(true)}
               className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-full font-bold shadow-sm transition-all active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
-              title="ডাউনলোড করুন"
+              title="Download App"
             >
               <Download size={16} />
-              <span className="hidden sm:inline">অ্যাপ ডাউনলোড</span>
+              <span className="hidden sm:inline">Download App</span>
             </button>
             <button
               onClick={() => setIsTrackingOpen(true)}
@@ -7159,8 +7534,8 @@ const handleSaveQuickEdit = async () => {
                 {liveSearchResults.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[300px] overflow-y-auto">
                     <div className="p-3 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">অনুসন্ধান ফলাফল ({liveSearchResults.length})</span>
-                      <button onMouseDown={() => setSearchInput("")} className="text-[10px] font-black text-primary hover:underline">ক্লিয়ার করুন</button>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Search Results ({liveSearchResults.length})</span>
+                      <button onMouseDown={() => setSearchInput("")} className="text-[10px] font-black text-primary hover:underline">Clear</button>
                     </div>
                     <div className="divide-y divide-gray-50">
                       {liveSearchResults.map((prod) => (
@@ -7377,7 +7752,7 @@ const handleSaveQuickEdit = async () => {
         </nav>
       )}
       {/* 3. Hero Banner Slider */}
-      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && activeBanners.length > 0 && (
+      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && heroBanners.length > 0 && (
         <section className="container mx-auto px-4 mt-4 relative group">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
             {/* Left Slider Column (3/4 width) */}
@@ -7389,9 +7764,8 @@ const handleSaveQuickEdit = async () => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.5 }}
-                  className={`relative w-full h-full min-h-[220px] md:min-h-[380px] ${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
+                  className={`relative w-full h-full min-h-[220px] md:min-h-[380px] ${heroBanners[currentBanner % (heroBanners.length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
                   onClick={() => {
-                    const heroBanners = activeBanners.filter(b => (b.type || 'hero') === 'hero');
                     const banner = heroBanners[currentBanner % (heroBanners.length || 1)];
                     if (banner?.linkedProductId) {
                       const product = products.find((p) => p.id === banner.linkedProductId);
@@ -7400,44 +7774,44 @@ const handleSaveQuickEdit = async () => {
                   }}
                 >
                   <img 
-                    src={activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.image}
+                    src={heroBanners[currentBanner % (heroBanners.length || 1)]?.image}
                     className="w-full h-full object-cover block absolute inset-0"
                     loading="eager"
                     alt={`i SHOP BD ব্যানার ${currentBanner + 1}`}
                   />
                   <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
                     <div className="max-w-md">
-                      {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title) && (
+                      {(heroBanners[currentBanner % (heroBanners.length || 1)]?.title) && (
                         <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                          className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleSize || 'text-2xl md:text-4xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
-                            activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleFont || 'font-ador'
+                          className={`${heroBanners[currentBanner % (heroBanners.length || 1)]?.titleSize || 'text-2xl md:text-4xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
+                            heroBanners[currentBanner % (heroBanners.length || 1)]?.titleFont || 'font-ador'
                           } ${
-                            activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
+                            heroBanners[currentBanner % (heroBanners.length || 1)]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
                           }`}>
-                          {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.title}
+                          {heroBanners[currentBanner % (heroBanners.length || 1)]?.title}
                         </motion.h2>
                       )}
-                      {(activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle) && (
+                      {(heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitle) && (
                         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-                          className={`${activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleSize || 'text-sm md:text-base'} opacity-90 text-white/90 drop-shadow-lg ${
-                            activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitleFont || 'font-ador'
+                          className={`${heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitleSize || 'text-sm md:text-base'} opacity-90 text-white/90 drop-shadow-lg ${
+                            heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitleFont || 'font-ador'
                           }`}>
-                          {activeBanners.filter(b => (b.type || 'hero') === 'hero')[currentBanner % (activeBanners.filter(b => (b.type || 'hero') === 'hero').length || 1)]?.subtitle}
+                          {heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitle}
                         </motion.p>
                       )}
                     </div>
                   </div>
                 </motion.div>
               </AnimatePresence>
-              {activeBanners.filter(b => (b.type || 'hero') === 'hero').length > 1 && (
+              {heroBanners.length > 1 && (
                 <>
                   <button
-                    onClick={() => setCurrentBanner(prev => (prev - 1 + activeBanners.filter(b => (b.type || 'hero') === 'hero').length) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
+                    onClick={() => setCurrentBanner(prev => (prev - 1 + heroBanners.length) % heroBanners.length)}
                     className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
                     <ChevronLeft size={24} />
                   </button>
                   <button
-                    onClick={() => setCurrentBanner(prev => (prev + 1) % activeBanners.filter(b => (b.type || 'hero') === 'hero').length)}
+                    onClick={() => setCurrentBanner(prev => (prev + 1) % heroBanners.length)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
                     <ChevronRight size={24} />
                   </button>
@@ -7449,47 +7823,37 @@ const handleSaveQuickEdit = async () => {
             <div className="col-span-1 md:flex hidden flex-col sm:flex-row md:flex-col gap-4">
               {/* Top Banner */}
               <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b1 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
-                {(() => {
-                  const bTop = activeBanners.find(b => b.type === 'right_top');
-                  return (
-                    <div 
-                      className="w-full h-full relative cursor-pointer"
-                      onClick={() => {
-                        setIsAppDownloadModalOpen(true);
-                      }}
-                    >
-                      <img 
-                        src={bTop?.image || '/default_right_top.png'} 
-                        className="w-full h-full object-cover group-hover/b1:scale-105 transition-transform duration-500 absolute inset-0"
-                        alt="Promo Banner Top"
-                      />
-                    </div>
-                  );
-                })()}
+                <div 
+                  className="w-full h-full relative cursor-pointer"
+                  onClick={() => {
+                    setIsAppDownloadModalOpen(true);
+                  }}
+                >
+                  <img 
+                    src={rightTopBanner?.image || '/default_right_top.png'} 
+                    className="w-full h-full object-cover group-hover/b1:scale-105 transition-transform duration-500 absolute inset-0"
+                    alt="Promo Banner Top"
+                  />
+                </div>
               </div>
 
               {/* Bottom Banner (Flash Sale link) */}
               <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b2 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
-                {(() => {
-                  const bBottom = activeBanners.find(b => b.type === 'right_bottom');
-                  return (
-                    <div 
-                      className="w-full h-full relative cursor-pointer"
-                      onClick={() => {
-                        const el = document.getElementById('flash-sale-section');
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth' });
-                        }
-                      }}
-                    >
-                      <img 
-                        src={bBottom?.image || '/default_right_bottom.png'} 
-                        className="w-full h-full object-cover group-hover/b2:scale-105 transition-transform duration-500 absolute inset-0"
-                        alt="Flash Sale Banner"
-                      />
-                    </div>
-                  );
-                })()}
+                <div 
+                  className="w-full h-full relative cursor-pointer"
+                  onClick={() => {
+                    const el = document.getElementById('flash-sale-section');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                >
+                  <img 
+                    src={rightBottomBanner?.image || '/default_right_bottom.png'} 
+                    className="w-full h-full object-cover group-hover/b2:scale-105 transition-transform duration-500 absolute inset-0"
+                    alt="Flash Sale Banner"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -7505,11 +7869,11 @@ const handleSaveQuickEdit = async () => {
             className="flex flex-wrap items-center gap-3 bg-cream p-4 rounded-2xl border border-gray-100"
           >
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              ফিল্টারসমূহ:
+              Filters:
             </span>
             {selectedCategory !== "all" && (
               <span className="bg-primary/5 text-primary text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-primary/10 shadow-sm">
-                ক্যাটাগরি: {selectedCategory}
+                Category: {selectedCategory}
                 <button
                   onClick={() => setSelectedCategory("all")}
                   className="hover:bg-primary/10 p-0.5 rounded-md transition-colors"
@@ -7520,7 +7884,7 @@ const handleSaveQuickEdit = async () => {
             )}
             {selectedBrand !== "all" && (
               <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-blue-100 shadow-sm">
-                ব্র্যান্ড: {selectedBrand}
+                Brand: {selectedBrand}
                 <button
                   onClick={() => setSelectedBrand("all")}
                   className="hover:bg-blue-100 p-0.5 rounded-md transition-colors"
@@ -7531,7 +7895,7 @@ const handleSaveQuickEdit = async () => {
             )}
             {searchQuery && (
               <span className="bg-white text-gray-600 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-gray-200 shadow-sm">
-                সার্চ: {searchQuery}
+                Search: {searchQuery}
                 <button
                   onClick={() => setSearchInput("")}
                   className="hover:bg-gray-100 p-0.5 rounded-md transition-colors"
@@ -7548,39 +7912,40 @@ const handleSaveQuickEdit = async () => {
               }}
               className="text-[10px] font-bold text-gray-400 hover:text-primary transition-colors underline decoration-dotted ml-auto"
             >
-              সব রিসেট করুন
+              Reset All
             </button>
           </motion.div>
         </div>
       )}
       <main className={isProductDetailsOpen ? "w-full flex-1 flex flex-col min-h-[800px]" : isCheckoutOpen ? "w-full bg-[#f4f6f8] flex-1 flex flex-col min-h-[800px]" : "container mx-auto px-4 py-8 flex-1 flex flex-col min-h-[800px]"}>
-        {isCampaignLoading ? (
-          <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
-            <p className="text-sm font-bold text-gray-500 animate-pulse font-sans">ক্যাম্পেইন লোড হচ্ছে, দয়া করে অপেক্ষা করুন...</p>
-          </div>
-        ) : isCheckoutOpen ? (
-          <CheckoutModal {...{ ALL_DISTRICTS, availableRewardPoints, calculateTotal, checkoutAddress, checkoutDistrict, checkoutDistrictSearch, checkoutItems, checkoutName, checkoutNote, checkoutPhone, checkoutPhoneFocused, getProductPrice, handleConfirmOrder, isApplyingRewardPoints, isCheckoutDistrictOpen, isOrderProcessing, isOrderSuccess, openProductDetails, paymentMethod, setPaymentMethod, removeItem, savedProfiles, setCheckoutAddress, setCheckoutDistrict, setCheckoutDistrictSearch, setCheckoutName, setCheckoutNote, setCheckoutPhone, setCheckoutPhoneFocused, setIsApplyingRewardPoints, setIsCheckoutDistrictOpen, setIsCheckoutOpen, t, toBengaliNumber, updateQuantity, isCheckoutOpen, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail, districtThanaMap, couponCode, setCouponCode, couponError, handleApplyCoupon, appliedCoupon, setAppliedCoupon, getDeliveryCharge, deliveryArea, setDeliveryArea, siteConfig }} />
-        ) : isProductDetailsOpen && selectedProduct ? (
-          <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
-        ) : (
-          <ShopList {...{ brands, categories, activeCampaign, cleanLatex, setActiveCampaign, Home, selectedCategory, searchQuery, isTrendingFilterActive, newArrivals, t, ProductCard, openProductDetails, handleBuyNow, handleLikeProduct, likedProducts, featuredProducts, featuredScrollRef, handleFeaturedScroll, featuredScrollPercent, setFeaturedScrollPercent, handleFeaturedSliderChange, isProductDetailsOpen, flashSaleProducts, selectedBrand, minPrice, maxPrice, setIsTrendingFilterActive, setSelectedCategory, setSearchInput, setSelectedBrand, setMinPrice, setMaxPrice, setIsFilterMenuOpen, isFilterMenuOpen, sortBy, setSortBy, FilterMenuModal, isLoading, productsPerPage, ProductSkeleton, filteredProducts, PackageOpen, currentPage, setCurrentPage }} />
-        )}
+        <Suspense fallback={<div className="flex-1 flex flex-col items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>}>
+          {isCampaignLoading ? (
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
+              <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
+              <p className="text-sm font-bold text-gray-500 animate-pulse font-sans">Loading campaign, please wait...</p>
+            </div>
+          ) : isCheckoutOpen ? (
+            <CheckoutModal {...{ ALL_DISTRICTS, availableRewardPoints, calculateTotal, checkoutAddress, checkoutDistrict, checkoutDistrictSearch, checkoutItems, checkoutName, checkoutNote, checkoutPhone, checkoutPhoneFocused, getProductPrice, handleConfirmOrder, isApplyingRewardPoints, isCheckoutDistrictOpen, isOrderProcessing, isOrderSuccess, openProductDetails, paymentMethod, setPaymentMethod, removeItem, savedProfiles, setCheckoutAddress, setCheckoutDistrict, setCheckoutDistrictSearch, setCheckoutName, setCheckoutNote, setCheckoutPhone, setCheckoutPhoneFocused, setIsApplyingRewardPoints, setIsCheckoutDistrictOpen, setIsCheckoutOpen, t, toBengaliNumber, updateQuantity, isCheckoutOpen, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail, districtThanaMap, couponCode, setCouponCode, couponError, handleApplyCoupon, appliedCoupon, setAppliedCoupon, getDeliveryCharge, deliveryArea, setDeliveryArea, siteConfig }} />
+          ) : isProductDetailsOpen && selectedProduct ? (
+            <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
+          ) : (
+            <ShopList {...{ brands, categories, activeCampaign, cleanLatex, setActiveCampaign, Home, selectedCategory, searchQuery, isTrendingFilterActive, newArrivals, t, ProductCard, openProductDetails, handleBuyNow, handleLikeProduct, likedProducts, featuredProducts, featuredScrollRef, handleFeaturedScroll, featuredScrollPercent, setFeaturedScrollPercent, handleFeaturedSliderChange, isProductDetailsOpen, flashSaleProducts, selectedBrand, minPrice, maxPrice, setIsTrendingFilterActive, setSelectedCategory, setSearchInput, setSelectedBrand, setMinPrice, setMaxPrice, setIsFilterMenuOpen, isFilterMenuOpen, sortBy, setSortBy, FilterMenuModal, isLoading, productsPerPage, ProductSkeleton, filteredProducts, PackageOpen, currentPage, setCurrentPage }} />
+          )}
+        </Suspense>
       </main>
         {/* Secondary Banner Slider - Added here before trending */}
-        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && activeBanners.filter(b => b.type === 'secondary').length > 0 && (
+        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && secondaryBanners.length > 0 && (
           <section className="mb-12 container mx-auto px-4">
              <div className="relative overflow-hidden group rounded-xl">
                 <AnimatePresence mode="wait">
                    <motion.div
-                      key={Math.floor(Date.now() / 5000) % activeBanners.filter(b => b.type === 'secondary').length}
+                      key={Math.floor(Date.now() / 5000) % secondaryBanners.length}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 1 }}
                       className="relative w-full cursor-pointer"
                       onClick={() => {
-                         const secondaryBanners = activeBanners.filter(b => b.type === 'secondary');
                          const currentIdx = Math.floor(Date.now() / 5000) % secondaryBanners.length;
                          const banner = secondaryBanners[currentIdx];
                          if (banner?.linkedProductId) {
@@ -7590,7 +7955,7 @@ const handleSaveQuickEdit = async () => {
                       }}
                    >
                       <img loading="lazy" 
-                         src={activeBanners.filter(b => b.type === 'secondary')[Math.floor(Date.now() / 5000) % activeBanners.filter(b => b.type === 'secondary').length]?.image} 
+                         src={secondaryBanners[Math.floor(Date.now() / 5000) % secondaryBanners.length]?.image} 
                          className="w-full h-auto block"
                          alt="Secondary Banner"
                       />
@@ -7603,7 +7968,7 @@ const handleSaveQuickEdit = async () => {
         )}
         {/* Category Sections (Replaces Trending Selection) */}
         {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && categories.map((cat) => {
-          const catProducts = products.filter(p => p.category === cat.name && !p.deleted && p.isPublished !== false);
+          const catProducts = productsByCategory[cat.name] || [];
           if (catProducts.length === 0) return null;
           
           return (
@@ -7624,7 +7989,7 @@ const handleSaveQuickEdit = async () => {
                   }}
                   className="text-sm font-bold text-primary hover:text-primary/80"
                 >
-                  {t("সব দেখুব", "View All")} "
+                  View All
                 </button>
               </div>
               <div className="relative group">
@@ -7681,44 +8046,6 @@ const handleSaveQuickEdit = async () => {
             </section>
           );
         })}
-        {/* 3.1 Active Campaigns Section */}
-        {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && campaigns.filter(c => c.isActive).length > 0 && (
-          <section className="mb-12 container mx-auto px-4">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="w-1 h-6 rounded-full bg-primary"></span>
-              <h3 className="text-xl font-black text-secondary uppercase tracking-tight">Active Campaigns</h3>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {campaigns.filter(c => c.isActive).map(campaign => (
-                <motion.div
-                  key={campaign.id}
-                  whileHover={{ y: -4 }}
-                  onClick={() => {
-                    setActiveCampaign(campaign);
-                    setSelectedCategory('all');
-                    setSelectedBrand('all');
-                    setSearchInput('');
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('campaign', campaign.slug);
-                    window.history.pushState({}, '', url.toString());
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="relative aspect-[16/9] rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all cursor-pointer group border border-gray-100"
-                >
-                  {campaign.image ? (
-                    <img loading="lazy" src={campaign.image} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt={campaign.name} />
-                  ) : (
-                    <div className="w-full h-full bg-secondary flex items-center justify-center text-white font-black">{campaign.name}</div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-3">
-                    <h4 className="text-white font-black text-xs md:text-sm line-clamp-1">{campaign.name}</h4>
-                    <p className="text-white/70 text-[10px] font-bold">{campaign.productIds?.length || 0} Items</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </section>
-        )}
         {/* Delivery Policy Notice */}
         {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
           <div className="mb-6 container mx-auto px-4">
@@ -7746,7 +8073,7 @@ const handleSaveQuickEdit = async () => {
         {/* Trust Badge / Feature Bar */}
         {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
           <div className="mb-10 container mx-auto px-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {/* Delivery Charge */}
               <button
                 onClick={() => setIsDeliveryInfoOpen(true)}
@@ -7757,11 +8084,10 @@ const handleSaveQuickEdit = async () => {
                 </div>
                 <div>
                   <p className="text-sm font-black text-secondary group-hover:text-primary transition-colors">
-                    {t("ডেলিভারি চার্জ", "Delivery Charge")}
-                    {t("ডেলিভারি চার্জ", "Delivery Charge")}
+                    Delivery Charge
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {t("ঢাকা ৳৮০ | ঢাকা? বাইরে ৳১২০", "Dhaka ৳80 | Outside ৳120")}
+                    Inside Dhaka ৳80 | Outside ৳120
                   </p>
                 </div>
               </button>
@@ -7772,10 +8098,10 @@ const handleSaveQuickEdit = async () => {
                 </div>
                 <div>
                   <p className="text-sm font-black text-secondary">
-                    {t("১০০% অরিজিনাল", "100% Authentic")}
+                    100% Authentic
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {t("কোয়ালিটা গ্যারান্টি", "Guaranteed Quality")}
+                    Guaranteed Quality
                   </p>
                 </div>
               </div>
@@ -7786,34 +8112,27 @@ const handleSaveQuickEdit = async () => {
                 </div>
                 <div>
                   <p className="text-sm font-black text-secondary">
-                    {t("নিরাপদ পেমেন্ট", "Secure Payment")}
+                    Secure Payment
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {t("বিকরা/নগদ/করুন?", "Bkash/Nagad/Card")}
+                    Bkash / Nagad / Card / Cash
                   </p>
                 </div>
               </div>
-              {/* Change Language */}
-              <button
-                onClick={() => {
-                  const langs: ("bn" | "en" | "ar" | "ur")[] = ["bn", "en", "ar", "ur"];
-                  const idx = langs.indexOf(language);
-                  setLanguage(langs[(idx + 1) % langs.length]);
-                }}
-                className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group text-left"
-              >
+              {/* 24/7 Support */}
+              <div className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm">
                 <div className="text-primary flex-shrink-0">
-                  <Languages size={28} />
+                  <Headset size={28} />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-secondary group-hover:text-primary transition-colors">
-                    {t("Change Language", "Change Language")}
+                  <p className="text-sm font-black text-secondary">
+                    Customer Support
                   </p>
                   <p className="text-[10px] font-bold text-gray-400">
-                    {language === "bn" ? "বাংলা" : language === "en" ? "English" : language === "ar" ? "العربية" : "اردو"}
+                    Dedicated Helpline Service
                   </p>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
         )}
@@ -7967,454 +8286,37 @@ const handleSaveQuickEdit = async () => {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {isAdminOpen && <AdminPanel {...{ isAdminOpen, ProfitAnalysis, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleDeleteAdmin, handleDeleteBanner, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
+        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleDeleteAdmin, handleDeleteBanner, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
       </AnimatePresence>
       <AnimatePresence>
         {selectedOrderForDetails && (
-          <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedOrderForDetails(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-white w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-[2.5rem] shadow-2xl flex flex-col"
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b flex justify-between items-center bg-gray-50/50">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 text-primary rounded-2xl">
-                    <History size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-secondary">অর্ডার ডিটেইলস</h3>
-                    <p className="text-xs text-gray-400 font-bold tracking-wider uppercase">Order ID: #{String(selectedOrderForDetails.displayId || selectedOrderForDetails.id).slice(-6).toUpperCase()}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedOrderForDetails(null)}
-                  className="p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  <X size={20} className="text-gray-400" />
-                </button>
-              </div>
-              {/* Modal Body */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
-                {/* Customer Section */}
-                <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                      <User size={12} /> কাস্টমার ইনফরমেশন
-                    </h4>
-                    {isAdminVerified && (
-                      <button
-                        onClick={() => {
-                          if (isEditingOrder) {
-                            handleUpdateOrderDetails();
-                          } else {
-                            setEditingOrderData({
-                              customerName: selectedOrderForDetails.customerName,
-                              customerPhone: selectedOrderForDetails.customerPhone,
-                              address: selectedOrderForDetails.address,
-                              items: JSON.parse(JSON.stringify(selectedOrderForDetails.items || []))
-                            });
-                            setIsEditingOrder(true);
-                          }
-                        }}
-                        className="text-[10px] font-bold px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary hover:text-white transition-colors"
-                      >
-                        {isEditingOrder ? "সেভ করুন" : "এডিট করুন"}
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="text-[10px] font-bold text-primary uppercase block mb-1">নাম</label>
-                      {isEditingOrder ? (
-                        <input type="text" value={editingOrderData.customerName || ""} onChange={e => setEditingOrderData({...editingOrderData, customerName: e.target.value})} className="w-full text-sm border p-2 rounded outline-none focus:ring-1 focus:ring-primary" />
-                      ) : (
-                        <p className="font-bold text-secondary">{selectedOrderForDetails.customerName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-primary uppercase block mb-1">ফোন</label>
-                      {isEditingOrder ? (
-                        <input type="text" value={editingOrderData.customerPhone || ""} onChange={e => setEditingOrderData({...editingOrderData, customerPhone: e.target.value})} className="w-full text-sm border p-2 rounded outline-none focus:ring-1 focus:ring-primary" />
-                      ) : (
-                        <p className="font-bold text-secondary">{selectedOrderForDetails.customerPhone}</p>
-                      )}
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-[10px] font-bold text-primary uppercase block mb-1">ঠিকানা</label>
-                      {isEditingOrder ? (
-                        <textarea value={editingOrderData.address || ""} onChange={e => setEditingOrderData({...editingOrderData, address: e.target.value})} className="w-full text-sm border p-2 rounded outline-none focus:ring-1 focus:ring-primary" rows={2} />
-                      ) : (
-                        <p className="text-sm font-bold text-gray-600 leading-relaxed">{selectedOrderForDetails.address}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Fraud Check / History Section */}
-                {(() => {
-                  const customerHistory = orderHistory.filter(o => o.customerPhone === selectedOrderForDetails.customerPhone);
-                  const totalOrders = customerHistory.length;
-                  const delivered = customerHistory.filter(o => o.status === "delivered").length;
-                  const returned = customerHistory.filter(o => ["cancelled", "returned", "failed"].includes(o.status)).length;
-                  
-                  const successRate = totalOrders > 0 ? Math.round((delivered / totalOrders) * 100) : 0;
-                  const isRisky = returned > 0 || successRate < 50;
-                  return (
-                    <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                          <AlertCircle size={14} className={isRisky ? "text-red-500" : "text-green-500"} /> কাস্টমার অর্ডার হিস্ট্রি (ইন্টারনাল)
-                        </h4>
-                        <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isRisky ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
-                          {totalOrders <= 1 && returned === 0 ? "নতুন কাস্টমার" : isRisky ? "রিস্কি কাস্টমার" : "সেইফ কাস্টমার"}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-4 gap-3">
-                        <div className="bg-gray-50 p-3 rounded-2xl text-center">
-                          <span className="text-[10px] font-bold text-gray-400 block mb-1">মোট অর্ডার</span>
-                          <span className="text-lg font-black text-gray-800">{totalOrders}</span>
-                        </div>
-                        <div className="bg-green-50 p-3 rounded-2xl text-center border border-green-100">
-                          <span className="text-[10px] font-bold text-green-500 block mb-1">ডেলিভারি</span>
-                          <span className="text-lg font-black text-green-700">{delivered}</span>
-                        </div>
-                        <div className="bg-red-50 p-3 rounded-2xl text-center border border-red-100">
-                          <span className="text-[10px] font-bold text-red-500 block mb-1">রিটার্ন/ক্যানসেল</span>
-                          <span className="text-lg font-black text-red-700">{returned}</span>
-                        </div>
-                        <div className="bg-blue-50 p-3 rounded-2xl text-center border border-blue-100">
-                          <span className="text-[10px] font-bold text-blue-500 block mb-1">সাকসেস রেট</span>
-                          <span className="text-lg font-black text-blue-700">{successRate}%</span>
-                        </div>
-                      </div>
-                      <p className="text-[9px] text-gray-400 mt-3 text-center">
-                        * পরবর্তী প্রতি কেজিতে ২০ টাকা করে অতিরিক্ত যুক্ত হবে।
-                      </p>
-                    </div>
-                  );
-                })()}
-                {/* Status & Payment Section */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase block mb-2">স্ট্যাটাস</label>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full animate-pulse ${
-                        selectedOrderForDetails.status === "pending"
-                          ? "bg-purple-500"
-                          : selectedOrderForDetails.status === "confirmed"
-                          ? "bg-blue-500"
-                          : selectedOrderForDetails.status === "shipped"
-                          ? "bg-indigo-500"
-                          : selectedOrderForDetails.status === "delivered"
-                          ? "bg-emerald-500"
-                          : selectedOrderForDetails.status === "returned"
-                          ? "bg-amber-500"
-                          : "bg-rose-500"
-                      }`} />
-                      <span className={`font-bold uppercase text-xs ${
-                        selectedOrderForDetails.status === "pending"
-                          ? "text-purple-600"
-                          : selectedOrderForDetails.status === "confirmed"
-                          ? "text-blue-600"
-                          : selectedOrderForDetails.status === "shipped"
-                          ? "text-indigo-600"
-                          : selectedOrderForDetails.status === "delivered"
-                          ? "text-emerald-600"
-                          : selectedOrderForDetails.status === "returned"
-                          ? "text-amber-600"
-                          : "text-rose-600"
-                      }`}>{selectedOrderForDetails.status}</span>
-                    </div>
-                  </div>
-                  <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase block mb-2">পেমেন্ট মেথড</label>
-                    <select
-                      value={selectedOrderForDetails.paymentMethod || "CASH"}
-                      onChange={async (e) => {
-                        const newMethod = e.target.value;
-                        setSelectedOrderForDetails(prev => prev ? { ...prev, paymentMethod: newMethod } : null);
-                        await handleUpdatePaymentMethod(selectedOrderForDetails.id, newMethod);
-                      }}
-                      className="font-bold text-primary uppercase text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1.5 outline-none focus:ring-2 focus:ring-primary shadow-sm w-full cursor-pointer"
-                    >
-                      <option value="CASH">CASH (ক্যাশ)</option>
-                      <option value="BKASH">BKASH (বিকাশ)</option>
-                      <option value="NAGAD">NAGAD (নগদ)</option>
-                      <option value="DUE">DUE (ডিউ)</option>
-                      <option value="BANK">BANK (ব্যাংক)</option>
-                      <option value="ONLINE">ONLINE (অনলাইন পেমেন্ট)</option>
-                      <option value="N/A">N/A</option>
-                    </select>
-                  </div>
-                  <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase block mb-2">ক্যাশ কালেক্ট পরিমাণ</label>
-                    <input
-                      type="number"
-                      value={selectedOrderForDetails.codAmount === undefined ? selectedOrderForDetails.total : selectedOrderForDetails.codAmount}
-                      onChange={async (e) => {
-                        const val = e.target.value === "" ? 0 : Number(e.target.value);
-                        setSelectedOrderForDetails(prev => prev ? { ...prev, codAmount: val } : null);
-                        try {
-                          const orderRef = doc(db, "orders", selectedOrderForDetails.id);
-                          await updateDoc(orderRef, { codAmount: val });
-                          setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? { ...o, codAmount: val } : o));
-                        } catch (err) {
-                          console.error("Failed to update COD amount", err);
-                        }
-                      }}
-                      className="font-bold text-primary text-xs bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-primary shadow-sm w-full"
-                    />
-                  </div>
-                </div>
-                {/* Items Section */}
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
-                    <ShoppingBag size={12} /> অর্ডার করা পণ্যসমূহ
-                  </h4>
-                  <div className="space-y-3">
-                    {(isEditingOrder ? editingOrderData.items : selectedOrderForDetails.items)?.map((item: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-4 bg-gray-50/50 p-4 rounded-3xl border border-gray-100 group transition-all hover:bg-white hover:shadow-md">
-                        <div className="w-16 h-16 rounded-2xl overflow-hidden border border-gray-100 shrink-0 bg-white">
-                          <img src={item.product?.image} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-secondary text-sm truncate">{item.product?.name}</p>
-                          {isEditingOrder ? (
-                            <div className="flex items-center gap-3 mt-2">
-                              <div className="flex flex-col gap-1 shrink-0">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">পরিমাণ</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={item.quantity}
-                                  onChange={(e) => {
-                                    const newQty = Math.max(1, Number(e.target.value));
-                                    const newItems = [...editingOrderData.items];
-                                    newItems[idx].quantity = newQty;
-                                    setEditingOrderData({ ...editingOrderData, items: newItems });
-                                  }}
-                                  className="w-16 text-xs font-bold border border-gray-200 rounded p-1.5 text-center outline-none focus:ring-1 focus:ring-primary bg-white"
-                                />
-                              </div>
-                              <div className="flex flex-col gap-1 flex-1">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">কালার</label>
-                                {item.product?.colors && item.product.colors.length > 0 ? (
-                                  <select
-                                    value={item.color || ""}
-                                    onChange={(e) => {
-                                      const newItems = [...editingOrderData.items];
-                                      newItems[idx].color = e.target.value;
-                                      setEditingOrderData({ ...editingOrderData, items: newItems });
-                                    }}
-                                    className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white cursor-pointer"
-                                  >
-                                    <option value="">N/A (নাই)</option>
-                                    {item.product.colors.map((c: string, cIdx: number) => (
-                                      <option key={cIdx} value={c}>{c}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    value={item.color || ""}
-                                    placeholder="কালার লিখুন"
-                                    onChange={(e) => {
-                                      const newItems = [...editingOrderData.items];
-                                      newItems[idx].color = e.target.value;
-                                      setEditingOrderData({ ...editingOrderData, items: newItems });
-                                    }}
-                                    className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white"
-                                  />
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-1 flex-1">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">সাইজ</label>
-                                {item.product?.sizes && item.product.sizes.length > 0 ? (
-                                  <select
-                                    value={item.size || ""}
-                                    onChange={(e) => {
-                                      const newItems = [...editingOrderData.items];
-                                      newItems[idx].size = e.target.value;
-                                      setEditingOrderData({ ...editingOrderData, items: newItems });
-                                    }}
-                                    className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white cursor-pointer"
-                                  >
-                                    <option value="">N/A (নাই)</option>
-                                    {item.product.sizes.map((s: string, sIdx: number) => (
-                                      <option key={sIdx} value={s}>{s}</option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    value={item.size || ""}
-                                    placeholder="সাইজ লিখুন"
-                                    onChange={(e) => {
-                                      const newItems = [...editingOrderData.items];
-                                      newItems[idx].size = e.target.value;
-                                      setEditingOrderData({ ...editingOrderData, items: newItems });
-                                    }}
-                                    className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white"
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] font-bold text-gray-400">Qty: {item.quantity}</span>
-                              {item.color && item.color !== "N/A" && (
-                                 <span className="text-xs bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl font-bold text-red-600 shadow-sm">কালার: {item.color}</span>
-                              )}
-                              {item.size && item.size !== "N/A" && (
-                                 <span className="text-xs bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl font-bold text-blue-600 shadow-sm">সাইজ: {item.size}</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-bold text-primary">৳{getProductPrice(item.product, item.quantity) * item.quantity}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* Totals Section */}
-                <div className="bg-secondary text-white rounded-[2rem] p-8 space-y-4">
-                  <div className="flex justify-between items-center text-secondary-foreground opacity-60">
-                    <span className="text-xs font-bold"> Sন</span>
-                    <span className="font-bold italic">
-                      {selectedOrderForDetails.totalWeight 
-                        ? (selectedOrderForDetails.totalWeight >= 1 
-                          ? `${selectedOrderForDetails.totalWeight.toFixed(2)} কেজি`
-                          : `${(selectedOrderForDetails.totalWeight * 1000).toFixed(0)} গ্রাম`)
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-secondary-foreground opacity-60">
-                    <span className="text-xs font-bold">সাব-টোটাল</span>
-                    <span className="font-bold italic">৳{selectedOrderForDetails.subtotal || selectedOrderForDetails.total - (selectedOrderForDetails.deliveryCharge || 0)}</span>
-                  </div>
-                   <div className="flex justify-between items-center text-secondary-foreground pb-4 border-b border-white/10">
-                    <span className="text-xs font-bold opacity-60">ডেলিভারি চার্জ</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        value={selectedOrderForDetails.deliveryCharge === undefined || selectedOrderForDetails.deliveryCharge === null ? "" : selectedOrderForDetails.deliveryCharge}
-                        onChange={async (e) => {
-                          const val = e.target.value === "" ? 0 : Number(e.target.value);
-                          const subtotal = selectedOrderForDetails.subtotal || (selectedOrderForDetails.total - (selectedOrderForDetails.deliveryCharge || 0));
-                          const newTotal = subtotal + val;
-                          
-                          setSelectedOrderForDetails(prev => prev ? { ...prev, deliveryCharge: val, total: newTotal } : null);
-                          
-                          try {
-                            const orderRef = doc(db, "orders", selectedOrderForDetails.id);
-                            await updateDoc(orderRef, { deliveryCharge: val, total: newTotal });
-                            setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? { ...o, deliveryCharge: val, total: newTotal } : o));
-                          } catch (err) {
-                            console.error("Failed to update delivery charge", err);
-                          }
-                        }}
-                        className="w-16 text-right bg-white/10 text-white border border-white/20 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-primary text-xs font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const val = 0;
-                          const subtotal = selectedOrderForDetails.subtotal || (selectedOrderForDetails.total - (selectedOrderForDetails.deliveryCharge || 0));
-                          const newTotal = subtotal;
-                          
-                          setSelectedOrderForDetails(prev => prev ? { ...prev, deliveryCharge: val, total: newTotal } : null);
-                          
-                          try {
-                            const orderRef = doc(db, "orders", selectedOrderForDetails.id);
-                            await updateDoc(orderRef, { deliveryCharge: val, total: newTotal });
-                            setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? { ...o, deliveryCharge: val, total: newTotal } : o));
-                          } catch (err) {
-                            console.error("Failed to update delivery charge", err);
-                          }
-                        }}
-                        className="text-[10px] bg-red-600 hover:bg-red-700 text-white font-black px-2 py-1 rounded transition-all active:scale-95 shadow-md"
-                      >
-                        ফ্রি
-                      </button>
-                    </div>
-                  </div>
-                  {selectedOrderForDetails.pointsUsed > 0 && (
-                    <div className="flex justify-between items-center text-[#ffeb3b] pb-4 border-b border-white/10">
-                      <span className="text-xs font-bold">রিওয়ার্ড পয়েন্ট ব্যবহৃত ({selectedOrderForDetails.pointsUsed} পয়েন্ট)</span>
-                      <span className="font-bold italic">-৳{selectedOrderForDetails.pointsDiscount || Math.floor(selectedOrderForDetails.pointsUsed / 10)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center pt-2">
-                    <span className="text-lg font-bold tracking-tight"></span>
-                    <span className="text-2xl font-bold text-primary italic drop-shadow-lg">৳{selectedOrderForDetails.total}</span>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Modal Footer */}
-              <div className="p-6 border-t bg-gray-50 flex gap-3">
-                 <button 
-                   onClick={() => {
-                     sendToCourier(selectedOrderForDetails);
-                     setSelectedOrderForDetails(null);
-                   }}
-                   className="flex-1 bg-primary text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-                 >
-                    <Truck size={18} /> কুরিয়ারে পাঠান
-                 </button>
-                 {selectedOrderForDetails.status === "pending" && (
-                    <button 
-                      onClick={() => {
-                        handleUpdateOrderStatus(selectedOrderForDetails.id, "confirmed");
-                        setSelectedOrderForDetails(null);
-                      }}
-                      className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                       <CheckCircle size={18} /> কনফার্ম করুন
-                    </button>
-                 )}
-              </div>
-            </motion.div>
-          </div>
+          <OrderDetailsModal
+            selectedOrderForDetails={selectedOrderForDetails}
+            setSelectedOrderForDetails={setSelectedOrderForDetails}
+            isAdminVerified={isAdminVerified}
+            isEditingOrder={isEditingOrder}
+            setIsEditingOrder={setIsEditingOrder}
+            editingOrderData={editingOrderData}
+            setEditingOrderData={setEditingOrderData}
+            handleUpdateOrderDetails={handleUpdateOrderDetails}
+            orderHistory={orderHistory}
+            setOrderHistory={setOrderHistory}
+            handleUpdatePaymentMethod={handleUpdatePaymentMethod}
+            sendToCourier={sendToCourier}
+            handleUpdateOrderStatus={handleUpdateOrderStatus}
+            getProductPrice={getProductPrice}
+          />
         )}
       </AnimatePresence>
       {/* Courier History Modal */}
       <AnimatePresence>
         {isCourierHistoryModalOpen && <CourierHistoryModal {...{ isCourierHistoryModalOpen, setIsCourierHistoryModalOpen, courierModalPhone, setCourierModalPhone, checkCourierReport, loadingCourierReports, courierReports, AlertTriangle }} />}
       </AnimatePresence>
-      {/* Floating Admin/Support & POS Buttons */}
+      {/* Floating Admin/Support Button */}
       <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3">
         {isAdmin && (
           <>
-            <button
-              onClick={() => {
-                setAdminTab("pos");
-                setShowOnlyPreOrders(false);
-                setIsAdminOpen(true);
-              }}
-              className="w-12 h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group border-2 border-white/20 cursor-pointer"
-              title="POS (Outlet Order)"
-            >
-              <ShoppingBag size={22} strokeWidth={2.2} />
-              <span className="absolute right-full mr-3 bg-purple-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                POS (আউটলেট অর্ডার)
-              </span>
-            </button>
-
+            {/* Support & Orders / Messenger Button */}
             <button
               onClick={() => {
                 if (!isMasterAdmin) {
@@ -8423,7 +8325,7 @@ const handleSaveQuickEdit = async () => {
                 setAdminTab("orders");
                 setIsAdminOpen(true);
               }}
-              className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
+              className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
               title="Support & Orders"
             >
               <Headset size={28} strokeWidth={2.5} />
@@ -8433,7 +8335,7 @@ const handleSaveQuickEdit = async () => {
                 </span>
               )}
               <span className="absolute right-full mr-3 bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                সাপোর্ট ও অর্ডার
+                সাপোর্ট ও মেসেঞ্জার
               </span>
             </button>
           </>
@@ -8459,350 +8361,27 @@ const handleSaveQuickEdit = async () => {
       {/* 9. User Profile Modal */}
       <AnimatePresence>
         {isProfileOpen && user && (
-          <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsProfileOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 30 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 30 }}
-              className="relative bg-white w-full max-w-2xl h-[90vh] md:h-[700px] rounded-3xl shadow-2xl flex flex-col md:flex-row overflow-hidden z-10"
-            >
-              {/* Back button for mobile */}
-              <button 
-                onClick={() => setIsProfileOpen(false)}
-                className="absolute top-4 right-4 z-[70] p-2 bg-secondary/50 hover:bg-secondary rounded-full text-white md:hidden"
-              >
-                <ArrowLeft size={18} />
-              </button>
-              {/* Left Sidebar: Profile Summary */}
-              <div className="w-full md:w-80 bg-secondary text-white p-8 flex flex-col overflow-y-auto no-scrollbar max-h-[40vh] md:max-h-full">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="relative group/avatar">
-                    <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-2xl font-black shadow-xl shadow-primary/20 overflow-hidden border-2 border-white/20">
-                      {(userProfile?.photoURL || user?.photoURL) ? (
-                        <img loading="lazy" 
-                          src={userProfile?.photoURL || user?.photoURL || ""} 
-                          alt="Profile" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        user.displayName?.[0] || "U"
-                      )}
-                    </div>
-                    <label 
-                      htmlFor="profile-pic-upload"
-                      className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 cursor-pointer transition-opacity"
-                    >
-                      <Camera size={20} className="text-white" />
-                    </label>
-                    <input 
-                      type="file"
-                      id="profile-pic-upload"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={handleProfileImageUpload}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-lg line-clamp-1">
-                      {user.displayName || "Customer"}
-                    </h3>
-                    <p className="text-xs text-gray-400 line-clamp-1">
-                      {user.email?.endsWith("@mobile.user") 
-                        ? user.email.replace("@mobile.user", "")
-                        : user.email}
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-white/10 rounded-2xl p-6 mb-8 border border-white/5 backdrop-blur-sm">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Wallet className="text-primary" size={20} />
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                      {t("ওয়ালেট ব্যালেন্স", "Wallet Balance")}
-                    </span>
-                  </div>
-                  <p className="text-3xl font-black text-white">
-                    ৳{userProfile?.balance || 0}
-                  </p>
-                  <button
-                    onClick={() => setIsDepositModalOpen(true)}
-                    className="w-full mt-4 bg-primary text-white py-2 rounded-xl text-xs font-black hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                  >
-                                <Plus size={16} /> {t("নতুন হোলসেল রেট যোগ করুন", "Add wholesale rates")}
-                  </button>
-                </div>
-                <div className="flex-1 space-y-2">
-                  {isAdmin && (
-                    <button
-                      onClick={() => {
-                        setIsAdminOpen(true);
-                        setIsProfileOpen(false);
-                      }}
-                      className="w-full text-left p-3 rounded-xl bg-secondary text-white font-black text-sm flex items-center gap-3 shadow-lg shadow-secondary/20 hover:scale-[1.02] transition-all"
-                    >
-                      <ShieldCheck size={18} /> {t("অ্যাডমিন প্যানেল", "Admin Panel")}
-                    </button>
-                  )}
-                  <button 
-                    onClick={() => setProfileTab("info")}
-                    className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "info" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
-                  >
-                    <User size={18} /> {t("প্রোফাইল তথ্য", "Profile Info")}
-                  </button>
-                  <button 
-                    onClick={() => setProfileTab("orders")}
-                    className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "orders" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
-                  >
-                    <History size={18} /> {t("অর্ডার হিস্ট্রি", "Order History")}
-                  </button>
-                  <button 
-                    onClick={() => setProfileTab("transactions")}
-                    className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "transactions" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
-                  >
-                    <Wallet size={18} /> {t("লেনদেনের ইতিহাস", "Transaction History")}
-                  </button>
-                  <button 
-                    onClick={() => setProfileTab("refunds")}
-                    className={`w-full text-left p-3 rounded-xl font-bold text-sm flex items-center gap-3 transition-all ${profileTab === "refunds" ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-white/5 text-gray-400 border border-transparent"}`}
-                  >
-                    <RefreshCcw size={18} /> {t("রিফান্ড রিকোয়েস্ট", "Refund Request")}
-                  </button>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="mt-8 flex items-center gap-3 text-red-400 hover:text-red-500 font-bold text-sm transition-colors"
-                >
-                  <LogOut size={18} /> {t("লগআউট করুন", "Log Out")}
-                </button>
-              </div>
-              {/* Right Content: Details & Transactions */}
-              <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
-                <div className="flex items-center justify-between mb-8">
-                  <h4 className="text-xl font-black text-secondary flex items-center gap-2">
-                    {profileTab === "transactions" && <><Wallet className="text-primary" size={24} /> {t("লেনদেনের ইতিহাস", "Transaction History")}</>}
-                    {profileTab === "orders" && <><History className="text-primary" size={24} /> {t("আপনার অর্ডারসমূহ", "Your Orders")}</>}
-                    {profileTab === "info" && <><User className="text-primary" size={24} /> {t("প্রোফাইল তথ্য", "Profile Info")}</>}
-                    {profileTab === "refunds" && <><RefreshCcw className="text-primary" size={24} /> {t("রিফান্ড রিকোয়েস্টসমূহ", "Refund Requests")}</>}
-                  </h4>
-                  <button
-                    onClick={() => setIsProfileOpen(false)}
-                    className="p-2 hover:bg-gray-100 rounded-full"
-                  >
-                    <X size={20} className="text-gray-400" />
-                  </button>
-                </div>
-                {profileTab === "transactions" && (
-                  <div className="space-y-4">
-                    {transactions.length === 0 ? (
-                      <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-                        <Wallet size={48} className="mx-auto mb-4 text-gray-200" />
-                        <p className="text-sm text-gray-400">{t("এখনো কোনো লেনদেন হয়নি", "No transactions yet")}</p>
-                      </div>
-                    ) : (
-                      transactions.map((tx: any) => (
-                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-gray-100 hover:shadow-md transition-all">
-                          <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl ${tx.type === "deposit" || tx.type === "refund" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
-                              {tx.type === "deposit" && <ArrowDownLeft size={20} />}
-                              {tx.type === "refund" && <RefreshCcw size={20} />}
-                              {tx.type === "purchase" && <ArrowUpRight size={20} />}
-                            </div>
-                            <div>
-                              <p className="font-bold text-sm text-secondary">{tx.description} {tx.method && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1 uppercase">{tx.method}</span>}</p>
-                              <p className="text-[10px] text-gray-400">{new Date(tx.createdAt).toLocaleString(language === "bn" ? "bn-BD" : "en-US")}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-black text-sm ${tx.type === "deposit" || tx.type === "refund" ? "text-green-600" : "text-red-600"}`}>
-                              {tx.type === "deposit" || tx.type === "refund" ? "+" : "-"} ৳{Math.abs(tx.amount)}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-                {profileTab === "orders" && (
-                  <div className="space-y-6">
-                    {orderHistory.length === 0 ? (
-                      <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-                        <History size={48} className="mx-auto mb-4 text-gray-200" />
-                        <p className="text-sm text-gray-400">{t("আপনার কোনো অর্ডার নেই", "You have no orders")}</p>
-                      </div>
-                    ) : (
-                      orderHistory.map((order: any) => (
-                        <div key={order.id} className="p-6 rounded-3xl bg-white border border-gray-100 shadow-sm space-y-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">ID: #{String(order.displayId || order.id).slice(-6).toUpperCase()}</p>
-                              <p className="text-xs font-bold text-gray-500">{order.date}</p>
-                            </div>
-                            {(() => {
-                              let finalStatus = order.status || 'pending';
-                              if (order.steadfastStatus) {
-                                const st = order.steadfastStatus.toLowerCase();
-                                if (st.includes('delivered')) finalStatus = 'delivered';
-                                else if (st.includes('cancelled')) finalStatus = 'cancelled';
-                                else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatched') || st.includes('picked_up')) finalStatus = 'shipped';
-                              } else if (order.pathaoStatus) {
-                                const st = order.pathaoStatus.toLowerCase();
-                                if (st.includes('delivered')) finalStatus = 'delivered';
-                                else if (st.includes('cancelled') || st.includes('return')) finalStatus = 'cancelled';
-                                else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatch') || st.includes('pickup')) finalStatus = 'shipped';
-                              }
-                              
-                              let bgColor = 'bg-amber-100 text-amber-700';
-                              if (finalStatus === 'delivered') bgColor = 'bg-green-100 text-green-700';
-                              else if (finalStatus === 'cancelled') bgColor = 'bg-red-100 text-red-700';
-                              else if (finalStatus === 'shipped') bgColor = 'bg-blue-100 text-blue-700';
-                              let label = finalStatus;
-                              if (finalStatus === 'pending') label = t('প্রসেসিং এ আছে', 'Pending');
-                              else if (finalStatus === 'processing') label = t('অর্ডারটি কনফার্ম করা হয়েছে', 'Confirmed');
-                              else if (finalStatus === 'shipped') label = t('শিপমেন্ট করা হয়েছে', 'Shipped');
-                              else if (finalStatus === 'delivered') label = t('ডেলিভার্ড', 'Delivered');
-                              else if (finalStatus === 'cancelled') label = t('বাতিল করা হয়েছে', 'Cancelled');
-                              return (
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider ${bgColor}`}>
-                                  {label}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                          <div className="space-y-3">
-                             {order.items.map((item: any, idx: number) => (
-                               <div key={idx} className="flex flex-col py-2 border-b border-gray-50 last:border-0">
-                                 <div className="flex justify-between text-base items-center">
-                                   <span className="text-[12px] font-black text-gray-900">{item.product.name} <span className="text-lg font-black text-primary ml-2 italic">x{item.quantity}</span></span>
-                                   <span className="font-black text-secondary">৳{getProductPrice(item.product, item.quantity) * item.quantity}</span>
-                                 </div>
-                                 <div className="flex gap-2 mt-1">
-                                   {item.color && item.color !== "N/A" && (
-                                     <span className="text-[12px] font-black text-primary">
-                                       {t("কালার", "Color")}: {item.color}
-                                     </span>
-                                   )}
-                                   {item.size && item.size !== "N/A" && (
-                                     <span className="text-[12px] font-black text-blue-600">
-                                              {t("সাইজ", "Size")}: {item.size}
-                                     </span>
-                                   )}
-                                 </div>
-                                </div>
-                             ))}
-                          </div>
-                          <div className="pt-4 border-t border-gray-50 flex justify-between items-center">
-                            <div>
-                              <p className="text-[10px] text-gray-400 font-bold">{t("মোট পেমেন্ট", "Total Payment")}</p>
-                              <p className="text-lg font-black text-primary">৳{order.total}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              {order.status === "delivered" && (
-                                <button 
-                                  onClick={() => {
-                                    setSelectedOrderForRefund(order);
-                                    setRefundReason("");
-                                  }}
-                                  className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-colors"
-                                >
-                                  {t("রিফান্ড রিকোয়েস্ট", "Refund Request")}
-                                </button>
-                              )}
-                              {order.status === "shipped" && (
-                                <div className="text-right">
-                                  <div className="flex items-center gap-1 justify-end text-[10px] font-black text-primary mb-1">
-                                    <Truck size={12} /> {order.courierName || t("কুরিয়ার সার্ভিস", "Courier Service")}
-                                  </div>
-                                  <p className="text-[10px] font-bold text-gray-500">ID: {order.trackingId || t("প্রসেসিং", "Processing")}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-                {profileTab === "refunds" && (
-                   <div className="space-y-6">
-                      {refundRequests.filter(r => r.userId === user.uid).length === 0 ? (
-                        <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-                          <RefreshCcw size={48} className="mx-auto mb-4 text-gray-200" />
-                          <p className="text-sm text-gray-400">{t("আপনার কোনো রিফান্ড রিকোয়েস্ট নেই", "You have no refund requests")}</p>
-                        </div>
-                      ) : (
-                        refundRequests.filter(r => r.userId === user.uid).map((refund: any) => (
-                           <div key={refund.id} className="p-6 rounded-3xl bg-white border border-gray-100 shadow-sm space-y-4">
-                              <div className="flex justify-between items-start">
-                                 <div>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">অর্ডার ID: #{String(refund.orderId).slice(-6).toUpperCase()}</p>
-                                    <p className="text-xs font-bold text-gray-500">{new Date(refund.createdAt).toLocaleString(language === "bn" ? "bn-BD" : "en-US")}</p>
-                                 </div>
-                                 <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                    refund.status === "approved" ? "bg-green-100 text-green-700" :
-                                    refund.status === "rejected" ? "bg-red-100 text-red-700" :
-                                    "bg-amber-100 text-amber-700"
-                                 }`}>
-                                    {refund.status === "approved" ? t("অ্যাপ্রুভড", "Approved") :
-                                     refund.status === "rejected" ? t("রিজেক্টেড", "Rejected") :
-                                     t("পেন্ডিং", "Pending")}
-                                 </span>
-                              </div>
-                              <div className="bg-gray-50 p-4 rounded-xl">
-                                 <p className="text-[10px] font-black text-gray-400 uppercase mb-2">{t("রিফান্ড রিজন", "Refund Reason")}</p>
-                                 <p className="text-xs font-bold text-secondary">{refund.reason}</p>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                 <p className="text-lg font-black text-primary">৳{refund.amount}</p>
-                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t("টোটাল রিফান্ড", "Total Refund")}</p>
-                              </div>
-                           </div>
-                        ))
-                      )}
-                   </div>
-                )}
-                {profileTab === "info" && (
-                   <div className="p-8 bg-gray-50 rounded-3xl border border-gray-100 text-center">
-                      <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl border-4 border-white">
-                        <User size={40} className="text-primary" />
-                      </div>
-                      <p className="font-black text-secondary text-lg mb-1">{user.displayName || t("কাস্টমার", "Customer")}</p>
-                      <p className="text-xs text-gray-400 mb-8">
-                        {user.email?.endsWith("@mobile.user") 
-                          ? user.email.replace("@mobile.user", "")
-                          : user.email}
-                      </p>
-                      <div className="bg-white p-6 rounded-2xl border border-gray-100 text-left shadow-sm">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{t("ব্যালেন্স", "Balance")}</label>
-                        <p className="text-2xl font-black text-primary">৳{userProfile?.balance || 0}</p>
-                      </div>
-                   </div>
-                )}
-                {/* Info Card */}
-                <div className="mt-8 bg-blue-50 p-6 rounded-3xl border border-blue-100 flex items-start gap-4">
-                  <div className="p-2 bg-blue-500 text-white rounded-xl shadow-lg">
-                    <Award size={20} />
-                  </div>
-                  <div>
-                    <h5 className="font-bold text-blue-900 text-sm mb-1">
-                      {t("রিফান্ড পলিসি", "Refund Policy")}
-                    </h5>
-<p className="text-sm text-blue-800 leading-relaxed">
-                      {t(
-                        "পেমেন্ট করার পর ট্রানজেকশন আইডিটি নিচে অটোমেটিক রিফান্ড করা হবে। এই টাকা ব্যবহার করে আপনি পরবর্তী যেকোনো সেট হয়ে যাবে।",
-                        "After making payment, the transaction ID will be verified automatically. You can use this balance for any future orders."
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
+          <ProfileModal
+            isProfileOpen={isProfileOpen}
+            setIsProfileOpen={setIsProfileOpen}
+            user={user}
+            userProfile={userProfile}
+            handleProfileImageUpload={handleProfileImageUpload}
+            t={t}
+            setIsDepositModalOpen={setIsDepositModalOpen}
+            isAdmin={isAdmin}
+            setIsAdminOpen={setIsAdminOpen}
+            profileTab={profileTab}
+            setProfileTab={setProfileTab}
+            handleLogout={handleLogout}
+            transactions={transactions}
+            orderHistory={orderHistory}
+            language={language}
+            getProductPrice={getProductPrice}
+            setSelectedOrderForRefund={setSelectedOrderForRefund}
+            setRefundReason={setRefundReason}
+            refundRequests={refundRequests}
+          />
         )}
       </AnimatePresence>
       {/* 10. Deposit Modal */}
@@ -8815,10 +8394,12 @@ const handleSaveQuickEdit = async () => {
             {/* Brand/About */}
             <div className="col-span-2 md:col-span-1">
               <h2 className="text-2xl font-extrabold text-primary mb-6">
-                i SHOP BD (আই শপ বিডি)
+                i SHOP BD
               </h2>
               <p className="text-sm text-gray-400 leading-relaxed mb-6">
-                {siteConfig?.aboutUs || "i SHOP BD (আই শপ বিডি) - আপনার বিশ্বস্ত অনলাইন শপিং প্ল্যাটফর্ম। আমরা সুলভ মূল্যে সর্বোচ্চ মানের ইলেকট্রিক গ্যাজেট, স্মার্ট এক্সেসরিজ এবং হোম এপ্লায়েন্স নিশ্চিত করি।"}
+                {siteConfig?.aboutUs && !siteConfig.aboutUs.includes("আই শপ বিডি") 
+                  ? siteConfig.aboutUs 
+                  : "i SHOP BD - Premium Gadgets & Electronics Shop. Providing top-quality products at affordable prices is our primary mission."}
               </p>
               <div className="flex gap-4">
                 <a
@@ -8841,14 +8422,14 @@ const handleSaveQuickEdit = async () => {
             </div>
             {/* Quick Links */}
             <div>
-              <h4 className="font-bold mb-6">কুইক লিঙ্ক</h4>
+              <h4 className="font-bold mb-6">Quick Links</h4>
               <ul className="space-y-3 text-sm text-gray-400">
                 <li>
                   <button
                     onClick={() => setIsAppDownloadModalOpen(true)}
                     className="hover:text-primary transition-colors cursor-pointer font-bold text-primary flex items-center gap-1.5"
                   >
-                    <Download size={14} /> অ্যাপ ডাউনলোড করুন
+                    <Download size={14} /> Download App
                   </button>
                 </li>
                 <li>
@@ -8856,7 +8437,7 @@ const handleSaveQuickEdit = async () => {
                     onClick={() => setActivePolicy("about")}
                     className="hover:text-primary transition-colors cursor-pointer"
                   >
-                    আমাদের সম্পর্কে
+                    About Us
                   </button>
                 </li>
                 <li>
@@ -8864,7 +8445,7 @@ const handleSaveQuickEdit = async () => {
                     onClick={() => setActivePolicy("privacy")}
                     className="hover:text-primary transition-colors cursor-pointer"
                   >
-                    প্রাইভেসি পলিসি
+                    Privacy Policy
                   </button>
                 </li>
                 <li>
@@ -8872,7 +8453,7 @@ const handleSaveQuickEdit = async () => {
                     onClick={() => setActivePolicy("refund")}
                     className="hover:text-primary transition-colors cursor-pointer"
                   >
-                    রিফান্ড পলিসি
+                    Refund Policy
                   </button>
                 </li>
                 <li>
@@ -8880,14 +8461,14 @@ const handleSaveQuickEdit = async () => {
                     onClick={() => setActivePolicy("terms")}
                     className="hover:text-primary transition-colors cursor-pointer"
                   >
-                    শর্তাবলী
+                    Terms & Conditions
                   </button>
                 </li>
               </ul>
             </div>
             {/* Customer Care */}
             <div>
-              <h4 className="font-bold mb-6">কাস্টমার কেয়ার</h4>
+              <h4 className="font-bold mb-6">Customer Care</h4>
               <div className="flex items-center gap-3 mb-4">
                 <a
                   href={`tel:${siteConfig?.supportPhone1?.replace(/[^0-9]/g, '') || "01777600844"}`}
@@ -8898,7 +8479,7 @@ const handleSaveQuickEdit = async () => {
                 </a>
                 <div>
                   <p className="text-xs text-gray-400">
-                    হেল্পলাইন (সকাল ৯টা - রাত ৯টা)
+                    Helpline (9:00 AM - 9:00 PM)
                   </p>
                   <div className="flex flex-col">
                     <a
@@ -8927,7 +8508,7 @@ const handleSaveQuickEdit = async () => {
                   <Facebook size={20} />
                 </a>
                 <div>
-<p className="text-xs text-gray-400">ফেসবুক মেসেঞ্জার</p>
+                  <p className="text-xs text-gray-400">Facebook Messenger</p>
                   <a
                     href={siteConfig?.facebookUrl || "https://www.facebook.com/online.ishopbd/"}
                     target="_blank"
@@ -8941,7 +8522,7 @@ const handleSaveQuickEdit = async () => {
             </div>
             {/* Payment Methods */}
             <div className="col-span-2 md:col-span-1">
-              <h4 className="font-bold mb-6">পেমেন্ট মেথড</h4>
+              <h4 className="font-bold mb-6">Payment Methods</h4>
               <div className="grid grid-cols-3 gap-2">
                 <div className="h-10 bg-white/10 rounded flex items-center justify-center p-2">
                   <span className="text-[10px] font-bold text-[#D12053]">BKASH</span>
@@ -8962,7 +8543,7 @@ const handleSaveQuickEdit = async () => {
             </div>
           </div>
           <div className="text-center text-xs text-gray-500">
-            <p>Â© ২০২৪ i SHOP BD | সকল স্বত্ব সংরক্ষিত।</p>
+            <p>© 2026 i SHOP BD | All Rights Reserved.</p>
             <p className="mt-1">
               Developed for the best shopping experience in Bangladesh.
             </p>
@@ -8995,211 +8576,43 @@ const handleSaveQuickEdit = async () => {
       </AnimatePresence>
       {/* Notification Drawer */}
       <AnimatePresence>
-        {isNotifOpen && <NotifModal {...{ setIsNotifOpen, notifications, handleClearAllNotifications, handleDismissNotification, Info, products, setSelectedProduct, setIsProductDetailsOpen, toast, isNotifOpen }} />}
+        {isNotifOpen && <NotifModal {...{ setIsNotifOpen, notifications, handleClearAllNotifications, handleDismissNotification, Info, products, setSelectedProduct, setIsProductDetailsOpen, toast, isNotifOpen, setIsTrackingOpen, setTrackingInput, handleTrackOrder }} />}
       </AnimatePresence>
       {/* Admin Verification Modal */}
       <AnimatePresence>
         {isAdmin && !isAdminVerified && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-secondary/95 backdrop-blur-md"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative"
-            >
-              <div className="absolute top-0 left-0 w-full h-2 bg-primary" />
-              <div className="text-center mb-8 mt-4">
-                <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-primary mx-auto mb-6">
-                  {is2FAPending ? <Key size={40} /> : <ShieldCheck size={40} />}
-                </div>
-                <h3 className="text-2xl font-black text-secondary mb-2">
-                  {is2FAPending ? "Two-Step Verification" : "Admin Verification"}
-                </h3>
-                <p className="text-sm text-gray-400 font-medium px-4">
-                  {is2FAPending 
-                    ? "Please enter the 6-digit code sent to your phone for security."
-                    : "Enter your access password to use the admin or moderator panel."}
-                </p>
-              </div>
-              <div className="space-y-4">
-                {is2FAPending ? (
-                  <>
-                    {!adminOTPSent ? (
-                      <button
-                        onClick={handleSendAdminOTP}
-                        disabled={isSendingOTP}
-                        className="w-full bg-primary text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3"
-                      >
-                        {isSendingOTP ? "Sending code..." : "Send Code (SMS)"}
-                        {!isSendingOTP && <Phone size={20} />}
-                      </button>
-                    ) : (
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={adminOTPInput}
-                          onChange={(e) => setAdminOTPInput(e.target.value)}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && handleVerifyOTP()
-                          }
-                          placeholder="Verification Code"
-                          className={`w-full bg-gray-50 border ${adminOTPError ? "border-red-500" : "border-gray-200"} rounded-2xl py-5 px-6 outline-none focus:ring-2 focus:ring-primary font-bold text-center text-lg tracking-widest`}
-                        />
-                        <button
-                          onClick={handleVerifyOTP}
-                          className="w-full bg-primary text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 mt-4"
-                        >
-                          Verify Code
-                        </button>
-                        <button
-                          onClick={() => setAdminOTPSent(false)}
-                          className="w-full text-center text-xs text-primary font-bold mt-4 underline"
-                        >
-                          Go Back
-                        </button>
-                      </div>
-                    )}
-                    {adminOTPError && (
-                      <p className="text-xs text-red-500 font-bold text-center mt-2">
-                        {adminOTPError}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div className="relative">
-                      <input
-                        type={showAdminPassword ? "text" : "password"}
-                        value={adminPasswordInput}
-                        onChange={(e) => setAdminPasswordInput(e.target.value)}
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && handleVerifyAdminPassword()
-                        }
-                        placeholder="Enter Password..."
-                        className={`w-full bg-gray-50 border ${adminPasswordError ? "border-red-500" : "border-gray-200"} rounded-2xl py-5 pl-6 pr-14 outline-none focus:ring-2 focus:ring-primary font-bold text-center text-lg tracking-widest`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAdminPassword(!showAdminPassword)}
-                        className="absolute right-4 top-[35px] -translate-y-1/2 text-gray-400 hover:text-primary transition-colors p-2 z-10"
-                      >
-                        {showAdminPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                      </button>
-                      {adminPasswordError && (
-                        <motion.p
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs text-red-500 font-bold text-center mt-2"
-                        >
-                          Incorrect password! Please try again.
-                        </motion.p>
-                      )}
-                    </div>
-                    <button
-                      onClick={handleVerifyAdminPassword}
-                      className="w-full bg-secondary text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-3"
-                    >
-                      Enter Panel
-                      <ArrowUpRight size={20} />
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={() => signOut(auth)}
-                  className="w-full bg-white text-gray-400 font-bold py-3 hover:text-red-500 transition-all text-xs"
-                >
-                    Log Out
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-        {/* Policy Modal */}
-        {activePolicy && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
-            onClick={() => setActivePolicy(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-white w-full max-w-2xl max-h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary text-white">
-                <h3 className="text-xl font-bold">
-                  {activePolicy === "about" && "আমাদের সম্পর্কে"}
-                  {activePolicy === "privacy" && "গোপনীয়তা নীতি"}
-                  {activePolicy === "refund" && "রিফান্ড পলিসি"}
-                  {activePolicy === "terms" && "নিয়ম S  "}
-                </h3>
-                <button
-                  onClick={() => setActivePolicy(null)}
-                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              <div className="p-8 overflow-y-auto text-secondary leading-relaxed space-y-6 overflow-x-hidden no-scrollbar">
-                {activePolicy === "about" && (
-                  <div className="space-y-4">
-                    <p className="font-bold text-lg text-primary">
-i SHOP BD - বাংলাদেশের অন্যতম জনপ্রিয় শপ
-                    </p>
-                    <div className="whitespace-pre-wrap leading-relaxed">
-                      {siteConfig?.aboutUs}
-                    </div>
-                    <div className="pt-4 border-t border-gray-100">
-                      <p className="font-black text-secondary mb-2 uppercase text-[10px] md:text-xs tracking-widest">:</p>
-                      <p className="text-sm font-bold text-gray-600">
-                        হেল্পলাইন ১: {siteConfig?.supportPhone1}
-                      </p>
-                      <p className="text-sm font-bold text-gray-600 mt-1">
-                        হেল্পলাইন ২: {siteConfig?.supportPhone2}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {activePolicy === "privacy" && (
-                  <div className="space-y-4 whitespace-pre-wrap leading-relaxed">
-                    {siteConfig?.privacyPolicy}
-                  </div>
-                )}
-                {activePolicy === "refund" && (
-                  <div className="space-y-4 whitespace-pre-wrap leading-relaxed">
-                    {siteConfig?.refundPolicy}
-                  </div>
-                )}
-                {activePolicy === "terms" && (
-                  <div className="space-y-4 whitespace-pre-wrap leading-relaxed">
-                    {siteConfig?.termsAndConditions}
-                  </div>
-                )}
-              </div>
-              <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end">
-                <button
-                  onClick={() => setActivePolicy(null)}
-                  className="bg-secondary text-white px-8 py-2.5 rounded-xl font-bold hover:bg-black transition-all"
-                >
-                  বন্ধ করুন
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <AdminPasswordModal
+            isAdmin={isAdmin}
+            isAdminVerified={isAdminVerified}
+            is2FAPending={is2FAPending}
+            adminOTPSent={adminOTPSent}
+            setAdminOTPSent={setAdminOTPSent}
+            isSendingOTP={isSendingOTP}
+            handleSendAdminOTP={handleSendAdminOTP}
+            adminOTPInput={adminOTPInput}
+            setAdminOTPInput={setAdminOTPInput}
+            handleVerifyOTP={handleVerifyOTP}
+            adminOTPError={adminOTPError}
+            showAdminPassword={showAdminPassword}
+            setShowAdminPassword={setShowAdminPassword}
+            adminPasswordInput={adminPasswordInput}
+            setAdminPasswordInput={setAdminPasswordInput}
+            handleVerifyAdminPassword={handleVerifyAdminPassword}
+            adminPasswordError={adminPasswordError}
+          />
         )}
       </AnimatePresence>
-      {/* Language Selection Modal */}
+      {/* Policy Modal */}
       <AnimatePresence>
-        {isLangModalOpen && <LangModal {...{ setIsLangModalOpen, Languages, t, languageList, setLanguage, language, isLangModalOpen }} />}
+        {activePolicy && (
+          <PolicyModal
+            activePolicy={activePolicy}
+            setActivePolicy={setActivePolicy}
+            siteConfig={siteConfig}
+          />
+        )}
       </AnimatePresence>
+
       {/* App Download Modal */}
       <AnimatePresence>
         {isAppDownloadModalOpen && (
@@ -9215,129 +8628,18 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
       {/* Slide-over Cart Drawer */}
       <AnimatePresence>
         {isCartDrawerOpen && (
-          <div className="fixed inset-0 z-[600] overflow-hidden">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsCartDrawerOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            {/* Drawer Container */}
-            <div className="absolute inset-y-0 right-0 max-w-full flex">
-              <motion.div
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="w-screen max-w-md bg-white shadow-2xl flex flex-col h-full"
-              >
-                {/* Header */}
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShoppingCart className="text-primary" size={24} />
-                    <h3 className="text-lg font-black text-secondary">Shopping Cart ({cartCount})</h3>
-                  </div>
-                  <button
-                    onClick={() => setIsCartDrawerOpen(false)}
-                    className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 rounded-full transition-all active:scale-90"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {/* Items List */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
-                  {cartItems.length === 0 ? (
-                    <div className="text-center py-20">
-                      <ShoppingCart className="mx-auto text-gray-300 mb-4" size={64} />
-                      <p className="text-sm font-bold text-gray-400">Your cart is empty.</p>
-                      <button
-                        onClick={() => setIsCartDrawerOpen(false)}
-                        className="mt-4 px-6 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-red-700 transition-all"
-                      >
-                        Start Shopping
-                      </button>
-                    </div>
-                  ) : (
-                    cartItems.map((item, idx) => (
-                      <div key={idx} className="flex gap-4 p-4 bg-gray-50/50 hover:bg-gray-50 rounded-2xl border border-gray-100/50 transition-all">
-                        <img
-                          src={item.product.image || "/logo.png"}
-                          alt={item.product.name}
-                          className="w-16 h-16 object-cover rounded-xl border border-gray-100"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-black text-secondary truncate">{item.product.name}</h4>
-                          <p className="text-[10px] text-gray-400 font-bold mt-0.5">
-                            {item.color && item.color !== 'N/A' && `Color: ${item.color}`}
-                            {item.size && item.size !== 'N/A' && ` | Size: ${item.size}`}
-                          </p>
-                          <div className="flex items-center justify-between mt-2.5">
-                            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
-                              <button
-                                onClick={() => updateQuantity(item.product.id, -1, item.color, item.size)}
-                                className="px-2 py-1 text-gray-500 hover:bg-gray-100 transition-all"
-                              >
-                                -
-                              </button>
-                              <span className="px-3 text-xs font-bold text-secondary">{item.quantity}</span>
-                              <button
-                                onClick={() => updateQuantity(item.product.id, 1, item.color, item.size)}
-                                className="px-2 py-1 text-gray-500 hover:bg-gray-100 transition-all"
-                              >
-                                +
-                              </button>
-                            </div>
-                            <span className="text-xs font-black text-primary">৳{getProductPrice(item.product, item.quantity) * item.quantity}</span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => removeItem(item.product.id, item.color, item.size)}
-                          className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Footer */}
-                {cartItems.length > 0 && (
-                  <div className="p-6 border-t border-gray-100 bg-gray-50/50 space-y-4">
-                    <div className="flex justify-between items-center text-sm font-bold text-secondary">
-                      <span>Subtotal:</span>
-                      <span className="text-lg font-black text-primary">
-                        ৳{cartItems.reduce((acc, curr) => acc + getProductPrice(curr.product, curr.quantity) * curr.quantity, 0)}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-gray-400 font-bold">Shipping and other charges will be calculated at checkout.</p>
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <button
-                        onClick={() => setIsCartDrawerOpen(false)}
-                        className="w-full bg-white hover:bg-gray-50 text-secondary border border-gray-200 font-bold py-3.5 rounded-xl transition-all active:scale-95 text-xs text-center"
-                      >
-                        Continue Shopping
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCheckoutItems([...cartItems]);
-                          setIsCartDrawerOpen(false);
-                          setIsCheckoutOpen(true);
-                          detectLocation();
-                        }}
-                        className="w-full bg-primary hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 text-xs text-center"
-                      >
-                        Complete Order
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          </div>
+          <CartDrawerModal
+            isCartDrawerOpen={isCartDrawerOpen}
+            setIsCartDrawerOpen={setIsCartDrawerOpen}
+            cartItems={cartItems}
+            cartCount={cartCount}
+            updateQuantity={updateQuantity}
+            removeItem={removeItem}
+            getProductPrice={getProductPrice}
+            setCheckoutItems={setCheckoutItems}
+            setIsCheckoutOpen={setIsCheckoutOpen}
+            detectLocation={detectLocation}
+          />
         )}
       </AnimatePresence>
       {/* PWA Install Banner */}
@@ -9472,114 +8774,13 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
       {/* Order Receipt Modal */}
       <AnimatePresence>
         {completedOrderReceipt && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setCompletedOrderReceipt(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-md max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
-            >
-              <div className="overflow-y-auto flex-1 w-full scroll-smooth no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
-                <div ref={receiptRef} className="bg-white pb-6 w-full h-max">
-                <div className="p-6 md:p-8 bg-green-50 border-b border-green-100 flex flex-col items-center text-center">
-                  <img loading="lazy" src="/logo.png" alt="Logo" className="h-10 mb-5 object-contain" />
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 animate-bounce">
-                    <Check size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold text-green-800 mb-1">অর্ডার সফল হয়েছে!</h3>
-                  <p className="text-green-600 text-sm font-medium">অর্ডার আইডি: #{String(completedOrderReceipt.orderId || "N/A").slice(-6).toUpperCase()}</p>
-                </div>
-                
-                <div className="p-6 md:p-8 space-y-6">
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
-                    <h4 className="font-bold text-secondary mb-4 flex items-center gap-2">
-                      <User size={18} className="text-primary" />
-                      সাম্প্রতিক অর্ডারসমূহ
-                    </h4>
-                    <div className="space-y-3 text-sm">
-                      <p><span className="font-bold text-gray-500">নাম:</span> {completedOrderReceipt.customerName}</p>
-                      <p><span className="font-bold text-gray-500">ফোন:</span> {completedOrderReceipt.customerPhone}</p>
-                      <p><span className="font-bold text-gray-500">ঠিকানা:</span> {completedOrderReceipt.address}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-secondary mb-4 flex items-center gap-2">
-                      <Package size={18} className="text-primary" />
-                      সাম্প্রতিক অর্ডারসমূহ
-                    </h4>
-                    
-                    <div className="space-y-3 mb-4">
-                      {completedOrderReceipt.items?.map((item: any, idx: number) => (
-                        <div key={idx} className="flex justify-between items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <div>
-                            <p className="font-bold text-secondary text-sm">{item.product?.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {item.quantity} {(() => {
-                                switch (item.product?.unit) {
-                                  case "piece": return "পিস";
-                                  case "kg": return "কেজি";
-                                  case "gm": return "গ্রাম";
-                                  case "liter": return "লিটার";
-                                  case "ml": return "মিলি";
-                                  case "packet": return "প্যাকেট";
-                                  case "box": return "বক্স";
-                                  case "set": return "সেট";
-                                  default: return item.product?.unit || "পিস";
-                                }
-                              })()} {item.color || item.size ? `(${[item.color, item.size].filter(Boolean).join(', ')})` : ''}
-                            </p>
-                          </div>
-                          <p className="font-bold text-primary">৳{(item.price !== undefined ? item.price : (item.product?.price || 0)) * item.quantity}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="border-t border-dashed pt-4 space-y-2 text-sm">
-                      <div className="flex justify-between text-gray-600">
-                        <p>সাবটোটাল</p>
-                        <p>৳{completedOrderReceipt.subtotal}</p>
-                      </div>
-                      <div className="flex justify-between text-gray-600">
-                        <p>ডেলিভারি চার্জ</p>
-                        <p>৳{completedOrderReceipt.deliveryCharge}</p>
-                      </div>
-                      {completedOrderReceipt.appliedCoupon && (
-                        <div className="flex justify-between text-green-600">
-                          <p>ডিসকাউন্ট</p>
-                          <p>- ৳{completedOrderReceipt.subtotal + completedOrderReceipt.deliveryCharge - completedOrderReceipt.total}</p>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-black text-lg text-secondary pt-2 border-t">
-                        <p>সর্বমোট</p>
-                        <p className="text-primary">৳{completedOrderReceipt.total}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              </div>
-              <div className="p-4 bg-gray-50 border-t shrink-0 flex gap-3 w-full">
-                <button
-                  onClick={handleDownloadReceipt}
-                  disabled={isDownloadingReceipt}
-                  className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-                >
-                  {isDownloadingReceipt ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <Download size={18} />
-                  )}
-                  ডাউনলোড করুন
-                </button>
-              </div>
-            </motion.div>
-          </div>
+          <ReceiptModal
+            completedOrderReceipt={completedOrderReceipt}
+            setCompletedOrderReceipt={setCompletedOrderReceipt}
+            receiptRef={receiptRef}
+            handleDownloadReceipt={handleDownloadReceipt}
+            isDownloadingReceipt={isDownloadingReceipt}
+          />
         )}
       </AnimatePresence>
       <AnimatePresence>
@@ -9588,459 +8789,18 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
       {/* ===== Landing Page Editor Modal ===== */}
       <AnimatePresence>
         {landingEditorProduct && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-stretch justify-center"
-          >
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="bg-white w-full max-w-7xl m-3 md:m-6 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
-            >
-              {/* Header */}
-              <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-6 py-4 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                    <LayoutTemplate size={20} />
-                  </div>
-                  <div>
-                    <h2 className="font-black text-lg">Landing Page Setup</h2>
-                    <p className="text-purple-200 text-xs">{landingEditorProduct.name}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => copyLandingPageLink(landingEditorProduct.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-bold transition-all"
-                  >
-                    <Share2 size={15} /> লিংক কপি
-                  </button>
-                  <button
-                    onClick={saveLandingConfig}
-                    disabled={isSavingLandingConfig}
-                    className="flex items-center gap-2 px-4 py-2 bg-white text-purple-700 hover:bg-purple-50 rounded-xl text-sm font-black transition-all disabled:opacity-60"
-                  >
-                    {isSavingLandingConfig ? <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" /> : <Save size={15} />}
-                    সেভ করুন
-                  </button>
-                  <button
-                    onClick={() => setLandingEditorProduct(null)}
-                    className="w-9 h-9 bg-white/20 hover:bg-white/40 rounded-xl flex items-center justify-center transition-all"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-              {/* Body: Editor + Preview */}
-              <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-                {/* === Left: Editor === */}
-                <div className="w-full md:w-[420px] shrink-0 overflow-y-auto border-r border-gray-100 p-5 space-y-5 bg-gray-50">
-                  {/* Headline */}
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider">📢 টেক্সট কন্টেন্ট</h3>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">হেডলাইন</label>
-                      <input
-                        type="text"
-                        value={landingEditorConfig.headline}
-                        onChange={e => setLandingEditorConfig((p: any) => ({ ...p, headline: e.target.value }))}
-                        placeholder={landingEditorProduct.name}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-purple-400 transition-all bg-gray-50"
-                      />
-                      <p className="text-[10px] text-gray-400 mt-1">খালি রাখলে প্রোডাক্টের নাম দেখাবে</p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">সাবহেডলাইন / বিবরণ</label>
-                      <textarea
-                        value={landingEditorConfig.subheadline}
-                        onChange={e => setLandingEditorConfig((p: any) => ({ ...p, subheadline: e.target.value }))}
-                        placeholder="প্রোডাক্ট সম্পর্কে সংক্ষিপ্ত বিবরণ"
-                        rows={2}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-400 transition-all bg-gray-50 resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">ব্লক টেক্সট (লাল ব্লক)</label>
-                      <input
-                        type="text"
-                        value={landingEditorConfig.badgeText}
-                        onChange={e => setLandingEditorConfig((p: any) => ({ ...p, badgeText: e.target.value }))}
-                        placeholder={`ধামাকা অফার! ${landingEditorProduct.discount || 0}% ছাড়`}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-purple-400 transition-all bg-gray-50"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">অফার মূল্য (Landing Price)</label>
-                        <input
-                          type="number"
-                          value={landingEditorConfig.priceOverride || ""}
-                          onChange={e => setLandingEditorConfig((p: any) => ({ ...p, priceOverride: e.target.value }))}
-                          placeholder={String(landingEditorProduct.price)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-purple-400 transition-all bg-gray-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1">আগের দাম (Old Price)</label>
-                        <input
-                          type="number"
-                          value={landingEditorConfig.oldPriceOverride || ""}
-                          onChange={e => setLandingEditorConfig((p: any) => ({ ...p, oldPriceOverride: e.target.value }))}
-                          placeholder={String(landingEditorProduct.oldPrice || "")}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-purple-400 transition-all bg-gray-50"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">মার্কেটিং কপি / বিস্তারিত</label>
-                      <textarea
-                        value={landingEditorConfig.bodyText}
-                        onChange={e => setLandingEditorConfig((p: any) => ({ ...p, bodyText: e.target.value }))}
-                        placeholder="পণ্যের বিশেষত্ব, অফার বিবরণ, ব্যবহারবিধি ইত্যাদি"
-                        rows={4}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-purple-400 transition-all bg-gray-50 resize-none"
-                      />
-                    </div>
-                  </div>
-                  {/* Extra Images */}
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider">📸 অতিরিক্ত ইমেজ (সর্বোচ্চ ৩টি)</h3>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(landingEditorConfig.extraImages || []).map((img: string, idx: number) => (
-                        <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 group">
-                          <img loading="lazy" src={img} className="w-full h-full object-cover" alt={`extra-${idx}`} />
-                          <button
-                            onClick={() => setLandingEditorConfig((p: any) => ({ ...p, extraImages: p.extraImages.filter((_: any, i: number) => i !== idx) }))}
-                            className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
-                      {(landingEditorConfig.extraImages || []).length < 3 && (
-                        <label className="aspect-square rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-400 cursor-pointer flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-purple-500 transition-all">
-                          <Plus size={20} />
-                          <span className="text-[10px] font-bold">ছবি যোগ</span>
-                          <input type="file" accept="image/*" multiple className="hidden" onChange={handleLandingEditorImageUpload} />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                  {/* YouTube Video URLs */}
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider">📺 ইউটিউব ভিডিও লিংক</h3>
-                    <div className="space-y-3">
-                      {(landingEditorConfig.videoUrls || []).map((url: string, idx: number) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={url}
-                            onChange={e => setLandingEditorConfig((p: any) => ({ ...p, videoUrls: p.videoUrls.map((u: string, i: number) => i === idx ? e.target.value : u) }))}
-                            placeholder="https://www.youtube.com/watch?v=..."
-                            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-purple-400"
-                          />
-                          <button
-                            onClick={() => setLandingEditorConfig((p: any) => ({ ...p, videoUrls: p.videoUrls.filter((_: string, i: number) => i !== idx) }))}
-                            className="w-7 h-7 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-lg flex items-center justify-center transition-all shrink-0"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                      {(landingEditorConfig.videoUrls || []).length < 3 && (
-                        <button
-                          onClick={() => setLandingEditorConfig((p: any) => ({ ...p, videoUrls: [...(p.videoUrls || []), ""] }))}
-                          className="w-full py-2 border-2 border-dashed border-gray-200 hover:border-purple-400 text-gray-400 hover:text-purple-500 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1"
-                        >
-                          <Plus size={14} /> ভিডিও লিংক যোগ করুন
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {/* Feature Points */}
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider">✅ ফিচার পয়েন্টস</h3>
-                    <div className="space-y-3">
-                      {(landingEditorConfig.features || []).map((feat: any, idx: number) => (
-                        <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <select
-                              value={feat.icon}
-                              onChange={e => setLandingEditorConfig((p: any) => ({ ...p, features: p.features.map((f: any, i: number) => i === idx ? { ...f, icon: e.target.value } : f) }))}
-                              className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none"
-                            >
-                              <option value="zap">âš¡ Zap</option>
-                              <option value="thumbsup">👍 ThumbsUp</option>
-                              <option value="truck">🚚 Truck</option>
-                              <option value="shield">🛡️ Shield</option>
-                            </select>
-                            <button
-                              onClick={() => setLandingEditorConfig((p: any) => ({ ...p, features: p.features.filter((_: any, i: number) => i !== idx) }))}
-                              className="w-6 h-6 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-full flex items-center justify-center transition-all"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            value={feat.title}
-                            onChange={e => setLandingEditorConfig((p: any) => ({ ...p, features: p.features.map((f: any, i: number) => i === idx ? { ...f, title: e.target.value } : f) }))}
-                            placeholder="ফিচার শিরোনাম"
-                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none focus:border-purple-400"
-                          />
-                          <textarea
-                            value={feat.desc}
-                            onChange={e => setLandingEditorConfig((p: any) => ({ ...p, features: p.features.map((f: any, i: number) => i === idx ? { ...f, desc: e.target.value } : f) }))}
-                            placeholder="বিবরণ"
-                            rows={2}
-                            className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-purple-400 resize-none"
-                          />
-                        </div>
-                      ))}
-                      {(landingEditorConfig.features || []).length < 4 && (
-                        <button
-                          onClick={() => setLandingEditorConfig((p: any) => ({ ...p, features: [...p.features, { icon: "zap", title: "", desc: "" }] }))}
-                          className="w-full py-2.5 border-2 border-dashed border-gray-200 hover:border-purple-400 text-gray-400 hover:text-purple-500 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1"
-                        >
-                          <Plus size={14} /> ফিচার যোগ করুন
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {/* Package/Weight Options */}
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-                    <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider">📦 প্যাকেজ / ওজন অপশন</h3>
-                    <div className="space-y-3">
-                      {(landingEditorConfig.packages || []).map((pkg: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={pkg.weight}
-                            onChange={e => setLandingEditorConfig((p: any) => ({ ...p, packages: p.packages.map((f: any, i: number) => i === idx ? { ...f, weight: e.target.value } : f) }))}
-                            placeholder="যেমন: ১০ কেজি"
-                            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none focus:border-purple-400"
-                          />
-                          <input
-                            type="number"
-                            value={pkg.price}
-                            onChange={e => setLandingEditorConfig((p: any) => ({ ...p, packages: p.packages.map((f: any, i: number) => i === idx ? { ...f, price: e.target.value } : f) }))}
-                            placeholder="দাম"
-                            className="w-24 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-purple-400"
-                          />
-                          <button
-                            onClick={() => setLandingEditorConfig((p: any) => ({ ...p, packages: p.packages.filter((_: any, i: number) => i !== idx) }))}
-                            className="w-7 h-7 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white rounded-lg flex items-center justify-center transition-all shrink-0"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => setLandingEditorConfig((p: any) => ({ ...p, packages: [...(p.packages || []), { weight: "", price: "" }] }))}
-                        className="w-full py-2 border-2 border-dashed border-gray-200 hover:border-purple-400 text-gray-400 hover:text-purple-500 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1"
-                      >
-                        <Plus size={14} /> অপশন যোগ করুন
-                      </button>
-                    </div>
-                  </div>
-                  {/* Trust Badges Toggle */}
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <span className="text-sm font-bold text-gray-700">ট্রাস্ট ব্লক দেখাবে?</span>
-                      <div
-                        onClick={() => setLandingEditorConfig((p: any) => ({ ...p, showTrustBadges: !p.showTrustBadges }))}
-                        className={`w-12 h-6 rounded-full transition-all relative cursor-pointer ${landingEditorConfig.showTrustBadges ? 'bg-purple-500' : 'bg-gray-200'}`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${landingEditorConfig.showTrustBadges ? 'left-7' : 'left-1'}`} />
-                      </div>
-                    </label>
-                    <p className="text-[10px] text-gray-400 mt-1">১০০% অরিজিনাল, ক্যাশ অন ডেলিভারি, রিপ্লেসমেন্ট ব্লক</p>
-                  </div>
-                </div>
-                {/* === Right: Live Preview === */}
-                <div className="flex-1 overflow-y-auto bg-gray-100 p-5 flex flex-col items-center gap-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <button
-                      onClick={() => setLandingPreviewTab('mobile')}
-                      className={`px-4 py-1.5 rounded-full text-xs font-black transition-all ${landingPreviewTab === 'mobile' ? 'bg-purple-600 text-white shadow' : 'bg-white text-gray-500'}`}
-                    >📱 মোবাইল</button>
-                    <button
-                      onClick={() => setLandingPreviewTab('desktop')}
-                      className={`px-4 py-1.5 rounded-full text-xs font-black transition-all ${landingPreviewTab === 'desktop' ? 'bg-purple-600 text-white shadow' : 'bg-white text-gray-500'}`}
-                    >🖥️ ডেস্কটপ</button>
-                  </div>
-                  <div className={`bg-white shadow-2xl overflow-hidden overflow-y-auto ${landingPreviewTab === 'mobile' ? 'w-[360px] rounded-[2rem] border-4 border-gray-800 max-h-[600px]' : 'w-full max-w-2xl rounded-2xl border border-gray-200 max-h-[600px]'}`}>
-                    {/* Preview Header */}
-                    <div className="bg-white/95 shadow-sm px-4 py-2.5 flex items-center justify-between border-b border-gray-100">
-                      <span className="text-sm font-extrabold text-red-600">i SHOP <span className="text-gray-800">BD</span></span>
-                      <button className="bg-red-600 text-white text-[9px] font-black px-3 py-1.5 rounded-full flex items-center gap-1">
-                        <ShoppingCart size={10} /> অর্ডার করুন
-                      </button>
-                    </div>
-                    {/* Preview Hero */}
-                    <div className="p-4 border-b border-gray-100">
-                      <div className="flex gap-3 items-start">
-                        {(() => {
-                          const previewCarouselImages = [landingEditorProduct?.image, ...(landingEditorProduct?.images || [])].filter(Boolean);
-                          return previewCarouselImages.length > 1 ? (
-                            <div className="w-32 h-32 shrink-0 bg-white rounded-xl border border-gray-100">
-                              <ImageCarousel images={previewCarouselImages} className="aspect-square rounded-xl h-full" />
-                            </div>
-                          ) : (
-                            <div className="w-32 h-32 shrink-0 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 flex items-center justify-center">
-                              <img loading="lazy" src={landingEditorProduct.image} className="max-w-full max-h-full object-contain" alt="" />
-                            </div>
-                          );
-                        })()}
-                        <div className="space-y-2 flex-1">
-                          <span className="inline-block bg-red-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full">
-                            {landingEditorConfig.badgeText || `ধামাকা অফার! ${(() => {
-                              const p = landingEditorConfig.priceOverride ? Number(landingEditorConfig.priceOverride) : landingEditorProduct.price;
-                              const o = landingEditorConfig.oldPriceOverride ? Number(landingEditorConfig.oldPriceOverride) : landingEditorProduct.oldPrice;
-                              return o && p && o > p ? Math.round(((o - p) / o) * 100) : (landingEditorProduct.discount || 0);
-                            })()}% ছাড়`}
-                          </span>
-                          <p className="font-black text-gray-900 text-sm leading-tight">
-                            {landingEditorConfig.headline || landingEditorProduct.name}
-                          </p>
-                          {landingEditorConfig.subheadline && (
-                            <p className="text-[10px] text-gray-500 leading-relaxed">{landingEditorConfig.subheadline}</p>
-                          )}
-                          <div className="flex items-center gap-2">
-                            {landingEditorConfig.oldPriceOverride || landingEditorProduct.oldPrice ? (
-                              <span className="text-xs text-gray-400 line-through">৳{landingEditorConfig.oldPriceOverride || landingEditorProduct.oldPrice}</span>
-                            ) : null}
-                            <span className="text-base font-black text-red-600">৳{landingEditorConfig.priceOverride || landingEditorProduct.price}</span>
-                          </div>
-                        </div>
-                      </div>
-                      {/* Extra images preview */}
-                      {(landingEditorConfig.extraImages || []).length > 0 && (
-                        <div className="flex gap-2 mt-3">
-                          {(landingEditorConfig.extraImages || []).map((img: string, i: number) => (
-                            <div key={i} className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 flex items-center justify-center">
-                              <img loading="lazy" src={img} className="max-w-full max-h-full object-contain" alt="" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {/* Preview Trust Badges */}
-                    {landingEditorConfig.showTrustBadges && (
-                      <div className="flex justify-around px-3 py-3 border-b border-gray-100 bg-gray-50">
-                        {[
-                          { icon: <ShieldCheck size={14} className="text-green-600" />, label: "১০০% অরিজিনাল" },
-                          { icon: <Truck size={14} className="text-blue-600" />, label: "ক্যাশ অন ডেলিভারি" },
-                          { icon: <RefreshCcw size={14} className="text-orange-500" />, label: "রিপ্লেসমেন্ট" },
-                        ].map((b, i) => (
-                          <div key={i} className="flex flex-col items-center gap-1">
-                            {b.icon}
-                            <span className="text-[8px] font-bold text-gray-600">{b.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Preview Features */}
-                    <div className="p-4 space-y-2">
-                      {/* Image Carousel Preview */}
-                      {(() => {
-                        const carouselImagesPreview = [...(landingEditorConfig.extraImages || [])].filter(Boolean);
-                        return carouselImagesPreview.length > 1 ? (
-                          <div className="mb-4">
-                            <ImageCarousel images={carouselImagesPreview} />
-                          </div>
-                        ) : carouselImagesPreview.length === 1 ? (
-                          <div className="mb-4 rounded-xl overflow-hidden border border-gray-100">
-                            <img loading="lazy" src={carouselImagesPreview[0]} className="w-full aspect-[16/9] object-contain bg-gray-50" />
-                          </div>
-                        ) : null;
-                      })()}
-                      <p className="text-[10px] font-black text-gray-800 text-center mb-3">কেন আমাদের প্রোডাক্টটি কিনবেন?</p>
-                      {landingEditorConfig.bodyText && (
-                        <div className="bg-amber-50 rounded-lg p-2 mb-2">
-                          <div className="text-[9px] text-gray-600 leading-relaxed whitespace-pre-wrap">{landingEditorConfig.bodyText}</div>
-                        </div>
-                      )}
-                      {/* YouTube Video Preview */}
-                      {(() => {
-                        const previewVideoUrls = [...(landingEditorConfig.videoUrls || [])];
-                        if (landingEditorProduct?.videoUrl && !previewVideoUrls.includes(landingEditorProduct.videoUrl)) {
-                          previewVideoUrls.unshift(landingEditorProduct.videoUrl);
-                        }
-                        const validUrls = previewVideoUrls.filter(Boolean);
-                        
-                        return validUrls.length > 0 ? (
-                          <div className="space-y-2 mb-2">
-                            {validUrls.map((url: string, idx: number) => {
-                              const embedUrl = getYouTubeEmbedUrl(url);
-                              return embedUrl ? (
-                                <div key={idx} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-100 shadow-sm">
-                                  <iframe
-                                    className="w-full h-full"
-                                    src={embedUrl}
-                                    title={`YouTube video ${idx + 1}`}
-                                    frameBorder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                  />
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        ) : null;
-                      })()}
-                      {(landingEditorConfig.features || []).filter((f: any) => f.title).map((feat: any, i: number) => (
-                        <div key={i} className="flex gap-2 p-2 bg-gray-50 rounded-lg border border-gray-100">
-                          <div className="shrink-0 mt-0.5">
-                            {feat.icon === 'zap' && <Zap size={12} className="text-red-500" />}
-                            {feat.icon === 'thumbsup' && <ThumbsUp size={12} className="text-red-500" />}
-                            {feat.icon === 'truck' && <Truck size={12} className="text-blue-600" />}
-                            {feat.icon === 'shield' && <ShieldCheck size={12} className="text-green-600" />}
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black text-gray-800">{feat.title}</p>
-                            <p className="text-[8px] text-gray-500">{feat.desc.slice(0, 50)}{feat.desc.length > 50 ? '...' : ''}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Preview CTA */}
-                    <div className="p-4">
-                      <div className="bg-green-600 text-white text-[10px] font-black py-3 rounded-xl text-center">
-                        অর্ডার কনফর্ম করুন (৳{landingEditorProduct.price + 60})
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-400 font-medium">এটি একটি রিভিউ। আসল পেজে সম্পূর্ণ ফর্ম দেখাবে।</p>
-                </div>
-              </div>
-              {/* Footer */}
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0">
-                <p className="text-xs text-gray-500">পরিবর্তন সেভ করতে উপরেএ° "সেভ করুন" বাটনে ক্লিক করুন।</p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setLandingEditorProduct(null)}
-                    className="px-5 py-2 bg-white border border-gray-200 text-gray-600 font-bold text-sm rounded-xl hover:bg-gray-100 transition-all"
-                  >
-                    বন্ধ করুন
-                  </button>
-                  <button
-                    onClick={saveLandingConfig}
-                    disabled={isSavingLandingConfig}
-                    className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-60"
-                  >
-                    {isSavingLandingConfig ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save size={15} />}
-                    সেভ করুন
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+          <LandingPageEditorModal
+            landingEditorProduct={landingEditorProduct}
+            setLandingEditorProduct={setLandingEditorProduct}
+            copyLandingPageLink={copyLandingPageLink}
+            saveLandingConfig={saveLandingConfig}
+            isSavingLandingConfig={isSavingLandingConfig}
+            landingEditorConfig={landingEditorConfig}
+            setLandingEditorConfig={setLandingEditorConfig}
+            handleLandingEditorImageUpload={handleLandingEditorImageUpload}
+            landingPreviewTab={landingPreviewTab}
+            setLandingPreviewTab={setLandingPreviewTab}
+          />
         )}
       </AnimatePresence>
 
@@ -10087,7 +8847,7 @@ i SHOP BD - বাংলাদেশের অন্যতম জনপ্রি
           </div>
         )}
       </AnimatePresence>
-
+      </React.Suspense>
     </div>
   );
 }

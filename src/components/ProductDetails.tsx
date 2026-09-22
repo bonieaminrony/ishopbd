@@ -1,6 +1,6 @@
 import React from 'react';
 import axios from 'axios';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
 import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info, MessageSquare, ArrowRight } from 'lucide-react';
 import { getProductPath } from '../utils/helpers';
@@ -375,8 +375,8 @@ export default function ProductDetails(props: ProductDetailsProps) {
                   </div>
                 <div className="relative w-full md:w-[85%] mx-auto aspect-square bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center group">
                   <ZoomableImage
-                    keyId={modalDisplayImage}
-                    src={modalDisplayImage || selectedProduct.image}
+                    keyId={modalDisplayImage || selectedProduct.image || selectedProduct.images?.[0]}
+                    src={modalDisplayImage || selectedProduct.image || selectedProduct.images?.[0]}
                     alt={selectedProduct.name}
                   />
                   {selectedProduct.isFreeDelivery && (
@@ -1308,7 +1308,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
                        aiRecommendations.map((product) => (
                          <div key={product.id} className="flex gap-3 group cursor-pointer bg-white hover:bg-gray-50 transition-all duration-300 rounded-xl p-2 -mx-2 hover:scale-[1.02]" onClick={() => openProductDetails(product)}>
                            <div className="w-20 h-20 shrink-0 bg-white rounded-lg border border-gray-100 overflow-hidden flex items-center justify-center p-1 relative">
-                             <img src={product.image} alt={product.name} className="w-full h-full object-contain group-hover:scale-115 transition-transform duration-300" />
+                             <img src={product.image} loading="lazy" decoding="async" alt={product.name} className="w-full h-full object-contain group-hover:scale-115 transition-transform duration-300" />
                              {product.discount > 0 && (
                                <span className="absolute top-0.5 left-0.5 bg-primary text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">
                                  -{product.discount}%
@@ -1385,3 +1385,6 @@ export default function ProductDetails(props: ProductDetailsProps) {
       </>
   );
 }
+
+export const MemoizedProductDetails = React.memo(ProductDetails);
+

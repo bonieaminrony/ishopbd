@@ -64,6 +64,7 @@ export const ZoomableImage = ({
         key={keyId}
         src={src}
         alt={alt}
+        decoding="async"
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: isZoomed ? 2.5 : 1 }}
         drag={false}
@@ -72,7 +73,7 @@ export const ZoomableImage = ({
       />
       {isZoomed && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md text-white text-[10px] px-4 py-1.5 rounded-full pointer-events-none md:hidden animate-bounce">
-          জুম করা আছে - টেনে দেখুন
+          Zoomed In - Drag to Pan
         </div>
       )}
     </div>

@@ -1,111 +1,51 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <script>
-      (function() {
-        // Test localStorage accessibility
-        var localStorageOk = true;
-        try {
-          var testKey = "__test_store__";
-          window.localStorage.setItem(testKey, "1");
-          window.localStorage.removeItem(testKey);
-        } catch (e) {
-          localStorageOk = false;
-        }
-
-        var makeFallbackStore = function() {
-          var store = {};
-          return {
-            getItem: function(key) {
-              return key in store ? store[key] : null;
-            },
-            setItem: function(key, value) {
-              store[key] = String(value);
-            },
-            removeItem: function(key) {
-              delete store[key];
-            },
-            clear: function() {
-              for (var key in store) {
-                delete store[key];
-              }
-            },
-            key: function(index) {
-              var keys = Object.keys(store);
-              return keys[index] || null;
-            },
-            get length() {
-              return Object.keys(store).length;
-            }
-          };
-        };
-
-        if (!localStorageOk) {
-          console.warn("localStorage is blocked/unavailable. Falling back to in-memory store.");
-          try {
-            Object.defineProperty(window, 'localStorage', {
-              value: makeFallbackStore(),
-              writable: true,
-              configurable: true
-            });
-          } catch(err) {
-            console.error("Failed to polyfill localStorage:", err);
-          }
-        }
-
-        // Test sessionStorage accessibility
-        var sessionStorageOk = true;
-        try {
-          var testKey = "__test_session__";
-          window.sessionStorage.setItem(testKey, "1");
-          window.sessionStorage.removeItem(testKey);
-        } catch (e) {
-          sessionStorageOk = false;
-        }
-
-        if (!sessionStorageOk) {
-          console.warn("sessionStorage is blocked/unavailable. Falling back to in-memory store.");
-          try {
-            Object.defineProperty(window, 'sessionStorage', {
-              value: makeFallbackStore(),
-              writable: true,
-              configurable: true
-            });
-          } catch(err) {
-            console.error("Failed to polyfill sessionStorage:", err);
-          }
-        }
-      })();
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Automatically purge legacy cross-project cache keys to prevent showing products from other projects
+      try {
+        ['cached_products', 'cached_categories', 'cached_banners', 'cached_admins', 'products_last_fetch', 'products_updated_at', 'products', 'categories'].forEach(function(k) {
+          localStorage.removeItem(k);
+        });
+      } catch(e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://firestore.googleapis.com" />
-    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@100..800&family=Atma:wght@300;400;500;600;700&family=Baloo+Da+2:wght@400..800&family=Galada&family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@100..900&family=Mina:wght@400;700&family=Noto+Sans+Bengali:wght@100..900&family=Tiro+Bangla:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.maateen.me/solaiman-lipi/font.css" rel="stylesheet" />
-    <title>i SHOP BD - Best Online Gadget & Lifestyle Store in Bangladesh</title>
-    <meta name="description" content="i SHOP BD - বাংলাদেশের বিশ্বস্ত অনলাইন গ্যাজেট ও লাইফস্টাইল শপ। সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland), Power Bank, Rechargeable Fan, Tripod, প্রিমিয়াম ঘড়ি ও ওয়ালেট কিনুন। Fast Cash on Delivery!" />
-    <meta name="keywords" content="i SHOP BD, আই শপ বিডি, ishopbd, ishop bd, wireless microphone price in bangladesh, dji mic bd, boya mic bd, ulanzi mic bd, power bank price in bangladesh, awei power bank bd, geeoo power bank bd, rechargeable fan price in bd, jysuper fan price in bangladesh, action camera accessories bd, tripod price bd, bluetooth neckband bd, rado watch bd, mens wallet bd, online gadget shop bangladesh" />
+    <link rel="preload" href="/logo.png" as="image" type="image/png" fetchpriority="high" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
+    </noscript>
+    <title>i SHOP BD (আই শপ বিডি) - Best Online Gadget, Microphone & Electronics Store in BD</title>
+    <meta name="description" content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের বিশ্বস্ত অনলাইন গ্যাজেট ও লাইফস্টাইল শপ। সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Power Bank, Rechargeable Fan, Smart Watch, Headphone কিনুন। Fast Cash on Delivery!" />
+    <meta name="keywords" content="i SHOP BD, ishopbd, ishop bd, আই শপ বিডি, ishopbd.com, ishop bangladesh, online shopping bangladesh, wireless microphone bd, dji mic bd, boya mic bd, ulanzi mic bd, power bank bd, charger fan bd, jysuper fan bd, smart watch bd, neckband bd, online gadget shop bangladesh" />
     <meta name="author" content="i SHOP BD" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow" />
+    <meta name="google-site-verification" content="googlea7215920fe1a9449" />
     <meta name="geo.region" content="BD" />
     <meta name="geo.placename" content="Bangladesh" />
     <meta name="language" content="Bengali, English" />
-    <link rel="icon" href="/favicon.ico" sizes="any">
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2026.1">
+    <link rel="icon" type="image/png" sizes="48x48" href="/icon-48x48.png?v=2026.1">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png?v=2026.1">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png?v=2026.1">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192x192.png?v=2026.1">
+    <link rel="shortcut icon" href="/favicon.ico?v=2026.1">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ishopbd.com" />
     <meta property="og:title" content="i SHOP BD - Best Online Gadget & Lifestyle Store in Bangladesh" />
     <meta property="og:description" content="i SHOP BD - সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Tripod, স্মার্ট এক্সেসরিজ, প্রিমিয়াম ঘড়ি ও ওয়ালেট কিনুন।" />
-    <meta property="og:image" content="https://ishopbd.com/logo.png" />
+    <meta property="og:image" content="https://ishopbd.com/og-image.png" />
+    <meta property="og:image:secure_url" content="https://ishopbd.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="i SHOP BD Online Shop" />
     <meta property="og:site_name" content="i SHOP BD" />
     <meta property="og:locale" content="bn_BD" />
 
@@ -114,7 +54,8 @@
     <meta name="twitter:url" content="https://ishopbd.com" />
     <meta name="twitter:title" content="i SHOP BD - Best Online Gadget & Lifestyle Store in Bangladesh" />
     <meta name="twitter:description" content="i SHOP BD - সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Tripod, স্মার্ট এক্সেসরিজ, প্রিমিয়াম ঘড়ি ও ওয়ালেট কিনুন।" />
-    <meta name="twitter:image" content="https://ishopbd.com/logo.png" />
+    <meta name="twitter:image" content="https://ishopbd.com/og-image.png" />
+    <meta name="twitter:image:alt" content="i SHOP BD Online Shop" />
 
     <!-- CANONICAL_URL_PLACEHOLDER -->
 
@@ -211,30 +152,40 @@
     <meta name="theme-color" content="#ff4d4f" />
     <link rel="apple-touch-icon" href="/icon-192x192.png" />
 
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-90PDPQL0RJ"></script>
+    <!-- Deferred Third-Party Analytics (GTM & FB Pixel) -->
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
+      function initAnalytics() {
+        // Google Tag Manager
+        var gtm = document.createElement('script');
+        gtm.async = true;
+        gtm.src = 'https://www.googletagmanager.com/gtag/js?id=G-90PDPQL0RJ';
+        document.head.appendChild(gtm);
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', 'G-90PDPQL0RJ');
 
-      gtag('config', 'G-90PDPQL0RJ');
+        // Facebook Pixel
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window,document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        if (window.fbq) {
+          fbq('init', '1358996272808579');
+          fbq('track', 'PageView');
+        }
+      }
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(function() { setTimeout(initAnalytics, 1500); });
+      } else {
+        window.addEventListener('load', function() { setTimeout(initAnalytics, 1500); });
+      }
     </script>
-
-    <!-- Facebook Pixel Code -->
-    <script>
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window,document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '1358996272808579');
-      fbq('track', 'PageView');
-    </script>
-    <!-- End Facebook Pixel Code -->
   </head>
   <body>
     <noscript>
@@ -242,86 +193,54 @@
     </noscript>
     <div id="root">
       <style>
-        #initial-loader {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100vw;
-          height: 100vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background-color: #ffffff;
-          z-index: 99999;
-          font-family: system-ui, -apple-system, sans-serif;
-        }
-        .loader-spinner {
-          width: 50px;
-          height: 50px;
-          border: 4px solid #ffe5e5;
-          border-top: 4px solid #ff4d4f;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-          margin-bottom: 20px;
-        }
-        .loader-text {
-          color: #ff4d4f;
-          font-size: 1.2rem;
-          font-weight: 600;
-          letter-spacing: 1px;
-          animation: pulse 1.5s ease-in-out infinite;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 1; }
-        }
+        .sk-wrap { max-width: 1200px; margin: 0 auto; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .sk-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f0f0f0; gap: 12px; }
+        .sk-logo { width: 110px; height: 36px; background: #ffe4e6; border-radius: 8px; }
+        .sk-search { flex: 1; max-width: 500px; height: 40px; background: #f3f4f6; border-radius: 9999px; }
+        .sk-icons { display: flex; gap: 10px; }
+        .sk-icon { width: 36px; height: 36px; background: #f3f4f6; border-radius: 50%; }
+        .sk-hero { width: 100%; aspect-ratio: 16/7; max-height: 360px; background: linear-gradient(90deg, #fef2f2 0%, #fee2e2 50%, #fef2f2 100%); border-radius: 16px; margin: 16px 0; animation: sk-pulse 1.5s ease-in-out infinite; }
+        .sk-cats { display: flex; gap: 8px; overflow: hidden; margin-bottom: 20px; }
+        .sk-cat { width: 90px; height: 32px; background: #f3f4f6; border-radius: 9999px; flex-shrink: 0; }
+        .sk-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        @media (min-width: 768px) { .sk-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; } }
+        .sk-card { background: #fff; border: 1px solid #f0f0f0; border-radius: 16px; padding: 10px; }
+        .sk-img { width: 100%; aspect-ratio: 1/1; background: #f9fafb; border-radius: 12px; margin-bottom: 8px; }
+        .sk-line { height: 12px; background: #f3f4f6; border-radius: 6px; margin-bottom: 6px; }
+        .sk-line-sm { width: 60%; height: 14px; background: #fee2e2; border-radius: 6px; }
+        @keyframes sk-pulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 0.4; } }
       </style>
-      <div id="initial-loader">
-        <div class="loader-spinner"></div>
-        <div class="loader-text">i SHOP BD...</div>
+      <div class="sk-wrap">
+        <div class="sk-head">
+          <div class="sk-logo"></div>
+          <div class="sk-search"></div>
+          <div class="sk-icons">
+            <div class="sk-icon"></div>
+            <div class="sk-icon"></div>
+          </div>
+        </div>
+        <div class="sk-hero"></div>
+        <div class="sk-cats">
+          <div class="sk-cat"></div>
+          <div class="sk-cat"></div>
+          <div class="sk-cat"></div>
+          <div class="sk-cat"></div>
+        </div>
+        <div class="sk-grid">
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line-sm"></div></div>
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line-sm"></div></div>
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line-sm"></div></div>
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line-sm"></div></div>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered: ', registration);
-          }).catch(registrationError => {
-            console.log('SW registration failed: ', registrationError);
-          });
+          navigator.serviceWorker.register('/sw.js').catch(function() {});
         });
       }
-
-      // Security: Prevent code inspection
-      document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-      });
-      document.addEventListener('keydown', function(e) {
-        if (e.keyCode == 123) { // F12
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 73) { // Ctrl+Shift+I
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 67) { // Ctrl+Shift+C
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.shiftKey && e.keyCode == 74) { // Ctrl+Shift+J
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.keyCode == 85) { // Ctrl+U
-          e.preventDefault();
-        }
-        if (e.ctrlKey && e.keyCode == 83) { // Ctrl+S
-          e.preventDefault();
-        }
-      });
     </script>
   </body>
 </html>

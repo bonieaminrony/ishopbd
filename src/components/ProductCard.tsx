@@ -41,14 +41,16 @@ export const ProductCard = React.memo(({
         onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
       >
         <img
-          src={product.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop"}
+          src={product.image || product.images?.[0] || product.variants?.[0]?.image || "/logo.png"}
           alt={product.name}
+          width="300"
+          height="300"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop";
+            (e.target as HTMLImageElement).src = "/logo.png";
           }}
         />
         
@@ -61,7 +63,7 @@ export const ProductCard = React.memo(({
           )}
           {product.isFreeDelivery && (
             <div className="bg-emerald-600 text-white text-[9px] md:text-[10px] font-black px-2.5 py-1 rounded-full whitespace-nowrap shadow-md flex items-center gap-1 border border-emerald-500/10">
-              <Truck size={11} /> ফ্রি ডেলিভারি
+              <Truck size={11} /> Free Delivery
             </div>
           )}
         </div>

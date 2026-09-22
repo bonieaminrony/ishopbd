@@ -10,6 +10,7 @@ import axios from "axios";
 import { GoogleGenAI } from "@google/genai";
 import compression from "compression";
 import crypto from "crypto";
+import https from "https";
 
 dotenv.config();
 
@@ -86,7 +87,79 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// ---- In-Memory Product Cache (AI Recommendations + Chat) ----
+// ---- Firestore REST API Fallback & Parsing Helpers ----
+function parseFirestoreValue(val: any): any {
+  if (!val || typeof val !== 'object') return val;
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return parseInt(val.integerValue, 10);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('timestampValue' in val) return val.timestampValue;
+  if ('nullValue' in val) return null;
+  if ('arrayValue' in val) return (val.arrayValue.values || []).map(parseFirestoreValue);
+  if ('mapValue' in val) {
+    const obj: Record<string, any> = {};
+    for (const [k, v] of Object.entries(val.mapValue.fields || {})) {
+      obj[k] = parseFirestoreValue(v);
+    }
+    return obj;
+  }
+  return null;
+}
+
+function parseFirestoreDoc(doc: any): any {
+  const id = doc.name.split('/').pop();
+  const data: Record<string, any> = { id };
+  for (const [k, v] of Object.entries(doc.fields || {})) {
+    data[k] = parseFirestoreValue(v);
+  }
+  return data;
+}
+
+async function fetchFirestoreCollectionFromRest(collectionName: string): Promise<any[]> {
+  const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyClPZu-7eztcpTyOT0vVWX-znIwouTg7I8";
+  let url: string | null = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/${collectionName}?key=${apiKey}&pageSize=100`;
+  const allDocs: any[] = [];
+  
+  while (url) {
+    const response: any = await axios.get(url, { timeout: 10000 });
+    const data = response.data;
+    if (data.documents && Array.isArray(data.documents)) {
+      allDocs.push(...data.documents);
+    }
+    if (data.nextPageToken) {
+      url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/${collectionName}?key=${apiKey}&pageSize=100&pageToken=${data.nextPageToken}`;
+    } else {
+      url = null;
+    }
+  }
+  
+  return allDocs.map(parseFirestoreDoc);
+}
+
+const firestoreHttpsAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 30000 });
+
+async function fetchFirestoreProductsRunQuery(): Promise<any[]> {
+  const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyClPZu-7eztcpTyOT0vVWX-znIwouTg7I8";
+  const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents:runQuery?key=${apiKey}`;
+  const response: any = await axios.post(
+    url,
+    { structuredQuery: { from: [{ collectionId: "products" }] } },
+    {
+      headers: { "Referer": "http://localhost:3000/" },
+      httpsAgent: firestoreHttpsAgent,
+      timeout: 10000
+    }
+  );
+  if (Array.isArray(response.data)) {
+    return response.data
+      .filter((item: any) => item.document)
+      .map((item: any) => parseFirestoreDoc(item.document));
+  }
+  return [];
+}
+
+// ---- In-Memory Product Cache (AI Recommendations + Chat + API) ----
 // Products are cached for 5 minutes to avoid repeated Firestore reads
 interface CachedProducts {
   data: any[];
@@ -95,30 +168,133 @@ interface CachedProducts {
 let productCache: CachedProducts | null = null;
 const PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+let isAdminSdkHealthy = true;
+let pendingProductsFetch: Promise<any[]> | null = null;
+
 async function getCachedProducts(db?: FirebaseFirestore.Firestore): Promise<any[]> {
   const now = Date.now();
-  if (productCache && now < productCache.expiresAt) {
+  if (productCache && now < productCache.expiresAt && productCache.data.length > 0) {
     return productCache.data;
   }
-  try {
-    const firestore = db || getFirestore();
-    const snap = await firestore.collection("products").get();
-    const products = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter((p: any) => !p.deleted);
-    productCache = { data: products, expiresAt: now + PRODUCT_CACHE_TTL_MS };
-    return products;
-  } catch (e: any) {
-    console.warn("getCachedProducts warning:", e.message);
-    return productCache?.data || [];
+
+  if (pendingProductsFetch) {
+    return pendingProductsFetch;
   }
+
+  pendingProductsFetch = (async () => {
+    try {
+      if (isAdminSdkHealthy) {
+        try {
+          const firestore = db || getFirestore();
+          const snap = await firestore.collection("products").get();
+          const products = snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter((p: any) => !p.deleted);
+          if (products.length > 0) {
+            productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+            return products;
+          }
+        } catch (e: any) {
+          console.warn("getCachedProducts Admin SDK warning:", e.message);
+          if (e.message?.includes("UNAUTHENTICATED") || e.code === 16 || e.message?.includes("invalid authentication credentials")) {
+            isAdminSdkHealthy = false;
+          }
+        }
+      }
+
+      // Fast single-roundtrip runQuery
+      try {
+        const runQueryDocs = await fetchFirestoreProductsRunQuery();
+        const products = runQueryDocs.filter((p: any) => !p.deleted);
+        if (products.length > 0) {
+          productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+          return products;
+        }
+      } catch (rqErr: any) {
+        console.warn("getCachedProducts runQuery fallback warning:", rqErr.message);
+      }
+
+      // Fallback to Firestore REST paginated API
+      try {
+        const restDocs = await fetchFirestoreCollectionFromRest("products");
+        const products = restDocs.filter((p: any) => !p.deleted);
+        if (products.length > 0) {
+          productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+          return products;
+        }
+      } catch (restErr: any) {
+        console.error("getCachedProducts REST fallback error:", restErr.message);
+      }
+
+      return productCache?.data || [];
+    } finally {
+      pendingProductsFetch = null;
+    }
+  })();
+
+  return pendingProductsFetch;
 }
 
 // Invalidate cache when products change (called after order/product update)
 function invalidateProductCache() {
   productCache = null;
+  // Proactive background prefetch so subsequent client requests resolve instantly
+  getCachedProducts().catch(() => {});
 }
 
+function slugify(text: string, maxLen = 38): string {
+  if (!text) return "";
+  let s = text
+    .toString()
+    .trim()
+    .replace(/&/g, " and ")
+    .replace(/\+/g, " plus ")
+    .replace(/@/g, " at ")
+    .replace(/(\d)\.(\d)/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^\w\s\u0980-\u09FF-]/g, "")
+    .replace(/[\s_–—-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (s.length > maxLen) {
+    const cut = s.substring(0, maxLen);
+    const lastHyphen = cut.lastIndexOf("-");
+    s = (lastHyphen > 10 ? cut.substring(0, lastHyphen) : cut).replace(/-+$/, "");
+  }
+
+  return s;
+}
+
+function getProductSlug(product: any): string {
+  if (!product) return "";
+  if (product.slug && typeof product.slug === "string" && product.slug.trim()) {
+    const custom = slugify(product.slug.trim(), 50);
+    if (custom) return custom;
+  }
+  if (product.smsName && typeof product.smsName === "string" && product.smsName.trim().length >= 3) {
+    const smsSlug = slugify(product.smsName.trim(), 35);
+    const prodId = product.id ? String(product.id).trim() : "";
+    if (smsSlug) {
+      if (prodId && !smsSlug.includes(prodId.toLowerCase())) {
+        const shortId = prodId.length > 8 ? prodId.slice(-6) : prodId;
+        return `${smsSlug}-${shortId}`;
+      }
+      return smsSlug;
+    }
+  }
+  const rawName = product.name || product.title || "";
+  const nameSlug = slugify(rawName, 35);
+  const prodId = product.id ? String(product.id).trim() : "";
+
+  if (nameSlug && prodId) {
+    if (nameSlug.endsWith(prodId.toLowerCase())) {
+      return nameSlug;
+    }
+    const shortId = prodId.length > 8 ? prodId.slice(-6) : prodId;
+    return `${nameSlug}-${shortId}`;
+  }
+  return nameSlug || prodId || "";
+}
 
 let serviceAccountPath = path.join(process.cwd(), "api", "service-account.json");
 if (!fs.existsSync(serviceAccountPath)) {
@@ -257,11 +433,26 @@ async function startServer() {
   });
 
   // API Routes
+  app.post("/api/invalidate-product-cache", (req, res) => {
+    invalidateProductCache();
+    res.json({ success: true, message: "Product cache invalidated" });
+  });
+
   app.get("/api/products", async (req, res) => {
     try {
       res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
       const prods = await getCachedProducts();
-      res.json(prods);
+      if (prods && prods.length > 0) {
+        const signature = prods.map(p => `${p.id}:${p.updatedAt || ''}:${p.price}:${p.stock}:${p.isPublished}`).join('|');
+        const etag = `"${crypto.createHash('md5').update(signature).digest('hex')}"`;
+        res.setHeader("ETag", etag);
+
+        if (req.headers["if-none-match"] === etag) {
+          return res.status(304).end();
+        }
+        return res.json(prods);
+      }
+      res.status(500).json({ error: "No products available" });
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch products" });
     }
@@ -552,11 +743,10 @@ async function startServer() {
 
       // Product pages
       productsSnap.forEach(doc => {
-        const id = doc.id;
-        const name = doc.data().name || "";
-        const slug = (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        const p = { id: doc.id, ...doc.data() };
+        const slug = getProductSlug(p);
         const updatedAt = doc.data().updatedAt?.toDate?.()?.toISOString?.() || new Date().toISOString();
-        const prodPath = slug ? `/product/${slug}-${id}` : `/product/${id}`;
+        const prodPath = `/p/${slug}`;
         xml += `  <url>\n    <loc>https://ishopbd.com${prodPath}</loc>\n    <lastmod>${updatedAt.split('T')[0]}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
       });
       
@@ -581,11 +771,11 @@ async function startServer() {
 
     const { code, cartTotal, userId } = req.body;
 
-    if (!code || typeof code !== 'string' || code.trim().length === 0 || code.length > 50) {
-      return res.status(400).json({ success: false, error: "কুপন কোড সঠিক নয়।" });
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ success: false, error: "Invalid coupon code." });
     }
     if (typeof cartTotal !== 'number' || cartTotal <= 0) {
-      return res.status(400).json({ success: false, error: "কার্টের মোট মূল্য সঠিক নয়।" });
+      return res.status(400).json({ success: false, error: "Invalid cart total amount." });
     }
 
     if (!(admin as any).apps.length) {
@@ -598,21 +788,21 @@ async function startServer() {
       const couponSnap = await couponRef.get();
 
       if (!couponSnap.exists) {
-        return res.status(404).json({ success: false, error: "এই কুপন কোডটি বিদ্যমান নেই।" });
+        return res.status(404).json({ success: false, error: "This coupon code does not exist." });
       }
 
       const coupon = couponSnap.data()!;
 
       // Check if active
       if (!coupon.isActive) {
-        return res.status(400).json({ success: false, error: "এই কুপনটি আর সক্রিয় নেই।" });
+        return res.status(400).json({ success: false, error: "This coupon is no longer active." });
       }
 
       // Check expiry
       if (coupon.expiresAt) {
         const expiresAt = coupon.expiresAt?.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
         if (new Date() > expiresAt) {
-          return res.status(400).json({ success: false, error: "এই কুপনের মেয়াদ শেষ হয়ে গেছে।" });
+          return res.status(400).json({ success: false, error: "This coupon has expired." });
         }
       }
 
@@ -620,13 +810,13 @@ async function startServer() {
       if (coupon.minOrderAmount && cartTotal < coupon.minOrderAmount) {
         return res.status(400).json({
           success: false,
-          error: `এই কুপন ব্যবহার করতে ন্যূনতম ৳${coupon.minOrderAmount} অর্ডার করতে হবে।`
+          error: `Minimum order of ৳${coupon.minOrderAmount} is required for this coupon.`
         });
       }
 
       // Check usage limit
       if (coupon.usageLimit && (coupon.usedCount || 0) >= coupon.usageLimit) {
-        return res.status(400).json({ success: false, error: "এই কুপনের ব্যবহারের সীমা শেষ হয়ে গেছে।" });
+        return res.status(400).json({ success: false, error: "This coupon usage limit has been reached." });
       }
 
       // Check per-user usage limit
@@ -636,7 +826,7 @@ async function startServer() {
           .where("userId", "==", userId)
           .get();
         if (userUsageSnap.size >= coupon.perUserLimit) {
-          return res.status(400).json({ success: false, error: "আপনি এই কুপনটি আগেই ব্যবহার করেছেন।" });
+          return res.status(400).json({ success: false, error: "You have already used this coupon." });
         }
       }
 
@@ -649,13 +839,13 @@ async function startServer() {
         if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
           discountAmount = coupon.maxDiscount;
         }
-        discountLabel = `${coupon.value}% ছাড়`;
+        discountLabel = `${coupon.value}% Off`;
       } else if (coupon.type === "fixed") {
         discountAmount = Math.min(coupon.value, cartTotal);
-        discountLabel = `৳${coupon.value} ছাড়`;
+        discountLabel = `৳${coupon.value} Off`;
       } else if (coupon.type === "free_delivery") {
         discountAmount = 0; // handled on frontend
-        discountLabel = "ফ্রি ডেলিভারি";
+        discountLabel = "Free Delivery";
       }
 
       return res.json({
@@ -672,7 +862,7 @@ async function startServer() {
 
     } catch (err: any) {
       console.error("Coupon validation error:", err);
-      return res.status(500).json({ success: false, error: "কুপন যাচাই করতে সমস্যা হয়েছে।" });
+      return res.status(500).json({ success: false, error: "Failed to validate coupon." });
     }
   });
 
@@ -935,31 +1125,31 @@ async function startServer() {
         <!-- Header -->
         <tr><td style="background:linear-gradient(135deg,#e07b39,#c9612a);padding:30px 40px;text-align:center;">
           <h1 style="margin:0;color:#fff;font-size:26px;font-weight:bold;">🛒 i SHOP BD</h1>
-          <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">নতুন অর্ডার পাওয়া গেছে!</p>
+          <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">New Order Received!</p>
         </td></tr>
 
         <!-- Order Badge -->
         <tr><td style="padding:24px 40px 0;text-align:center;">
           <span style="display:inline-block;background:#fff3e8;color:#e07b39;border:2px solid #e07b39;border-radius:30px;padding:8px 24px;font-size:14px;font-weight:bold;">
-            ✅ অর্ডার কনফার্ম হয়েছে
+            ✅ Order Confirmed
           </span>
           <p style="color:#888;font-size:13px;margin:10px 0 0;">${orderDate}</p>
         </td></tr>
 
         <!-- Customer Info -->
         <tr><td style="padding:24px 40px;">
-          <h2 style="margin:0 0 16px;font-size:16px;color:#333;border-bottom:2px solid #f0f0f0;padding-bottom:10px;">📋 কাস্টমারের তথ্য</h2>
+          <h2 style="margin:0 0 16px;font-size:16px;color:#333;border-bottom:2px solid #f0f0f0;padding-bottom:10px;">📋 Customer Details</h2>
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="padding:6px 0;color:#888;font-size:13px;width:120px;">নাম:</td>
+              <td style="padding:6px 0;color:#888;font-size:13px;width:120px;">Name:</td>
               <td style="padding:6px 0;color:#333;font-size:14px;font-weight:bold;">${customerName}</td>
             </tr>
             <tr>
-              <td style="padding:6px 0;color:#888;font-size:13px;">ফোন:</td>
+              <td style="padding:6px 0;color:#888;font-size:13px;">Phone:</td>
               <td style="padding:6px 0;color:#333;font-size:14px;">${customerPhone}</td>
             </tr>
             <tr>
-              <td style="padding:6px 0;color:#888;font-size:13px;">ঠিকানা:</td>
+              <td style="padding:6px 0;color:#888;font-size:13px;">Address:</td>
               <td style="padding:6px 0;color:#333;font-size:14px;">${address}</td>
             </tr>
           </table>
@@ -967,14 +1157,14 @@ async function startServer() {
 
         <!-- Items Table -->
         <tr><td style="padding:0 40px 24px;">
-          <h2 style="margin:0 0 16px;font-size:16px;color:#333;border-bottom:2px solid #f0f0f0;padding-bottom:10px;">📦 অর্ডার আইটেম</h2>
+          <h2 style="margin:0 0 16px;font-size:16px;color:#333;border-bottom:2px solid #f0f0f0;padding-bottom:10px;">📦 Order Items</h2>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #f0f0f0;border-radius:8px;overflow:hidden;">
             <thead>
               <tr style="background:#f8f8f8;">
-                <th style="padding:10px 12px;text-align:left;font-size:12px;color:#888;font-weight:600;">পণ্য</th>
-                <th style="padding:10px 12px;text-align:center;font-size:12px;color:#888;font-weight:600;">পরিমাণ</th>
-                <th style="padding:10px 12px;text-align:right;font-size:12px;color:#888;font-weight:600;">মূল্য</th>
-                <th style="padding:10px 12px;text-align:right;font-size:12px;color:#888;font-weight:600;">সাবটোটাল</th>
+                <th style="padding:10px 12px;text-align:left;font-size:12px;color:#888;font-weight:600;">Product</th>
+                <th style="padding:10px 12px;text-align:center;font-size:12px;color:#888;font-weight:600;">Qty</th>
+                <th style="padding:10px 12px;text-align:right;font-size:12px;color:#888;font-weight:600;">Price</th>
+                <th style="padding:10px 12px;text-align:right;font-size:12px;color:#888;font-weight:600;">Subtotal</th>
               </tr>
             </thead>
             <tbody>${itemRowsHtml}</tbody>
@@ -986,7 +1176,7 @@ async function startServer() {
           <table width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td style="text-align:right;padding:12px 16px;background:#fff3e8;border-radius:8px;">
-                <span style="font-size:14px;color:#888;">মোট পরিমাণ: </span>
+                <span style="font-size:14px;color:#888;">Total Amount: </span>
                 <span style="font-size:22px;font-weight:bold;color:#e07b39;">৳${total.toLocaleString()}</span>
               </td>
             </tr>
@@ -995,8 +1185,8 @@ async function startServer() {
 
         <!-- Footer -->
         <tr><td style="background:#f8f8f8;padding:20px 40px;text-align:center;border-top:1px solid #eee;">
-          <p style="margin:0;color:#aaa;font-size:12px;">এই ইমেইলটি স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে।</p>
-          <p style="margin:6px 0 0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} i SHOP BD — সেরা অনলাইন শপ</p>
+          <p style="margin:0;color:#aaa;font-size:12px;">This email was sent automatically.</p>
+          <p style="margin:6px 0 0;color:#aaa;font-size:12px;">© ${new Date().getFullYear()} i SHOP BD — Premium Online Shop</p>
         </td></tr>
       </table>
     </td></tr>
@@ -1007,16 +1197,16 @@ async function startServer() {
     const mailOptions = {
       from: `"i SHOP BD" <${process.env.EMAIL_USER}>`,
       to: notifyEmail,
-      subject: `🛒 নতুন অর্ডার — ${customerName.substring(0, 60)} (৳${total})`,
+      subject: `🛒 New Order — ${customerName.substring(0, 60)} (৳${total})`,
       text: [
-        'নতুন অর্ডার কনফার্ম!',
+        'New Order Confirmed!',
         '',
-        `কাস্টমার: ${customerName}`,
-        `ফোন: ${customerPhone}`,
-        `ঠিকানা: ${address}`,
-        `মোট: ৳${total}`,
+        `Customer: ${customerName}`,
+        `Phone: ${customerPhone}`,
+        `Address: ${address}`,
+        `Total: ৳${total}`,
         '',
-        'আইটেম:',
+        'Items:',
         itemsPlainText,
       ].join('\n'),
       html: htmlBody,
@@ -1458,9 +1648,9 @@ Guidelines:
       const genAI = new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
       });
-      const selectedModel = (modelName && !["gemini-1.5-flash", "gemini-pro", "gemini-2.5-flash"].includes(modelName))
+      const selectedModel = (modelName && ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"].includes(modelName))
         ? modelName 
-        : "gemini-3.6-flash";
+        : "gemini-2.0-flash";
 
       const response = await genAI.models.generateContent({
         model: selectedModel,
@@ -1470,7 +1660,7 @@ Guidelines:
         }
       });
 
-      const aiReplyText = response.text || "দুঃখিত, কোনো উত্তর পাওয়া যায়নি।";
+      const aiReplyText = response.text || "Sorry, no response could be generated.";
 
       // If chatId is passed, also save directly in Firestore via Admin SDK
       const { chatId } = req.body;
@@ -1567,7 +1757,7 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       });
 
       const response = await genAI.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: "gemini-2.0-flash",
         contents: prompt,
       });
 
@@ -1660,29 +1850,128 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
     }
   });
 
+  // Submit Product Review API
+  app.post("/api/reviews", async (req, res) => {
+    try {
+      const { productId, review } = req.body;
+      if (!productId || !review) {
+        return res.status(400).json({ error: "Product ID and review data are required." });
+      }
 
-  // Dynamic Product Image Route for Open Graph Previews
+      const cleanProdId = String(productId).trim();
+      const reviewId = String(review.id || `rev_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`);
+
+      const reviewData = {
+        id: reviewId,
+        userId: review.userId || `guest_${Math.random().toString(36).substr(2, 5)}`,
+        userName: String(review.userName || "Customer").trim(),
+        userPhoto: review.userPhoto || null,
+        rating: Math.min(5, Math.max(1, Number(review.rating) || 5)),
+        comment: String(review.comment || "").trim(),
+        images: Array.isArray(review.images) ? review.images : [],
+        createdAt: review.createdAt || new Date().toISOString()
+      };
+
+      const db = getFirestore();
+      const productRef = db.collection("products").doc(cleanProdId);
+      const productSnap = await productRef.get();
+
+      const reviewDocRef = productRef.collection("reviews").doc(reviewId);
+      await reviewDocRef.set(reviewData, { merge: true });
+
+      // Update product aggregate rating and review count
+      let newRating = reviewData.rating;
+      let newCount = 1;
+
+      if (productSnap.exists) {
+        const productData = productSnap.data() || {};
+        const currentRating = Number(productData.rating) || 0;
+        const currentCount = Number(productData.reviewCount) || 0;
+        newCount = currentCount + 1;
+        newRating = Number(((currentRating * currentCount + reviewData.rating) / newCount).toFixed(1));
+
+        await productRef.set({
+          rating: newRating,
+          reviewCount: newCount,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      } else {
+        await productRef.set({
+          rating: newRating,
+          reviewCount: 1,
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      // Invalidate product cache so updated rating/reviews reflect
+      invalidateProductCache();
+
+      return res.json({
+        success: true,
+        review: reviewData,
+        rating: newRating,
+        reviewCount: newCount
+      });
+    } catch (error: any) {
+      console.error("Review Submit Error in /api/reviews:", error);
+      return res.status(500).json({ error: "Failed to submit review", details: error?.message || error });
+    }
+  });
+
+  // Dynamic Product Image Route for Open Graph Previews & Lean Cache Images
   app.get("/api/product-image/:id", async (req, res) => {
     const productId = req.params.id;
+    if (!productId) return res.status(400).send("Product ID required");
+
     try {
-      const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
-      const response = await axios.get(url, { timeout: 5000 });
-      const data = response.data;
+      let imageStr: string | undefined;
+      const index = req.query.index !== undefined ? parseInt(String(req.query.index), 10) : NaN;
+
+      // 1. Fast Path: In-Memory Product Cache
+      const prods = await getCachedProducts();
+      const matched = prods.find(p => p.id === productId || (p.slug && p.slug === productId));
+      if (matched) {
+        if (!isNaN(index) && Array.isArray(matched.images) && matched.images[index]) {
+          imageStr = matched.images[index];
+        } else {
+          imageStr = matched.image;
+        }
+      }
+
+      // 2. Fallback to Firestore REST API if not found in memory
+      if (!imageStr) {
+        const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
+        const response = await axios.get(url, { timeout: 5000 }).catch(() => null);
+        const data = response?.data;
+        if (data && data.fields) {
+          if (!isNaN(index) && data.fields.images?.arrayValue?.values && data.fields.images.arrayValue.values[index]?.stringValue) {
+            imageStr = data.fields.images.arrayValue.values[index].stringValue;
+          } else if (data.fields.image?.stringValue) {
+            imageStr = data.fields.image.stringValue;
+          }
+        }
+      }
       
-      if (data && data.fields && data.fields.image) {
-        const imageStr = data.fields.image.stringValue;
-        if (imageStr && imageStr.startsWith("data:")) {
+      if (imageStr && typeof imageStr === "string") {
+        if (imageStr.startsWith("data:")) {
           // Base64 data URI
           const match = imageStr.match(/^data:([^;]+);base64,(.*)$/);
           if (match) {
             const contentType = match[1];
             const base64Data = match[2];
             const imgBuffer = Buffer.from(base64Data, 'base64');
+            const etag = `"${crypto.createHash('md5').update(imgBuffer).digest('hex')}"`;
+
             res.setHeader("Content-Type", contentType);
-            res.setHeader("Cache-Control", "public, max-age=86400");
+            res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+            res.setHeader("ETag", etag);
+
+            if (req.headers["if-none-match"] === etag) {
+              return res.status(304).end();
+            }
             return res.send(imgBuffer);
           }
-        } else if (imageStr && (imageStr.startsWith("http://") || imageStr.startsWith("https://"))) {
+        } else if (imageStr.startsWith("http://") || imageStr.startsWith("https://")) {
           // Direct URL — SSRF protection: only allow known image CDNs
           const ALLOWED_IMAGE_HOSTS = [
             'firebasestorage.googleapis.com',
@@ -1710,6 +1999,7 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       const logoPath = path.join(distPath, 'logo.png');
       if (fs.existsSync(logoPath)) {
         res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=86400");
         return res.sendFile(logoPath);
       }
       res.status(404).send("Image not found");
@@ -1754,15 +2044,16 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       
       if (productIdentifier) {
         try {
-          const parts = String(productIdentifier).split('-');
-          const lastPart = parts[parts.length - 1];
-          const productId = (lastPart && lastPart.length >= 6) ? lastPart : String(productIdentifier);
+          const rawIdentifier = decodeURIComponent(String(productIdentifier)).trim();
+          const parts = rawIdentifier.split('-');
+          let lastPart = parts[parts.length - 1];
+          let productId = (lastPart && lastPart.length >= 6) ? lastPart : rawIdentifier;
 
           let url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
           let response = await axios.get(url, { timeout: 4000 }).catch(() => null);
           
-          if (!response?.data?.fields && productId !== productIdentifier) {
-            url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productIdentifier}`;
+          if (!response?.data?.fields && productId !== rawIdentifier) {
+            url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${rawIdentifier}`;
             response = await axios.get(url, { timeout: 4000 }).catch(() => null);
           }
 
@@ -1790,8 +2081,8 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
             const protocol = req.headers['x-forwarded-proto'] || req.protocol;
             const host = req.get('host');
             const imageUrl = `${protocol}://${host}/api/product-image/${productId}`;
-            const cleanSlug = data.fields.slug?.stringValue || (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-            const productPath = cleanSlug ? `/product/${cleanSlug}-${productId}` : `/product/${productId}`;
+            const cleanSlug = getProductSlug({ id: productId, name, slug: data.fields.slug?.stringValue });
+            const productPath = `/p/${cleanSlug}`;
             const currentUrl = `${protocol}://${host}${productPath}`;
             
             const productSchema = {
@@ -1906,14 +2197,12 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
 
           let categoryProducts: any[] = [];
           try {
-            if ((admin as any).apps.length) {
-              const db = getFirestore();
-              const snap = await db.collection("products").where("deleted", "==", false).where("isPublished", "==", true).get();
-              categoryProducts = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })).filter(p => {
-                const catSlug = (p.category || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                return catSlug.includes(categorySlug) || categorySlug.includes(catSlug);
-              });
-            }
+            const allProds = await getCachedProducts();
+            categoryProducts = allProds.filter(p => {
+              if (p.deleted || p.isPublished === false) return false;
+              const catSlug = (p.category || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+              return catSlug.includes(categorySlug) || categorySlug.includes(catSlug);
+            });
           } catch (e) {}
 
           const categorySchema = {
@@ -1929,7 +2218,7 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
               "itemListElement": categoryProducts.slice(0, 24).map((p, idx) => ({
                 "@type": "ListItem",
                 "position": idx + 1,
-                "url": `${protocol}://${host}/product/${(p.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${p.id}`,
+                "url": `${protocol}://${host}/product/${getProductSlug(p)}`,
                 "name": p.name,
                 "image": p.image || imageUrl
               }))
@@ -1959,7 +2248,7 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
                 <h1>${categorySeo.title}</h1>
                 <p>${categorySeo.description}</p>
                 <ul>
-                  ${categoryProducts.map(p => `<li><a href="/product/${(p.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${p.id}">${p.name} - ৳${p.price}</a></li>`).join('')}
+                  ${categoryProducts.map(p => `<li><a href="/product/${getProductSlug(p)}">${p.name} - ৳${p.price}</a></li>`).join('')}
                 </ul>
               </div>
             `;
@@ -1981,6 +2270,7 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
         }
       } catch (e) {}
 
+      res.setHeader("Content-Type", "text/html; charset=UTF-8");
       res.send(html);
     });
   }

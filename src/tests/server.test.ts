@@ -21,13 +21,13 @@ function calculateCouponDiscount(
     if (maxDiscount && discountAmount > maxDiscount) {
       discountAmount = maxDiscount;
     }
-    discountLabel = `${value}% ছাড়`;
+    discountLabel = `${value}% Off`;
   } else if (type === "fixed") {
     discountAmount = Math.min(value, cartTotal);
-    discountLabel = `৳${value} ছাড়`;
+    discountLabel = `৳${value} Off`;
   } else if (type === "free_delivery") {
     discountAmount = 0;
-    discountLabel = "ফ্রি ডেলিভারি";
+    discountLabel = "Free Delivery";
   }
 
   return { discountAmount, discountLabel };
@@ -70,7 +70,7 @@ describe('Coupon Discount Calculation', () => {
   it('percent type — 10% of 1000 = 100', () => {
     const result = calculateCouponDiscount('percent', 10, 1000);
     expect(result.discountAmount).toBe(100);
-    expect(result.discountLabel).toBe('10% ছাড়');
+    expect(result.discountLabel).toBe('10% Off');
   });
 
   it('percent type — maxDiscount cap applies', () => {
@@ -82,7 +82,7 @@ describe('Coupon Discount Calculation', () => {
   it('fixed type — ৳150 off 1000 = 150', () => {
     const result = calculateCouponDiscount('fixed', 150, 1000);
     expect(result.discountAmount).toBe(150);
-    expect(result.discountLabel).toBe('৳150 ছাড়');
+    expect(result.discountLabel).toBe('৳150 Off');
   });
 
   it('fixed type — cannot exceed cart total', () => {
@@ -94,7 +94,7 @@ describe('Coupon Discount Calculation', () => {
   it('free_delivery type — discountAmount is 0', () => {
     const result = calculateCouponDiscount('free_delivery', 0, 1000);
     expect(result.discountAmount).toBe(0);
-    expect(result.discountLabel).toBe('ফ্রি ডেলিভারি');
+    expect(result.discountLabel).toBe('Free Delivery');
   });
 
   it('percent rounding — 15% of 1333 rounds correctly', () => {

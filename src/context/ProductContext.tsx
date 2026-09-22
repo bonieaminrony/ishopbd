@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useMemo, useEffect } from '
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, Category } from '../types';
+import { findProductBySlugOrId, normalizeProducts, normalizeProduct, safeGetLocalStorage } from '../utils/helpers';
+import { STORAGE_KEYS, purgeLegacyCaches } from '../constants/data';
 
 type ProductContextType = {
   activeCampaign: any;
@@ -52,52 +54,42 @@ type ProductContextType = {
   setIsAiSearching: any;
 };
 
-export const normalizeProduct = (p: any): Product => {
-  if (!p) return p;
-  let stock = Number(p.stock !== undefined && p.stock !== null ? p.stock : 0);
-  if (Array.isArray(p.variants) && p.variants.length > 0) {
-    const hasVariantStocks = p.variants.some((v: any) => v && v.stock !== undefined && v.stock !== null);
-    if (hasVariantStocks) {
-      const sum = p.variants.reduce((acc: number, v: any) => acc + (Number(v?.stock) || 0), 0);
-      stock = Math.max(0, sum);
-    } else {
-      stock = Math.max(0, stock);
-    }
-  } else {
-    stock = Math.max(0, stock);
-  }
-  return {
-    ...p,
-    stock
-  };
-};
-
-export const normalizeProducts = (prods: any[]): Product[] => {
-  if (!Array.isArray(prods)) return [];
-  return prods.map(normalizeProduct);
-};
-
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
 export function ProductProvider({ children }: { children: React.ReactNode }) {
+  // Purge legacy generic cache keys on initialization to prevent other project contamination
+  useEffect(() => {
+    purgeLegacyCaches();
+  }, []);
 
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [activeCampaign, setActiveCampaign] = useState<any | null>(null);
   const [selectedColor, setSelectedColor] = useState<string>('all');
 
-const [categories, setCategories] = useState<Category[]>(() => {
+  const [categories, setCategories] = useState<Category[]>(() => {
     try {
-      const cached = localStorage.getItem("cached_categories");
+      purgeLegacyCaches();
+      const cached = safeGetLocalStorage(STORAGE_KEYS.CATEGORIES);
       return cached ? JSON.parse(cached) : [];
     } catch {
       return [];
     }
   });
 
-const [productsRaw, setProductsRaw] = useState<Product[]>(() => {
+  const [productsRaw, setProductsRaw] = useState<Product[]>(() => {
     try {
-      const cached = localStorage.getItem("cached_products");
-      return cached ? normalizeProducts(JSON.parse(cached)) : [];
+      purgeLegacyCaches();
+      if (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_PRODUCTS__) && (window as any).__INITIAL_PRODUCTS__.length > 0) {
+        return normalizeProducts((window as any).__INITIAL_PRODUCTS__);
+      }
+      const cached = safeGetLocalStorage(STORAGE_KEYS.PRODUCTS);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return normalizeProducts(parsed);
+        }
+      }
+      return [];
     } catch {
       return [];
     }
@@ -156,12 +148,12 @@ const relatedProducts = useMemo(() => {
     if (!selectedProduct) return [];
     
     const sameCategoryProducts = products.filter(
-      (p) => p.category === selectedProduct.category && p.id !== selectedProduct.id && !p.deleted && p.isPublished !== false
+      (p) => (p.category || "").toLowerCase() === (selectedProduct.category || "").toLowerCase() && p.id !== selectedProduct.id && !p.deleted && p.isPublished !== false
     );
     
     const scoredProducts = sameCategoryProducts.map((p) => {
       let score = 0;
-      if (p.brand && selectedProduct.brand && p.brand === selectedProduct.brand) score += 5;
+      if (p.brand && selectedProduct.brand && p.brand.toLowerCase() === selectedProduct.brand.toLowerCase()) score += 5;
       
       if (p.tags && selectedProduct.tags) {
         const pTags = p.tags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
@@ -183,6 +175,13 @@ const relatedProducts = useMemo(() => {
 
 const filteredProducts = useMemo(() => {
     let result = [];
+    const selCat = (selectedCategory || "all").trim().toLowerCase();
+    const selSubcat = (selectedSubcategory || "all").trim().toLowerCase();
+    const selBrand = (selectedBrand || "all").trim().toLowerCase();
+    const q = (searchQuery || "").trim().toLowerCase();
+
+    const isSearching = q.length > 0;
+
     if (activeCampaign) {
       // In campaign mode, we only show campaign products. 
       // We also apply current search/filter within the campaign context.
@@ -190,65 +189,79 @@ const filteredProducts = useMemo(() => {
         if (p.deleted || p.isPublished === false) return false;
         if (!activeCampaign.productIds.includes(p.id)) return false;
         
-        const name = p.name || "";
-        const category = p.category || "";
-        const code = p.code || "";
-        const brand = p.brand || "";
+        const name = (p.name || "").toLowerCase();
+        const category = (p.category || "").trim().toLowerCase();
+        const subcategory = ((p as any).subcategory || "").trim().toLowerCase();
+        const code = (p.code || "").toLowerCase();
+        const brand = (p.brand || "").trim().toLowerCase();
+        const tags = (p.tags || "").toLowerCase();
+        const description = (p.description || "").toLowerCase();
+
+        const keywordMatches =
+          !isSearching ||
+          name.includes(q) ||
+          category.includes(q) ||
+          subcategory.includes(q) ||
+          code.includes(q) ||
+          brand.includes(q) ||
+          tags.includes(q) ||
+          description.includes(q);
+
         const matchesSearch = aiSearchProductIds !== null
-          ? aiSearchProductIds.includes(p.id)
-          : (
-            name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        const matchesCategory =
-          selectedCategory === "all" || category === selectedCategory;
-        const matchesSubcategory =
-          selectedSubcategory === "all" || (p as any).subcategory === selectedSubcategory;
-        const matchesBrand =
-          selectedBrand === "all" || brand === selectedBrand;
+          ? (aiSearchProductIds.includes(p.id) || keywordMatches)
+          : keywordMatches;
+
+        const matchesCategory = isSearching || selCat === "all" || category === selCat;
+        const matchesSubcategory = isSearching || selSubcat === "all" || subcategory === selSubcat;
+        const matchesBrand = isSearching || selBrand === "all" || brand === selBrand;
         const matchesColor =
           selectedColor === "all" || (p.colors && p.colors.includes(selectedColor));
-        const matchesTrending = !isTrendingFilterActive || p.isTrending;
+        const matchesTrending = isSearching || !isTrendingFilterActive || p.isTrending;
         
-        const price = p.price || 0;
+        const price = Number(p.price) || 0;
         const matchesPrice = (minPrice === "" || price >= minPrice) && (maxPrice === "" || price <= maxPrice);
         return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor && matchesTrending && matchesPrice;
       });
     } else {
       result = products.filter((p) => {
         if (p.deleted || p.isPublished === false) return false;
-        const name = p.name || "";
-        const category = p.category || "";
-        const code = p.code || "";
-        const brand = p.brand || "";
+        const name = (p.name || "").toLowerCase();
+        const category = (p.category || "").trim().toLowerCase();
+        const subcategory = ((p as any).subcategory || "").trim().toLowerCase();
+        const code = (p.code || "").toLowerCase();
+        const brand = (p.brand || "").trim().toLowerCase();
+        const tags = (p.tags || "").toLowerCase();
+        const description = (p.description || "").toLowerCase();
+
+        const keywordMatches =
+          !isSearching ||
+          name.includes(q) ||
+          category.includes(q) ||
+          subcategory.includes(q) ||
+          code.includes(q) ||
+          brand.includes(q) ||
+          tags.includes(q) ||
+          description.includes(q);
+
         const matchesSearch = aiSearchProductIds !== null
-          ? aiSearchProductIds.includes(p.id)
-          : (
-            name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (p.tags || "").toLowerCase().includes(searchQuery.toLowerCase())
-          );
-        const matchesCategory =
-          selectedCategory === "all" || category === selectedCategory;
-        const matchesSubcategory =
-          selectedSubcategory === "all" || (p as any).subcategory === selectedSubcategory;
-        const matchesBrand =
-          selectedBrand === "all" || brand === selectedBrand;
+          ? (aiSearchProductIds.includes(p.id) || keywordMatches)
+          : keywordMatches;
+
+        const matchesCategory = isSearching || selCat === "all" || category === selCat;
+        const matchesSubcategory = isSearching || selSubcat === "all" || subcategory === selSubcat;
+        const matchesBrand = isSearching || selBrand === "all" || brand === selBrand;
         const matchesColor =
           selectedColor === "all" || (p.colors && p.colors.includes(selectedColor));
-        const matchesTrending = !isTrendingFilterActive || p.isTrending;
-        const price = p.price || 0;
+        const matchesTrending = isSearching || !isTrendingFilterActive || p.isTrending;
+        const price = Number(p.price) || 0;
         const matchesPrice = (minPrice === "" || price >= minPrice) && (maxPrice === "" || price <= maxPrice);
         return matchesSearch && matchesCategory && matchesSubcategory && matchesBrand && matchesColor && matchesTrending && matchesPrice;
       });
     }
     // Sorting logic
     return [...result].sort((a, b) => {
-      if (sortBy === "price_low") return a.price - b.price;
-      if (sortBy === "price_high") return b.price - a.price;
+      if (sortBy === "price_low") return (Number(a.price) || 0) - (Number(b.price) || 0);
+      if (sortBy === "price_high") return (Number(b.price) || 0) - (Number(a.price) || 0);
       if (sortBy === "popularity") {
         const ratingA = a.rating || 0;
         const ratingB = b.rating || 0;

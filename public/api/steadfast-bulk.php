@@ -1,5 +1,26 @@
 <?php
-header('Content-Type: application/json');
+$allowedOrigins = [
+    'https://ishopbd.com',
+    'https://www.ishopbd.com',
+    'https://ishopbd.online',
+    'https://www.ishopbd.online',
+    'http://localhost:5173',
+    'http://localhost:3000',
+];
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+if (in_array($origin, $allowedOrigins)) {
+    header("Access-Control-Allow-Origin: $origin");
+} else {
+    header("Access-Control-Allow-Origin: https://ishopbd.com");
+}
+header("Access-Control-Allow-Headers: Content-Type, X-Admin-Token");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header('Content-Type: application/json; charset=UTF-8');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit(0);
+}
 
 // Enable error reporting for debugging
 ini_set('display_errors', 0);

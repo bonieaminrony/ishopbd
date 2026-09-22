@@ -3,6 +3,7 @@ import { TrendingUp, DollarSign, Activity, Package, Plus, Trash2, Receipt, Shopp
 import { collection, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Expense } from '../types';
+import { formatEnglishDateTime } from '../utils/helpers';
 
 interface ProfitAnalysisProps {
   orderHistory: any[];
@@ -200,7 +201,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           itemIndex: itemIndex,
           rawOrder: order,
           orderId: order.orderId || '-',
-          date: order.date || new Date(order.createdAt?.seconds ? order.createdAt.seconds * 1000 : order.createdAt).toLocaleDateString(),
+          date: formatEnglishDateTime(order.date || order.createdAt),
           productName: productName,
           quantity: qty,
           sellPrice: Number(sellPrice),
@@ -243,11 +244,11 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
       if (selectedPeriod !== 'all' && !selectedPeriod.startsWith('year-')) {
         // Daily group YYYY-MM-DD
         groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        label = d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+        label = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
       } else {
         // Monthly group YYYY-MM
         groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        label = d.toLocaleDateString('bn-BD', { month: 'short', year: 'numeric' });
+        label = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       }
       
       if (!groups[groupKey]) {
@@ -326,16 +327,16 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
       const orderData = {
         orderId,
         shortId: orderId.slice(-6).toUpperCase(),
-        customerName: "অফলাইন সেলস",
+        customerName: "Offline Direct Sale",
         customerPhone: "N/A",
-        address: "অফলাইন সেলস",
+        address: "Offline Sale",
         paymentMethod: "cash",
         subtotal: Number(offlineSellPrice) * offlineQuantity,
         total: Number(offlineSellPrice) * offlineQuantity,
         status: "delivered",
         isOffline: true,
         createdAt: serverTimestamp(),
-        date: saleDateObj.toLocaleString("bn-BD"),
+        date: saleDateObj.toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
         items: [{
           product: {
             id: selectedProd.id,
@@ -364,12 +365,12 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
   };
 
   const handleDeleteExpense = async (id: string) => {
-    if (!window.confirm("আপনি কি নিশ্চিত যে এই খরচটি ডিলিট করতে চান?")) return;
+    if (!window.confirm("Are you sure you want to delete this expense?")) return;
     try {
       await deleteDoc(doc(db, "expenses", id));
     } catch (err) {
       console.error("Error deleting expense:", err);
-      alert("খরচ ডিলিট করতে সমস্যা হয়েছে।");
+      alert("Failed to delete expense.");
     }
   };
 
@@ -377,17 +378,17 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
     let targetTableData = tableData;
     let targetExpensesList = filteredExpensesList;
     let targetSummary = summary;
-    let periodText = 'সব সময় (All Time)';
+    let periodText = 'All Time';
 
     if (filterType === 'selected') {
-      periodText = 'নির্বাচিত সময়কাল (Selected Period)';
-      if (selectedPeriod === 'this_week') periodText = 'চলতি সপ্তাহ (This Week)';
-      else if (selectedPeriod === 'last_week') periodText = 'গত সপ্তাহ (Last Week)';
-      else if (selectedPeriod.startsWith('year-')) periodText = `${selectedPeriod.split('-')[1]} সাল (Yearly)`;
+      periodText = 'Selected Period';
+      if (selectedPeriod === 'this_week') periodText = 'This Week';
+      else if (selectedPeriod === 'last_week') periodText = 'Last Week';
+      else if (selectedPeriod.startsWith('year-')) periodText = `Year ${selectedPeriod.split('-')[1]}`;
       else if (selectedPeriod.startsWith('month-')) {
         const [, y, mo] = selectedPeriod.split('-');
         const d = new Date(Number(y), Number(mo) - 1);
-        periodText = d.toLocaleString('bn-BD', { month: 'long', year: 'numeric' });
+        periodText = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
       }
     } else {
       const now = new Date();
@@ -404,9 +405,9 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
         return false;
       };
 
-      if (filterType === 'daily') periodText = 'আজকের রিপোর্ট (Daily)';
-      else if (filterType === 'weekly') periodText = 'গত ৭ দিনের রিপোর্ট (Weekly)';
-      else if (filterType === 'monthly') periodText = 'গত ৩০ দিনের রিপোর্ট (Monthly)';
+      if (filterType === 'daily') periodText = 'Daily (Today)';
+      else if (filterType === 'weekly') periodText = 'Weekly (Last 7 Days)';
+      else if (filterType === 'monthly') periodText = 'Monthly (Last 30 Days)';
 
       const validOrders = (orderHistory || []).filter(o => o.status === 'delivered');
       const filteredOrders = validOrders.filter(order => {
@@ -458,7 +459,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           totalItemsSold += Number(qty);
 
           data.push({
-            date: order.date || new Date(order.createdAt?.seconds ? order.createdAt.seconds * 1000 : order.createdAt).toLocaleDateString(),
+            date: formatEnglishDateTime(order.date || order.createdAt),
             orderId: order.orderId || '-',
             productName: productName,
             quantity: qty,
@@ -478,21 +479,21 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
       targetSummary = { totalSales, totalCost, grossProfit, totalItemsSold, totalExpenses, netProfit };
     }
 
-    let csvContent = "\uFEFF"; // UTF-8 BOM for Bengali support in Excel
+    let csvContent = "\uFEFF"; // UTF-8 BOM
 
     // 1. Summary Section
-    csvContent += "রিপোর্ট সারসংক্ষেপ\n";
-    csvContent += `সময়কাল:, ${periodText}\n`;
-    csvContent += `মোট বিক্রয়:, ৳${targetSummary.totalSales}\n`;
-    csvContent += `প্রোডাক্ট ক্রয়মূল্য:, ৳${targetSummary.totalCost}\n`;
-    csvContent += `গ্রোস প্রফিট:, ৳${targetSummary.grossProfit}\n`;
-    csvContent += `মোট খরচ:, ৳${targetSummary.totalExpenses}\n`;
-    csvContent += `নেট প্রফিট:, ৳${targetSummary.netProfit}\n`;
+    csvContent += "Report Summary\n";
+    csvContent += `Period:, ${periodText}\n`;
+    csvContent += `Total Sales:, ৳${targetSummary.totalSales}\n`;
+    csvContent += `Product Cost:, ৳${targetSummary.totalCost}\n`;
+    csvContent += `Gross Profit:, ৳${targetSummary.grossProfit}\n`;
+    csvContent += `Total Expenses:, ৳${targetSummary.totalExpenses}\n`;
+    csvContent += `Net Profit:, ৳${targetSummary.netProfit}\n`;
     csvContent += "\n";
 
     // 2. Income/Orders Section
-    csvContent += "অর্ডার ও আয়সমূহ\n";
-    csvContent += "তারিখ,অর্ডার আইডি,প্রোডাক্ট,পরিমাণ,ক্রয়মূল্য,বিক্রয়মূল্য,প্রফিট,স্ট্যাটাস\n";
+    csvContent += "Orders & Revenue\n";
+    csvContent += "Date,Order ID,Product,Quantity,Cost,Revenue,Profit,Status\n";
     targetTableData.forEach(row => {
       const prodName = `"${row.productName.replace(/"/g, '""')}"`;
       csvContent += `${row.date},${row.orderId},${prodName},${row.quantity},${row.buyPrice * row.quantity},${row.sellPrice * row.quantity},${row.profit},${row.status}\n`;
@@ -500,11 +501,11 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
     csvContent += "\n";
 
     // 3. Expenses Section
-    csvContent += "খরচসমূহ\n";
-    csvContent += "তারিখ,বিবরণ,পরিমাণ\n";
+    csvContent += "Expenses\n";
+    csvContent += "Date,Description,Amount\n";
     targetExpensesList.forEach(exp => {
       const desc = exp.description ? `"${exp.description.replace(/"/g, '""')}"` : "";
-      const date = exp.date ? new Date(exp.date).toLocaleDateString('bn-BD') : "";
+      const date = exp.date ? new Date(exp.date).toLocaleDateString('en-US') : "";
       csvContent += `${date},${desc},${exp.amount}\n`;
     });
 
@@ -526,28 +527,28 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
         {/* Actions Bar: Month Selector & Export */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <label className="font-bold text-gray-700 whitespace-nowrap">সময়কাল সিলেক্ট করুন:</label>
+            <label className="font-bold text-gray-700 whitespace-nowrap">Select Time Period:</label>
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
               className="w-full md:w-auto p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 font-bold bg-gray-50 text-gray-800 outline-none"
             >
-              <option value="all">সব সময় (All Time)</option>
-              <optgroup label="সাপ্তাহিক (Weekly)">
-                <option value="this_week">চলতি সপ্তাহ (This Week)</option>
-                <option value="last_week">গত সপ্তাহ (Last Week)</option>
+              <option value="all">All Time</option>
+              <optgroup label="Weekly">
+                <option value="this_week">This Week</option>
+                <option value="last_week">Last Week</option>
               </optgroup>
-              <optgroup label="মাসিক (Monthly)">
+              <optgroup label="Monthly">
                 {availablePeriods.months.map(m => {
                   const [y, mo] = m.split('-');
                   const date = new Date(Number(y), Number(mo) - 1);
-                  const monthName = date.toLocaleString('bn-BD', { month: 'long', year: 'numeric' });
+                  const monthName = date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
                   return <option key={`month-${m}`} value={`month-${m}`}>{monthName}</option>;
                 })}
               </optgroup>
-              <optgroup label="বাৎসরিক (Yearly)">
+              <optgroup label="Yearly">
                 {availablePeriods.years.map(y => (
-                  <option key={`year-${y}`} value={`year-${y}`}>{y} সাল</option>
+                  <option key={`year-${y}`} value={`year-${y}`}>Year {y}</option>
                 ))}
               </optgroup>
             </select>
@@ -555,47 +556,47 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           <div className="relative w-full md:w-auto" ref={downloadDropdownRef}>
             <button
               onClick={() => setIsDownloadDropdownOpen(!isDownloadDropdownOpen)}
-              className="w-full md:w-auto px-5 py-2.5 bg-[#107c41] text-white font-bold rounded-xl hover:bg-[#0c5e31] transition-colors flex items-center justify-center gap-2 shadow-sm shadow-[#107c41]/20 active:scale-95"
+              className="w-full md:w-auto px-5 py-2.5 bg-[#107c41] text-white font-bold rounded-xl hover:bg-[#0c5e31] transition-colors flex items-center justify-center gap-2 shadow-sm shadow-[#107c41]/20 active:scale-95 cursor-pointer"
             >
-              <Download size={18} /> এক্সেল ডাউনলোড করুন <ChevronDown size={14} />
+              <Download size={18} /> Download Excel <ChevronDown size={14} />
             </button>
             {isDownloadDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] py-1.5 animate-in fade-in slide-in-from-top-2 duration-200">
                 <button
                   onClick={() => {
                     handleDownloadCSV('daily');
                     setIsDownloadDropdownOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <Download size={14} /> আজকের রিপোর্ট
+                  <Download size={14} /> Today's Report
                 </button>
                 <button
                   onClick={() => {
                     handleDownloadCSV('weekly');
                     setIsDownloadDropdownOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <Download size={14} /> গত ৭ দিনের রিপোর্ট
+                  <Download size={14} /> Last 7 Days Report
                 </button>
                 <button
                   onClick={() => {
                     handleDownloadCSV('monthly');
                     setIsDownloadDropdownOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <Download size={14} /> গত ৩০ দিনের রিপোর্ট
+                  <Download size={14} /> Last 30 Days Report
                 </button>
                 <button
                   onClick={() => {
                     handleDownloadCSV('selected');
                     setIsDownloadDropdownOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2 border-t border-gray-50 pt-2.5 mt-1"
+                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2 border-t border-gray-50 pt-2.5 mt-1 cursor-pointer"
                 >
-                  <Download size={14} /> নির্বাচিত সময়কালের রিপোর্ট
+                  <Download size={14} /> Selected Period Report
                 </button>
                 <div className="h-px bg-gray-100 my-1"></div>
                 <button
@@ -603,9 +604,9 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
                     handleDownloadCSV('all');
                     setIsDownloadDropdownOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2 cursor-pointer"
                 >
-                  <Download size={14} /> সব সময়ের রিপোর্ট
+                  <Download size={14} /> All Time Report
                 </button>
               </div>
             )}
@@ -619,7 +620,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <DollarSign size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-500 uppercase">মোট বিক্রয়</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Total Sales</p>
               <p className="text-2xl font-bold text-gray-900">৳{summary.totalSales.toLocaleString()}</p>
             </div>
           </div>
@@ -628,7 +629,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <Activity size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-500 uppercase">প্রোডাক্ট ক্রয়মূল্য</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Product Buying Cost</p>
               <p className="text-2xl font-bold text-gray-900">৳{summary.totalCost.toLocaleString()}</p>
             </div>
           </div>
@@ -637,7 +638,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <TrendingUp size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-500 uppercase">গ্রোস প্রফিট</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Gross Profit</p>
               <p className="text-2xl font-bold text-gray-900">৳{summary.grossProfit.toLocaleString()}</p>
             </div>
           </div>
@@ -646,7 +647,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <Receipt size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-500 uppercase">অন্যান্য খরচ</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Other Expenses</p>
               <p className="text-2xl font-bold text-gray-900">৳{summary.totalExpenses.toLocaleString()}</p>
             </div>
           </div>
@@ -655,7 +656,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <TrendingUp size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-indigo-600 uppercase">নেট প্রফিট</p>
+              <p className="text-sm font-bold text-indigo-600 uppercase">Net Profit</p>
               <p className="text-2xl font-bold text-indigo-900">৳{summary.netProfit.toLocaleString()}</p>
             </div>
           </div>
@@ -664,8 +665,8 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <Package size={24} />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-500 uppercase">সর্বমোট প্রোডাক্ট সেল</p>
-              <p className="text-2xl font-bold text-gray-900">{summary.totalItemsSold.toLocaleString()} টি</p>
+              <p className="text-sm font-bold text-gray-500 uppercase">Total Items Sold</p>
+              <p className="text-2xl font-bold text-gray-900">{summary.totalItemsSold.toLocaleString()} pcs</p>
             </div>
           </div>
         </div>
@@ -674,21 +675,21 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
         <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 my-6">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'dashboard' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'dashboard' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
           >
-            <Activity size={18} /> গ্রাফিক্যাল ড্যাশবোর্ড
+            <Activity size={18} /> Graphical Dashboard
           </button>
           <button
             onClick={() => setActiveTab('orders')}
-            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'orders' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'orders' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
           >
-            <Package size={18} /> অর্ডার ও লাভ তালিকা
+            <Package size={18} /> Order & Profit Breakdown
           </button>
           <button
             onClick={() => setActiveTab('expenses')}
-            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'expenses' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'expenses' ? 'bg-[#4f46e5]/10 text-[#4f46e5] shadow-sm' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
           >
-            <Receipt size={18} /> খরচ ও অফলাইন সেলস
+            <Receipt size={18} /> Expenses & Offline Sales
           </button>
         </div>
 
@@ -699,7 +700,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
             {/* Sales and Profit Trend Chart */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <TrendingUp className="text-indigo-600" size={20} /> Sales & Profit Trend (বিক্রয় ও লাভ গ্রাফ)
+                <TrendingUp className="text-indigo-600" size={20} /> Sales & Profit Trend
               </h3>
               
               {chartData.length === 0 ? (
@@ -828,11 +829,11 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
                     <div className="flex justify-center items-center gap-6 mt-4">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 bg-indigo-400 rounded-md"></div>
-                        <span className="text-xs font-bold text-gray-600">Total Sales (মোট বিক্রি)</span>
+                        <span className="text-xs font-bold text-gray-600">Total Sales</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 bg-green-400 rounded-md"></div>
-                        <span className="text-xs font-bold text-gray-600">Gross Profit (মোট লাভ)</span>
+                        <span className="text-xs font-bold text-gray-600">Gross Profit</span>
                       </div>
                     </div>
                   </div>
@@ -844,7 +845,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <TrendingUp className="text-green-600" /> Top Selling Products by Profit (সেরা লাভজনক পণ্যসমূহ)
+                  <TrendingUp className="text-green-600" /> Top Selling Products by Profit
                 </h3>
                 
                 {productMetrics.length === 0 ? (
@@ -880,7 +881,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
 
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Package className="text-blue-600" /> Sales Share by Product (বিক্রয় রেভিনিউ শেয়ার)
+                  <Package className="text-blue-600" /> Sales Share by Product
                 </h3>
                 
                 {productMetrics.length === 0 ? (
@@ -923,22 +924,22 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Receipt className="text-red-500" size={20} /> খরচ যুক্ত করুন
+              <Receipt className="text-red-500" size={20} /> Add New Expense
             </h3>
             <form onSubmit={handleAddExpense} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">খরচের বিবরণ</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Expense Description</label>
                 <input
                   type="text"
                   required
                   value={expenseDesc}
                   onChange={(e) => setExpenseDesc(e.target.value)}
-                  placeholder="যেমন: প্যাকেজিং, স্টাফ বেতন"
+                  placeholder="e.g. Packaging, Office Rent, Staff Salary"
                   className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">পরিমাণ (৳)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (৳)</label>
                 <input
                   type="number"
                   required
@@ -950,7 +951,7 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">তারিখ</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                 <input
                   type="date"
                   required
@@ -962,26 +963,26 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                {isSubmitting ? 'যুক্ত হচ্ছে...' : <><Plus size={18} /> খরচ যুক্ত করুন</>}
+                {isSubmitting ? 'Adding...' : <><Plus size={18} /> Add Expense</>}
               </button>
             </form>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <ShoppingCart className="text-indigo-500" size={20} /> অফলাইন সেলস যুক্ত করুন
+              <ShoppingCart className="text-indigo-500" size={20} /> Add Direct Offline Sale
             </h3>
             <form onSubmit={handleAddOfflineSale} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">তারিখ</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                 <input type="date" required value={offlineDate} onChange={(e) => setOfflineDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">প্রোডাক্ট</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product</label>
                 <select required value={offlineProductId} onChange={handleOfflineProductChange} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                  <option value="">প্রোডাক্ট সিলেক্ট করুন</option>
+                  <option value="">Select Product</option>
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
@@ -989,20 +990,20 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">পরিমাণ</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
                   <input type="number" required min="1" value={offlineQuantity} onChange={(e) => setOfflineQuantity(Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">ক্রয়মূল্য (৳)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Buying Price (৳)</label>
                   <input type="number" required min="0" value={offlineBuyPrice} onChange={(e) => setOfflineBuyPrice(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">বিক্রয়মূল্য (৳)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (৳)</label>
                   <input type="number" required min="0" value={offlineSellPrice} onChange={(e) => setOfflineSellPrice(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
-              <button type="submit" disabled={isSubmittingOffline} className="w-full bg-indigo-500 text-white font-bold py-3 rounded-xl hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2">
-                {isSubmittingOffline ? 'যুক্ত হচ্ছে...' : <><Plus size={18} /> অফলাইন সেলস যুক্ত করুন</>}
+              <button type="submit" disabled={isSubmittingOffline} className="w-full bg-indigo-500 text-white font-bold py-3 rounded-xl hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer">
+                {isSubmittingOffline ? 'Adding...' : <><Plus size={18} /> Add Offline Sale</>}
               </button>
             </form>
           </div>
@@ -1010,37 +1011,37 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           <div className="lg:col-span-1 xl:col-span-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <Activity className="text-gray-500" size={18} /> খরচের তালিকা
+                <Activity className="text-gray-500" size={18} /> Expense Records
               </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-gray-600">
                 <thead className="bg-gray-50 text-gray-900 border-b border-gray-100">
                   <tr>
-                    <th className="px-6 py-3 font-bold">তারিখ</th>
-                    <th className="px-6 py-3 font-bold">বিবরণ</th>
-                    <th className="px-6 py-3 font-bold text-right">পরিমাণ (৳)</th>
-                    <th className="px-6 py-3 font-bold text-center">অ্যাকশন</th>
+                    <th className="px-6 py-3 font-bold">Date</th>
+                    <th className="px-6 py-3 font-bold">Description</th>
+                    <th className="px-6 py-3 font-bold text-right">Amount (৳)</th>
+                    <th className="px-6 py-3 font-bold text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {(filteredExpensesList || []).length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
-                        কোনো খরচের রেকর্ড নেই
+                        No expense records found
                       </td>
                     </tr>
                   ) : (
                     [...(filteredExpensesList || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((exp) => (
                       <tr key={exp.id} className="hover:bg-red-50/30 transition-colors">
-                        <td className="px-6 py-3 whitespace-nowrap">{exp?.date ? new Date(exp.date).toLocaleDateString() : ''}</td>
+                        <td className="px-6 py-3 whitespace-nowrap">{exp?.date ? new Date(exp.date).toLocaleDateString('en-US') : ''}</td>
                         <td className="px-6 py-3">{exp?.description || ''}</td>
                         <td className="px-6 py-3 text-right font-bold text-red-600">{(exp?.amount || 0).toLocaleString()}</td>
                         <td className="px-6 py-3 text-center">
                           <button
                             onClick={() => exp?.id && handleDeleteExpense(exp.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="ডিলিট করুন"
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -1060,29 +1061,29 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 bg-indigo-50 flex items-center justify-between">
             <h3 className="font-bold text-indigo-900 flex items-center gap-2">
-              <Package size={18} /> অর্ডার ও প্রফিট তালিকা
+              <Package size={18} /> Order & Profit Breakdown
             </h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm text-gray-600">
               <thead className="bg-gray-50 text-gray-900 border-b border-gray-100">
                 <tr>
-                  <th className="px-3 py-3 font-bold whitespace-nowrap">তারিখ</th>
-                  <th className="px-3 py-3 font-bold whitespace-nowrap">অর্ডার আইডি</th>
-                  <th className="px-3 py-3 font-bold">প্রোডাক্টের নাম</th>
-                  <th className="px-3 py-3 font-bold text-center whitespace-nowrap">পরিমাণ</th>
-                  <th className="px-3 py-3 font-bold text-right whitespace-nowrap">ক্রয়মূল্য (৳)</th>
-                  <th className="px-3 py-3 font-bold text-right whitespace-nowrap">বিক্রয়মূল্য (৳)</th>
-                  <th className="px-3 py-3 font-bold text-right whitespace-nowrap">প্রফিট (৳)</th>
-                  <th className="px-3 py-3 font-bold text-center whitespace-nowrap">স্ট্যাটাস</th>
-                  <th className="px-3 py-3 font-bold text-center min-w-[120px] whitespace-nowrap">অ্যাকশন</th>
+                  <th className="px-3 py-3 font-bold whitespace-nowrap">Date</th>
+                  <th className="px-3 py-3 font-bold whitespace-nowrap">Order ID</th>
+                  <th className="px-3 py-3 font-bold">Product Name</th>
+                  <th className="px-3 py-3 font-bold text-center whitespace-nowrap">Quantity</th>
+                  <th className="px-3 py-3 font-bold text-right whitespace-nowrap">Buy Price (৳)</th>
+                  <th className="px-3 py-3 font-bold text-right whitespace-nowrap">Sell Price (৳)</th>
+                  <th className="px-3 py-3 font-bold text-right whitespace-nowrap">Profit (৳)</th>
+                  <th className="px-3 py-3 font-bold text-center whitespace-nowrap">Status</th>
+                  <th className="px-3 py-3 font-bold text-center min-w-[120px] whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {tableData.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-gray-400">
-                      কোনো ডেলিভারড অর্ডার পাওয়া যায়নি
+                      No delivered orders found
                     </td>
                   </tr>
                 ) : (
@@ -1131,14 +1132,14 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
                         <div className="flex items-center justify-center gap-2">
                           {isEditing ? (
                             <>
-                              <button onClick={() => handleSaveEdit(row)} className="p-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition-colors" title="Save"><Save size={16} /></button>
-                              <button onClick={() => setEditingRowId(null)} className="p-1.5 bg-red-50 text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="Cancel"><X size={16} /></button>
+                              <button onClick={() => handleSaveEdit(row)} className="p-1.5 bg-green-50 text-green-600 hover:bg-green-100 rounded-lg transition-colors cursor-pointer" title="Save"><Save size={16} /></button>
+                              <button onClick={() => setEditingRowId(null)} className="p-1.5 bg-red-50 text-red-500 hover:bg-red-100 rounded-lg transition-colors cursor-pointer" title="Cancel"><X size={16} /></button>
                             </>
                           ) : (
                             <button onClick={() => {
                               setEditingRowId(rowId);
                               setEditData({ quantity: row.quantity, buyPrice: row.buyPrice, sellPrice: row.sellPrice });
-                            }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit row">
+                            }} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" title="Edit row">
                               <Edit2 size={16} />
                             </button>
                           )}

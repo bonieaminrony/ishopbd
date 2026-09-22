@@ -141,7 +141,7 @@ export const BENGALI_FONTS = [
   { name: "Sulaiman Lipi", value: "font-sulaiman" },
 ];
 
-export const NOTIF_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+export const NOTIF_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3";
 
 export const MASTER_EMAILS = [
   "bonieaminrony@gmail.com",
@@ -229,3 +229,32 @@ export const ALL_DISTRICTS = [
   "Rangpur", "Satkhira", "Shariatpur", "Sherpur", "Sirajganj", "Sunamganj", "Sylhet",
   "Tangail", "Thakurgaon"
 ];
+
+export const STORAGE_KEYS = {
+  PRODUCTS: 'ishopbd_cached_products_v2026',
+  CATEGORIES: 'ishopbd_cached_categories_v2026',
+  BANNERS: 'ishopbd_cached_banners_v2026',
+  ADMINS: 'ishopbd_cached_admins_v2026',
+  PRODUCTS_LAST_FETCH: 'ishopbd_products_last_fetch_v2026',
+  PRODUCTS_UPDATED_AT: 'ishopbd_products_updated_at_v2026',
+} as const;
+
+export function purgeLegacyCaches() {
+  if (typeof window === 'undefined') return;
+  const legacyKeys = [
+    'cached_products',
+    'cached_categories',
+    'cached_banners',
+    'cached_admins',
+    'products_last_fetch',
+    'products_updated_at',
+    'products',
+    'categories'
+  ];
+  legacyKeys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {}
+  });
+}
+

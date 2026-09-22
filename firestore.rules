@@ -159,7 +159,7 @@ service cloud.firestore {
 
       match /reviews/{reviewId} {
         allow read: if true;
-        allow create: if isValidId(reviewId) && isSignedIn() && isValidReview(incoming()) && incoming().createdAt == request.time;
+        allow create: if isValidId(reviewId) && isValidReview(incoming()) && (incoming().createdAt == request.time || incoming().createdAt is string);
         allow delete: if isModerator() || (isSignedIn() && existing().userId == request.auth.uid);
       }
     }
@@ -248,7 +248,7 @@ service cloud.firestore {
       // Only allow public read for safe, non-sensitive config documents.
       // Sensitive config (API keys, courier keys) must be stored in /admin_config/
       // which requires moderator access.
-      allow read: if configId == 'siteConfig' || configId == 'appSettings' || configId == 'announcement';
+      allow read: if configId in ['siteConfig', 'site', 'appSettings', 'announcement'];
       allow write: if isModerator();
     }
 
@@ -265,6 +265,10 @@ service cloud.firestore {
     match /incomplete_orders/{orderId} {
       allow read: if isModerator();
       allow write: if true;
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isModerator();
     }
 
     match /deleted_orders/{orderId} {
