@@ -70,10 +70,10 @@ export default function ProfileModal({
           <ArrowLeft size={18} />
         </button>
         {/* Left Sidebar: Profile Summary */}
-        <div className="w-full md:w-80 bg-secondary text-white p-8 flex flex-col overflow-y-auto no-scrollbar max-h-[40vh] md:max-h-full">
-          <div className="flex items-center gap-4 mb-8">
+        <div className="w-full md:w-80 bg-secondary text-white p-4 sm:p-6 md:p-8 flex flex-col overflow-y-auto no-scrollbar max-h-[40vh] md:max-h-full">
+          <div className="flex items-center gap-4 mb-6 md:mb-8">
             <div className="relative group/avatar">
-              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-2xl font-black shadow-xl shadow-primary/20 overflow-hidden border-2 border-white/20">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-primary flex items-center justify-center text-2xl font-black shadow-xl shadow-primary/20 overflow-hidden border-2 border-white/20">
                 {(userProfile?.photoURL || user?.photoURL) ? (
                   <img loading="lazy" decoding="async"
                     src={userProfile?.photoURL || user?.photoURL || ""} 
@@ -91,15 +91,15 @@ export default function ProfileModal({
                 <Camera size={20} className="text-white" />
               </label>
               <input 
-                type="file"
-                id="profile-pic-upload"
-                className="hidden"
-                accept="image/*"
-                onChange={handleProfileImageUpload}
+                type="file" 
+                id="profile-pic-upload" 
+                className="hidden" 
+                accept="image/*" 
+                onChange={handleProfileImageUpload} 
               />
             </div>
             <div>
-              <h3 className="font-black text-lg line-clamp-1">
+              <h3 className="font-black text-base sm:text-lg line-clamp-1">
                 {user.displayName || "Customer"}
               </h3>
               <p className="text-xs text-gray-400 line-clamp-1">
@@ -109,14 +109,14 @@ export default function ProfileModal({
               </p>
             </div>
           </div>
-          <div className="bg-white/10 rounded-2xl p-6 mb-8 border border-white/5 backdrop-blur-sm">
+          <div className="bg-white/10 rounded-2xl p-4 sm:p-6 mb-6 md:mb-8 border border-white/5 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-2">
               <Wallet className="text-primary" size={20} />
               <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                 {t("ওয়ালেট ব্যালেন্স", "Wallet Balance")}
               </span>
             </div>
-            <p className="text-3xl font-black text-white">
+            <p className="text-2xl sm:text-3xl font-black text-white">
               ৳{userProfile?.balance || 0}
             </p>
             <button
@@ -165,15 +165,15 @@ export default function ProfileModal({
           </div>
           <button
             onClick={handleLogout}
-            className="mt-8 flex items-center gap-3 text-red-400 hover:text-red-500 font-bold text-sm transition-colors"
+            className="mt-6 md:mt-8 flex items-center gap-3 text-red-400 hover:text-red-500 font-bold text-sm transition-colors"
           >
             <LogOut size={18} /> {t("লগআউট করুন", "Log Out")}
           </button>
         </div>
         {/* Right Content: Details & Transactions */}
-        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
-          <div className="flex items-center justify-between mb-8">
-            <h4 className="text-xl font-black text-secondary flex items-center gap-2">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 no-scrollbar">
+          <div className="flex items-center justify-between mb-6 md:mb-8">
+            <h4 className="text-lg sm:text-xl font-black text-secondary flex items-center gap-2">
               {profileTab === "transactions" && <><Wallet className="text-primary" size={24} /> {t("লেনদেনের ইতিহাস", "Transaction History")}</>}
               {profileTab === "orders" && <><History className="text-primary" size={24} /> {t("আপনার অর্ডারসমূহ", "Your Orders")}</>}
               {profileTab === "info" && <><User className="text-primary" size={24} /> {t("প্রোফাইল তথ্য", "Profile Info")}</>}
@@ -302,12 +302,15 @@ export default function ProfileModal({
                             {t("রিফান্ড রিকোয়েস্ট", "Refund Request")}
                           </button>
                         )}
-                        {order.status === "shipped" && (
+                        {(order.status === "shipped" || order.courierTrackingId || order.trackingId || order.couriers?.trackingId) && (
                           <div className="text-right">
                             <div className="flex items-center gap-1 justify-end text-[10px] font-black text-primary mb-1">
                               <Truck size={12} /> {order.courierName || t("কুরিয়ার সার্ভিস", "Courier Service")}
                             </div>
-                            <p className="text-[10px] font-bold text-gray-500">ID: {order.trackingId || t("প্রসেসিং", "Processing")}</p>
+                            <p className="text-[10px] font-bold text-gray-500">ID: {order.courierTrackingId || order.trackingId || order.couriers?.trackingId || t("প্রসেসিং", "Processing")}</p>
+                            {(order.courierStatusLabel || order.courierStatus || order.steadfastStatus || order.pathaoStatus) && (
+                              <p className="text-[10px] font-bold text-sky-600 mt-0.5">{order.courierStatusLabel || order.courierStatus || order.steadfastStatus || order.pathaoStatus}</p>
+                            )}
                           </div>
                         )}
                       </div>

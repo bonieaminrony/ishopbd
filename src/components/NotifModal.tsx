@@ -135,51 +135,86 @@ export default function NotifModal(props: NotifModalProps) {
     setIsNotifOpen(false);
   };
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isNotifOpen) {
+        setIsNotifOpen(false);
+      }
+    };
+    if (isNotifOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isNotifOpen, setIsNotifOpen]);
+
+  if (!isNotifOpen) return null;
+
   return (
-    <>
-      {isNotifOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-end">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsNotifOpen(false)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-sm h-full bg-white shadow-2xl flex flex-col z-10"
-          >
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-primary/5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-                  <Bell size={20} />
-                </div>
-                <div>
-                  <h3 className="font-black text-secondary text-base">Notifications</h3>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">ALL UPDATES ({notifications.length})</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {notifications.length > 0 && (
-                  <button
-                    onClick={handleClearAllNotifications}
-                    className="text-xs font-black text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-all"
-                  >
-                    Clear All
-                  </button>
-                )}
-                <button 
-                  onClick={() => setIsNotifOpen(false)}
-                  className="p-2 hover:bg-white rounded-xl transition-colors text-gray-400"
-                >
-                  <X size={20} />
-                </button>
-              </div>
+    <div className="fixed inset-0 z-[600] flex items-center justify-end overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsNotifOpen(false);
+        }}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+      />
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="relative w-full max-w-sm h-full bg-white shadow-2xl flex flex-col z-10 select-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-primary/5 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <Bell size={20} />
             </div>
+            <div>
+              <h3 className="font-black text-secondary text-base">Notifications</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">ALL UPDATES ({notifications.length})</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {notifications.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleClearAllNotifications();
+                }}
+                className="text-xs font-black text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-all active:scale-95 touch-manipulation cursor-pointer"
+              >
+                Clear All
+              </button>
+            )}
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsNotifOpen(false);
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsNotifOpen(false);
+              }}
+              className="p-2.5 bg-white/80 hover:bg-white text-gray-500 hover:text-secondary rounded-xl transition-all active:scale-90 touch-manipulation cursor-pointer shadow-xs border border-gray-100"
+              title="Close Notifications"
+              aria-label="Close Notifications"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
 
             <div className="flex-1 overflow-y-auto p-4 no-scrollbar space-y-3.5">
               {notifications.length === 0 ? (
@@ -284,7 +319,5 @@ export default function NotifModal(props: NotifModalProps) {
             </div>
           </motion.div>
         </div>
-      )}
-    </>
   );
 }

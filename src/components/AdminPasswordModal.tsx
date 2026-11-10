@@ -55,7 +55,7 @@ export default function AdminPasswordModal({
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative"
+        className="bg-white w-full max-w-md rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-8 shadow-2xl overflow-y-auto max-h-[92vh] relative"
       >
         <div className="absolute top-0 left-0 w-full h-2 bg-primary" />
         <div className="text-center mb-8 mt-4">

@@ -11,6 +11,23 @@ import { GoogleGenAI } from "@google/genai";
 import compression from "compression";
 import crypto from "crypto";
 import https from "https";
+import {
+  buildMetaCapiPayload,
+  buildTikTokEventsPayload,
+  dispatchServerTrackingEvents,
+  extractClientIp,
+  isSupportedTrackingEvent,
+  parseCookies,
+} from "./src/server/trackingEngine";
+import {
+  fetchSteadfastLiveStatus,
+  loadCourierCredentials,
+  processSteadfastWebhook,
+  startCourierBackgroundSync,
+  syncAllActiveCourierOrders,
+  syncSingleOrderCourierStatus,
+} from "./src/server/courierSyncEngine";
+import { buildProductStructuredData } from "./src/utils/productSchema";
 
 dotenv.config();
 
@@ -32,10 +49,10 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   console.warn('[WARNING] EMAIL_USER or EMAIL_PASS not set. Order confirmation emails will not be sent.');
 }
 
-// ---- Security: Require MASTER_ADMIN_PASSWORD in env (with fallback to 'islamic786') ----
-const MASTER_ADMIN_PASSWORD = process.env.MASTER_ADMIN_PASSWORD || 'islamic786';
-if (!process.env.MASTER_ADMIN_PASSWORD) {
-  console.warn('[WARNING] MASTER_ADMIN_PASSWORD is not set in .env. Using code fallback password.');
+// ---- Security: Require MASTER_ADMIN_PASSWORD in env ----
+const MASTER_ADMIN_PASSWORD = process.env.MASTER_ADMIN_PASSWORD || '';
+if (!MASTER_ADMIN_PASSWORD) {
+  console.error('[CRITICAL SECURITY ERROR] MASTER_ADMIN_PASSWORD is not set in .env! Admin access will be restricted.');
 }
 
 // ---- Admin Brute-Force Lockout Map ----
@@ -160,15 +177,29 @@ async function fetchFirestoreProductsRunQuery(): Promise<any[]> {
 }
 
 // ---- In-Memory Product Cache (AI Recommendations + Chat + API) ----
-// Products are cached for 5 minutes to avoid repeated Firestore reads
+// 24-hour TTL with instant sync to disk cache; proactively invalidated on product change
 interface CachedProducts {
   data: any[];
   expiresAt: number;
 }
 let productCache: CachedProducts | null = null;
-const PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PRODUCT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours (instant zero-latency paint)
 
-let isAdminSdkHealthy = true;
+// Instant boot from disk cache so cold start is 0ms without waiting for Firestore
+try {
+  const diskCachePath = path.join(process.cwd(), 'public', 'api', 'products_cache.json');
+  if (fs.existsSync(diskCachePath)) {
+    const raw = fs.readFileSync(diskCachePath, 'utf8');
+    if (raw && raw.length > 50) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        productCache = { data: parsed, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+      }
+    }
+  }
+} catch (e) {}
+
+let isAdminSdkHealthy = false; // runQuery is primary & sub-200ms
 let pendingProductsFetch: Promise<any[]> | null = null;
 
 async function getCachedProducts(db?: FirebaseFirestore.Firestore): Promise<any[]> {
@@ -183,6 +214,23 @@ async function getCachedProducts(db?: FirebaseFirestore.Firestore): Promise<any[
 
   pendingProductsFetch = (async () => {
     try {
+      // 1. Fast single-roundtrip runQuery first (~150ms)
+      try {
+        const runQueryDocs = await fetchFirestoreProductsRunQuery();
+        const products = runQueryDocs.filter((p: any) => !p.deleted);
+        if (products.length > 0) {
+          productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+          try {
+            const diskCachePath = path.join(process.cwd(), 'public', 'api', 'products_cache.json');
+            fs.writeFile(diskCachePath, JSON.stringify(products), () => {});
+          } catch (_) {}
+          return products;
+        }
+      } catch (rqErr: any) {
+        console.warn("getCachedProducts runQuery fallback warning:", rqErr.message);
+      }
+
+      // 2. Try Admin SDK if marked healthy
       if (isAdminSdkHealthy) {
         try {
           const firestore = db || getFirestore();
@@ -192,39 +240,45 @@ async function getCachedProducts(db?: FirebaseFirestore.Firestore): Promise<any[
             .filter((p: any) => !p.deleted);
           if (products.length > 0) {
             productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+            try {
+              const diskCachePath = path.join(process.cwd(), 'public', 'api', 'products_cache.json');
+              fs.writeFile(diskCachePath, JSON.stringify(products), () => {});
+            } catch (_) {}
             return products;
           }
         } catch (e: any) {
           console.warn("getCachedProducts Admin SDK warning:", e.message);
-          if (e.message?.includes("UNAUTHENTICATED") || e.code === 16 || e.message?.includes("invalid authentication credentials")) {
-            isAdminSdkHealthy = false;
-          }
+          isAdminSdkHealthy = false;
         }
       }
 
-      // Fast single-roundtrip runQuery
-      try {
-        const runQueryDocs = await fetchFirestoreProductsRunQuery();
-        const products = runQueryDocs.filter((p: any) => !p.deleted);
-        if (products.length > 0) {
-          productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
-          return products;
-        }
-      } catch (rqErr: any) {
-        console.warn("getCachedProducts runQuery fallback warning:", rqErr.message);
-      }
-
-      // Fallback to Firestore REST paginated API
+      // 3. Fallback to Firestore REST paginated API
       try {
         const restDocs = await fetchFirestoreCollectionFromRest("products");
         const products = restDocs.filter((p: any) => !p.deleted);
         if (products.length > 0) {
           productCache = { data: products, expiresAt: Date.now() + PRODUCT_CACHE_TTL_MS };
+          try {
+            const diskCachePath = path.join(process.cwd(), 'public', 'api', 'products_cache.json');
+            fs.writeFile(diskCachePath, JSON.stringify(products), () => {});
+          } catch (_) {}
           return products;
         }
       } catch (restErr: any) {
         console.error("getCachedProducts REST fallback error:", restErr.message);
       }
+
+      // 4. Fallback to local disk cache if network is unavailable
+      try {
+        const diskCachePath = path.join(process.cwd(), 'public', 'api', 'products_cache.json');
+        if (fs.existsSync(diskCachePath)) {
+          const raw = fs.readFileSync(diskCachePath, 'utf8');
+          const diskProds = JSON.parse(raw);
+          if (Array.isArray(diskProds) && diskProds.length > 0) {
+            return diskProds;
+          }
+        }
+      } catch (e) {}
 
       return productCache?.data || [];
     } finally {
@@ -235,11 +289,106 @@ async function getCachedProducts(db?: FirebaseFirestore.Firestore): Promise<any[
   return pendingProductsFetch;
 }
 
+// Transform products to lightweight representation: strip heavy base64 and landingConfig for fast catalog delivery
+function toLeanProducts(products: any[]): any[] {
+  if (!Array.isArray(products)) return [];
+  return products.map((p: any) => {
+    if (!p) return p;
+    const lean: any = { ...p };
+    delete lean.landingConfig;
+    if (typeof lean.image === 'string' && lean.image.startsWith('data:')) {
+      lean.image = `/api/product-image/${p.id || ''}`;
+    }
+    if (Array.isArray(lean.images)) {
+      lean.images = lean.images
+        .filter((img: any) => typeof img === 'string' && img.trim().length > 0)
+        .map((img: string, idx: number) => {
+          if (img.startsWith('data:')) {
+            return `/api/product-image/${p.id || ''}?index=${idx}`;
+          }
+          return img;
+        });
+    }
+    if (Array.isArray(lean.variants)) {
+      lean.variants = lean.variants.map((v: any) => {
+        if (v && typeof v.image === 'string' && v.image.startsWith('data:')) {
+          return { ...v, image: `/api/product-image/${p.id || ''}` };
+        }
+        return v;
+      });
+    }
+    return lean;
+  });
+}
+
 // Invalidate cache when products change (called after order/product update)
 function invalidateProductCache() {
   productCache = null;
+  try {
+    const diskCachePath = path.join(process.cwd(), 'public', 'api', 'products_cache.json');
+    if (fs.existsSync(diskCachePath)) {
+      fs.unlinkSync(diskCachePath);
+    }
+  } catch (_) {}
   // Proactive background prefetch so subsequent client requests resolve instantly
   getCachedProducts().catch(() => {});
+}
+
+let bannersCache: { data: any[]; expiresAt: number } | null = null;
+const BANNER_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function sortBannersByOrder(list: any[]): any[] {
+  return [...list].sort((a, b) => Number(a?.order ?? 0) - Number(b?.order ?? 0));
+}
+
+// Instant boot for banners from disk
+try {
+  const diskBannerPath = path.join(process.cwd(), 'public', 'api', 'banners_cache.json');
+  if (fs.existsSync(diskBannerPath)) {
+    const raw = fs.readFileSync(diskBannerPath, 'utf8');
+    if (raw && raw.length > 20) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        bannersCache = { data: sortBannersByOrder(parsed), expiresAt: Date.now() + BANNER_CACHE_TTL_MS };
+      }
+    }
+  }
+} catch (e) {}
+
+async function getCachedBanners(db?: FirebaseFirestore.Firestore): Promise<any[]> {
+  const now = Date.now();
+  if (bannersCache && now < bannersCache.expiresAt && bannersCache.data.length > 0) {
+    return bannersCache.data;
+  }
+  try {
+    const firestoreDb = db || getFirestore();
+    if (firestoreDb) {
+      const snap = await firestoreDb.collection("banners").get();
+      const list = sortBannersByOrder(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+      if (list.length > 0) {
+        bannersCache = { data: list, expiresAt: now + BANNER_CACHE_TTL_MS };
+        try {
+          const diskBannerPath = path.join(process.cwd(), 'public', 'api', 'banners_cache.json');
+          fs.writeFile(diskBannerPath, JSON.stringify(list), () => {});
+        } catch (_) {}
+        return list;
+      }
+    }
+  } catch (e: any) {
+    console.warn("getCachedBanners warning:", e.message);
+  }
+  return [];
+}
+
+async function invalidateBannerCache(): Promise<any[]> {
+  bannersCache = null;
+  try {
+    const diskBannerPath = path.join(process.cwd(), 'public', 'api', 'banners_cache.json');
+    if (fs.existsSync(diskBannerPath)) {
+      fs.unlinkSync(diskBannerPath);
+    }
+  } catch (_) {}
+  return getCachedBanners().catch(() => []);
 }
 
 function slugify(text: string, maxLen = 38): string {
@@ -296,24 +445,54 @@ function getProductSlug(product: any): string {
   return nameSlug || prodId || "";
 }
 
-let serviceAccountPath = path.join(process.cwd(), "api", "service-account.json");
-if (!fs.existsSync(serviceAccountPath)) {
-  serviceAccountPath = path.join(process.cwd(), "public", "api", "service-account.json");
+const possibleServiceAccountPaths = [
+  process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
+  path.join(process.cwd(), "api", "service-account.json"),
+  path.join(process.cwd(), "..", "api", "service-account.json"),
+  path.join(path.dirname(process.cwd()), "api", "service-account.json")
+].filter(Boolean) as string[];
+
+// Strictly ensure no public, dist, or public_html directory is ever used to load credentials
+const secureServiceAccountPaths = possibleServiceAccountPaths.filter(p => {
+  const norm = path.normalize(p).toLowerCase();
+  return !norm.includes(`${path.sep}public`) && !norm.includes(`${path.sep}dist`) && !norm.includes('public_html');
+});
+
+let serviceAccountPath = secureServiceAccountPaths.find(p => fs.existsSync(p)) || "";
+let serviceAccountData: any = null;
+
+if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+  try {
+    const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+    serviceAccountData = rawKey.startsWith('{')
+      ? JSON.parse(rawKey)
+      : JSON.parse(Buffer.from(rawKey, 'base64').toString('utf8'));
+    console.log("Firebase Admin credentials loaded from FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
+  } catch (err: any) {
+    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY from env:", err.message);
+  }
+} else if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+  try {
+    serviceAccountData = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  } catch (err: any) {
+    console.error("Failed to parse serviceAccountPath:", err.message);
+  }
 }
-if (fs.existsSync(serviceAccountPath)) {
+
+if (serviceAccountData) {
   try {
     admin.initializeApp({
-      credential: admin.cert(JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'))),
+      credential: admin.cert(serviceAccountData),
       databaseURL: "https://i-shop-bd.firebaseio.com"
     });
-    console.log("Firebase Admin initialized successfully.");
-  } catch (e) {
+    console.log(`Firebase Admin initialized successfully from: ${serviceAccountPath || 'ENV variable'}`);
+  } catch (e: any) {
     if (!/already exists/.test(e.message)) {
       console.error("Firebase Admin init error:", e);
     }
   }
 } else {
-  console.error("[CRITICAL] service-account.json not found. Backend checkout won't work.");
+  console.error("[CRITICAL] service-account.json not found in secure server-only locations or env. Backend checkout won't work.");
 }
 
 async function startServer() {
@@ -322,6 +501,20 @@ async function startServer() {
 
   // Trust proxy for correct IP detection behind NGINX/Cloudflare
   app.set("trust proxy", 1);
+
+  // ---- Absolute Shield: Block any HTTP request for sensitive files or credentials ----
+  app.use((req, res, next) => {
+    const url = (req.path || "").toLowerCase();
+    const isSensitive = 
+      url.includes("service-account") ||
+      /(?:^|\/)\.env($|\.|\/)/i.test(url) ||
+      url.includes("products_cache.json") ||
+      (process.env.NODE_ENV === "production" && (url.endsWith(".map") || url.endsWith(".cjs")));
+    if (isSensitive) {
+      return res.status(403).json({ error: "Access Denied: Sensitive file blocked" });
+    }
+    next();
+  });
 
   // ---- Compression Middleware ----
   app.use(compression());
@@ -336,6 +529,7 @@ async function startServer() {
   app.use("/api/send-sms", express.json({ limit: '8kb' }));
   app.use("/api/send-bulk-sms", express.json({ limit: '256kb' }));
   app.use("/api/confirm-order", express.json({ limit: '64kb' }));
+  app.use("/api/track-event", express.json({ limit: '64kb' }));
   app.use("/api/courier", express.json({ limit: '512kb' }));
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '1mb', extended: true }));
@@ -354,7 +548,7 @@ async function startServer() {
     if (isAllowed && origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Api-Key,X-Secret-Key');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Api-Key,X-Secret-Key,X-Admin-Token');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
     if (req.method === 'OPTIONS') {
@@ -384,8 +578,9 @@ async function startServer() {
     next();
   });
 
-  // ---- General API Rate Limit: 300 req/min per IP ----
+  // ---- General API Rate Limit & Robots Shield ----
   app.use("/api", (req, res, next) => {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
     const rawIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || "unknown";
     const ip = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : rawIp);
     if (!rateLimit(ip + ":api", 300, 60_000)) {
@@ -440,22 +635,51 @@ async function startServer() {
 
   app.get("/api/products", async (req, res) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
       const prods = await getCachedProducts();
       if (prods && prods.length > 0) {
-        const signature = prods.map(p => `${p.id}:${p.updatedAt || ''}:${p.price}:${p.stock}:${p.isPublished}`).join('|');
+        const lean = toLeanProducts(prods);
+        const signature = lean.map(p => `${p.id}:${p.updatedAt || ''}:${p.price}:${p.stock}:${p.isPublished}`).join('|');
         const etag = `"${crypto.createHash('md5').update(signature).digest('hex')}"`;
         res.setHeader("ETag", etag);
 
         if (req.headers["if-none-match"] === etag) {
           return res.status(304).end();
         }
-        return res.json(prods);
+        res.setHeader("Content-Type", "application/json");
+        return res.json(lean);
       }
       res.status(500).json({ error: "No products available" });
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch products" });
     }
+  });
+
+  app.get("/api/banners", async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      const list = await getCachedBanners();
+      if (list && list.length > 0) {
+        const signature = list.map(b => `${b.id}:${b.updatedAt || ''}:${b.image || ''}`).join('|');
+        const etag = `"${crypto.createHash('md5').update(signature).digest('hex')}"`;
+        res.setHeader("ETag", etag);
+
+        if (req.headers["if-none-match"] === etag) {
+          return res.status(304).end();
+        }
+        res.setHeader("Content-Type", "application/json");
+        return res.json(list);
+      }
+      return res.json([]);
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  app.post("/api/invalidate-banner-cache", async (req, res) => {
+    await invalidateBannerCache();
+    res.json({ success: true, message: "Banner cache invalidated" });
   });
 
   app.post("/api/verify-admin", (req, res) => {
@@ -478,7 +702,9 @@ async function startServer() {
       return res.status(400).json({ success: false, error: 'Invalid password format.' });
     }
 
-    if (password.trim() === masterPassword.trim()) {
+    const providedBuf = Buffer.from(password.trim());
+    const masterBuf = Buffer.from(masterPassword.trim());
+    if (masterBuf.length > 0 && providedBuf.length === masterBuf.length && crypto.timingSafeEqual(providedBuf, masterBuf)) {
       console.log(`[${new Date().toISOString()}] Admin login SUCCESS from IP: ${ip}`);
       clearAdminFail(ip);
       return res.json({ success: true });
@@ -489,9 +715,14 @@ async function startServer() {
     return res.status(401).json({ success: false, error: 'Incorrect password.' });
   });
 
-  // ---- Image Upload Endpoint ----
+  // ---- Image Upload Endpoint (Admin Only, Raster Images Only) ----
   app.post("/api/upload", async (req, res) => {
     try {
+      const isAuthorized = await verifyIsAdmin(req);
+      if (!isAuthorized) {
+        return res.status(401).json({ error: "Unauthorized: Admin access required" });
+      }
+
       const { image, filename } = req.body;
       if (!image || typeof image !== 'string' || !image.startsWith('data:image/')) {
         return res.status(400).json({ error: "Invalid image format" });
@@ -503,14 +734,17 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid base64 image data" });
       }
 
-      const contentType = match[1];
+      const contentType = match[1].toLowerCase();
       const base64Data = match[2];
       const buffer = Buffer.from(base64Data, 'base64');
+      if (buffer.length === 0 || buffer.length > 5 * 1024 * 1024) {
+        return res.status(400).json({ error: "Image size must be between 1 byte and 5 MB" });
+      }
 
-      // Validate allowed mime types (jpeg, png, webp, gif, svg)
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+      // Validate allowed safe raster mime types (SVG disallowed to prevent Stored XSS)
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
       if (!allowedMimeTypes.includes(contentType)) {
-        return res.status(400).json({ error: "Only image files are allowed (JPEG, PNG, WEBP, GIF, SVG)" });
+        return res.status(400).json({ error: "Only raster image files are allowed (JPEG, PNG, WEBP, GIF)" });
       }
 
       // Determine extension
@@ -518,7 +752,6 @@ async function startServer() {
       if (contentType === 'image/png') ext = 'png';
       else if (contentType === 'image/webp') ext = 'webp';
       else if (contentType === 'image/gif') ext = 'gif';
-      else if (contentType === 'image/svg+xml') ext = 'svg';
 
       // Create uploads directory if it doesn't exist
       const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
@@ -544,6 +777,60 @@ async function startServer() {
     }
   });
 
+  // ---- Server-Side AI Natural Product Search Proxy (Hides Gemini API Key) ----
+  app.post("/api/ai-search", async (req, res) => {
+    const rawIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || "unknown";
+    const ip = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : rawIp);
+    if (!rateLimit(ip + ":ai-search", 30, 60_000)) {
+      return res.status(429).json({ success: false, matchingIds: [], message: "Too many requests" });
+    }
+
+    const { query, products } = req.body;
+    if (!query || typeof query !== 'string' || !Array.isArray(products) || products.length === 0) {
+      return res.json({ success: true, matchingIds: [] });
+    }
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      return res.json({ success: false, matchingIds: [] });
+    }
+
+    try {
+      const prompt = `Based on these e-commerce products:
+${JSON.stringify(products.slice(0, 100))}
+
+Filter and return the products matching this customer query: "${query.substring(0, 200)}".
+Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"]. Return an empty array [] if no items match. Do not write explanations or markdown coding fence.`;
+
+      let aiRes: any = null;
+      const searchModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.8-flash"];
+      for (const sModel of searchModels) {
+        try {
+          aiRes = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${sModel}:generateContent?key=${geminiKey}`,
+            {
+              contents: [{ role: "user", parts: [{ text: prompt }] }]
+            },
+            { timeout: 8000 }
+          );
+          if (aiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+            break;
+          }
+        } catch (sErr: any) {
+          // try next model
+        }
+      }
+
+      const responseText = aiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+      const cleanedText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+      const ids = JSON.parse(cleanedText);
+      return res.json({ success: true, matchingIds: Array.isArray(ids) ? ids : [] });
+    } catch (err: any) {
+      console.warn("AI Search Backend Error:", err.message);
+      return res.json({ success: false, matchingIds: [] });
+    }
+  });
+
   app.post("/api/send-sms", async (req, res) => {
     const rawIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || "unknown";
     const ip = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : rawIp);
@@ -559,13 +846,15 @@ async function startServer() {
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Message cannot be empty.' });
     }
-    if (message.length > 1000) {
-      return res.status(400).json({ success: false, message: 'Message cannot exceed 1000 characters.' });
+    if (message.length > 600) {
+      return res.status(400).json({ success: false, message: 'Message cannot exceed 600 characters.' });
     }
 
-    // SMS Configuration from .env
+    const isAdminSender = await verifyIsAdmin(req);
     const SMS_API_KEY = process.env.SMS_API_KEY;
-    const SMS_SENDER_ID = senderId || process.env.SMS_SENDER_ID || "8809648908219";
+    const SMS_SENDER_ID = (isAdminSender && typeof senderId === 'string' && senderId.trim())
+      ? senderId.trim()
+      : (process.env.SMS_SENDER_ID || "8809648908219");
 
     if (!SMS_API_KEY) {
       console.warn("SMS_API_KEY not set in environment. SMS not sent.");
@@ -574,10 +863,8 @@ async function startServer() {
 
     // Format phone number to 8801XXXXXXXXX format
     let formattedPhone = String(phone || "").trim();
-    // Convert Bengali digits to English
     const banglaToEnglish = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
     formattedPhone = formattedPhone.replace(/[০-৯]/g, (match) => (banglaToEnglish as any)[match]);
-    // Remove all non-digits except leading +
     const isPlus = formattedPhone.startsWith("+");
     formattedPhone = formattedPhone.replace(/\D/g, "");
     if (isPlus) formattedPhone = "+" + formattedPhone;
@@ -587,6 +874,12 @@ async function startServer() {
     }
     if (formattedPhone.startsWith("01") && formattedPhone.length === 11) {
       formattedPhone = "88" + formattedPhone;
+    }
+    if (!/^8801[3-9]\d{8}$/.test(formattedPhone)) {
+      return res.status(400).json({ success: false, message: "Invalid Bangladeshi phone number format." });
+    }
+    if (!isAdminSender && !rateLimit("sms-phone:" + formattedPhone, 3, 5 * 60_000)) {
+      return res.status(429).json({ success: false, message: "Too many SMS requests for this phone number. Please try again later." });
     }
 
     try {
@@ -624,6 +917,16 @@ async function startServer() {
     if (!rateLimit(ip + ":bulksms", 2, 60_000)) {
       return res.status(429).json({ success: false, message: "Too many requests. Please wait a moment." });
     }
+
+    // Server-side Admin Authentication Check
+    const rawAdminToken = (req.headers['x-admin-token'] as string) || (req.headers['authorization'] as string) || '';
+    const adminToken = rawAdminToken.startsWith('Bearer ') ? rawAdminToken.slice(7).trim() : rawAdminToken.trim();
+    const validToken = (process.env.ADMIN_API_TOKEN || process.env.MASTER_ADMIN_PASSWORD || MASTER_ADMIN_PASSWORD).trim();
+
+    if (!validToken || !adminToken || adminToken !== validToken) {
+      return res.status(403).json({ success: false, message: "Unauthorized: Valid admin token required" });
+    }
+
     const { phones, message, senderId } = req.body;
 
     const SMS_API_KEY = process.env.SMS_API_KEY;
@@ -711,51 +1014,46 @@ async function startServer() {
   
   app.get("/sitemap.xml", async (req, res) => {
     try {
-      if (!(admin as any).apps.length) return res.status(500).send("Firebase not initialized");
-      const db = getFirestore();
+      const distSitemapPath = path.join(process.cwd(), 'dist', 'sitemap.xml');
+      const publicSitemapPath = path.join(process.cwd(), 'public', 'sitemap.xml');
+      if (fs.existsSync(distSitemapPath)) {
+        res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.sendFile(distSitemapPath);
+      }
+      if (fs.existsSync(publicSitemapPath)) {
+        res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.sendFile(publicSitemapPath);
+      }
 
-      // Fetch products, categories, and campaigns in parallel
-      const [productsSnap, categoriesSnap, campaignsSnap] = await Promise.all([
-        db.collection("products").where("deleted", "==", false).where("isPublished", "==", true).get(),
-        db.collection("categories").get(),
-        db.collection("campaigns").where("isActive", "==", true).get(),
-      ]);
-      
+      const products = await getCachedProducts().catch(() => []);
+      const activeProducts = products.filter((p: any) => !p.deleted && p.isPublished !== false);
+      const today = new Date().toISOString().split('T')[0];
+
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-      xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
-      
-      // Homepage
-      xml += `  <url>\n    <loc>https://ishopbd.com/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
+      xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n`;
+      xml += `  <url>\n    <loc>https://ishopbd.com/</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
 
-      // Category pages
-      categoriesSnap.forEach(doc => {
-        const name = doc.data().name || "";
-        if (!name) return;
-        const catSlug = (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-        xml += `  <url>\n    <loc>https://ishopbd.com/category/${catSlug}</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+      const staticCategories = [
+        "charger-fan", "power-bank", "smart-watch", "headphone", "mobile-accessories", "lifestyle-watch"
+      ];
+      staticCategories.forEach(catSlug => {
+        xml += `  <url>\n    <loc>https://ishopbd.com/category/${catSlug}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.95</priority>\n  </url>\n`;
       });
 
-      // Campaign pages
-      campaignsSnap.forEach(doc => {
-        const slug = doc.data().slug || doc.id;
-        xml += `  <url>\n    <loc>https://ishopbd.com/?campaign=${slug}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.85</priority>\n  </url>\n`;
-      });
-
-      // Product pages
-      productsSnap.forEach(doc => {
-        const p = { id: doc.id, ...doc.data() };
+      activeProducts.forEach((p: any) => {
         const slug = getProductSlug(p);
-        const updatedAt = doc.data().updatedAt?.toDate?.()?.toISOString?.() || new Date().toISOString();
-        const prodPath = `/p/${slug}`;
-        xml += `  <url>\n    <loc>https://ishopbd.com${prodPath}</loc>\n    <lastmod>${updatedAt.split('T')[0]}</lastmod>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+        const imageUrl = `https://ishopbd.com/api/product-image/${p.id}`;
+        xml += `  <url>\n    <loc>https://ishopbd.com/p/${slug}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n    <image:image>\n      <image:loc>${imageUrl}</image:loc>\n      <image:title>${p.name ? String(p.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : 'i SHOP BD'}</image:title>\n    </image:image>\n  </url>\n`;
       });
-      
+
       xml += `</urlset>`;
-      
-      res.header("Content-Type", "application/xml");
-      res.header("Cache-Control", "public, max-age=3600"); // Cache 1 hour
+
+      res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+      res.setHeader("Cache-Control", "public, max-age=3600");
       res.send(xml);
-    } catch (e) {
+    } catch (e: any) {
       res.status(500).send(e.message);
     }
   });
@@ -1229,16 +1527,16 @@ async function startServer() {
 
 
   app.post("/api/courier/steadfast/bulk", async (req, res) => {
-    // Auth guard: require admin password header
-    const adminToken = req.headers['x-admin-token'] as string;
-    const masterPassword = MASTER_ADMIN_PASSWORD;
-    if (!masterPassword || !adminToken || adminToken !== masterPassword) {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
       return res.status(403).json({ success: false, error: "Unauthorized: Admin access required" });
     }
 
-    // Use server-side env keys; fallback to body keys if env not set (backward compat)
-    const apiKey = process.env.STEADFAST_API_KEY || req.body.apiKey;
-    const secretKey = process.env.STEADFAST_SECRET_KEY || req.body.secretKey;
+    const db = getFirestore();
+    const creds = await loadCourierCredentials(db);
+    // Use server-side keys; fallback to body keys if not set on server
+    const apiKey = creds.steadfastApiKey || req.body.apiKey;
+    const secretKey = creds.steadfastSecretKey || req.body.secretKey;
     const { orders } = req.body;
 
     if (!apiKey || !secretKey) {
@@ -1277,10 +1575,13 @@ async function startServer() {
           );
           
           if (response.data && response.data.status === 200) {
+            const consignmentId = response.data.consignment?.consignment_id ? String(response.data.consignment.consignment_id) : undefined;
+            const trackingCode = response.data.consignment?.tracking_code ? String(response.data.consignment.tracking_code) : undefined;
             return {
               id: order.id,
               success: true,
-              trackingId: response.data.consignment?.tracking_code || response.data.consignment?.consignment_id || "Success"
+              consignmentId,
+              trackingId: trackingCode || consignmentId || "Success"
             };
           } else {
             return {
@@ -1314,56 +1615,174 @@ async function startServer() {
 
     try {
       const db = getFirestore();
-      const keysDoc = await db.collection("admin_config").doc("keys").get();
-      const { steadfastApiKey, steadfastSecretKey } = keysDoc.data() || {};
-      if (!keysDoc.exists || !steadfastApiKey || !steadfastSecretKey) {
+      const creds = await loadCourierCredentials(db);
+      if (!creds.steadfastApiKey || !creds.steadfastSecretKey) {
         return res.status(500).json({ success: false, error: "Steadfast API Key settings missing. Please configure them in Dashboard Settings." });
       }
 
-      const response = await axios.get(
-        `https://portal.packzy.com/api/v1/status_by_cid/${id}`,
-        {
-          headers: {
-            "Api-Key": steadfastApiKey,
-            "Secret-Key": steadfastSecretKey,
-            "Content-Type": "application/json"
-          },
-          timeout: 10000
-        }
-      );
-      res.json({ success: true, data: response.data });
+      const rawId = String(id).trim();
+      const statusRes = await fetchSteadfastLiveStatus(creds, {
+        consignmentId: /^\d+$/.test(rawId) ? rawId : undefined,
+        trackingId: rawId,
+      });
+      res.json({
+        success: true,
+        data: {
+          ...(statusRes.rawResponse || {}),
+          delivery_status: statusRes.rawStatus,
+        },
+      });
     } catch (error: any) {
-      console.error("Error in steadfast-status proxy:", error);
-      res.status(500).json({ success: false, error: error.response?.data?.message || "Failed to fetch Steadfast status" });
+      console.error("Error in steadfast-status proxy:", error.message);
+      res.status(500).json({ success: false, error: error.response?.data?.message || error.message || "Failed to fetch Steadfast status" });
+    }
+  });
+
+  app.post("/api/admin/courier/sync-all", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized access" });
+    }
+    try {
+      const db = getFirestore();
+      const force = Boolean(req.body?.force);
+      const limitNum = req.body?.limit ? Number(req.body.limit) : 60;
+      const result = await syncAllActiveCourierOrders(db, {
+        force,
+        limit: limitNum,
+        source: "ADMIN_MANUAL_SYNC",
+      });
+      return res.status(result.success ? 200 : 400).json(result);
+    } catch (err: any) {
+      console.error("[COURIER_SYNC] Manual sync-all error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to sync courier statuses" });
+    }
+  });
+
+  app.post("/api/admin/courier/sync/:orderId", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized access" });
+    }
+    try {
+      const db = getFirestore();
+      const result = await syncSingleOrderCourierStatus(db, req.params.orderId, {
+        source: "ADMIN_SINGLE_SYNC",
+      });
+      return res.json({ success: true, syncResult: result });
+    } catch (err: any) {
+      const statusCode = /not found/i.test(err.message || "") ? 404 : 400;
+      return res.status(statusCode).json({ success: false, error: err.message || "Failed to sync order courier status" });
+    }
+  });
+
+  app.post("/api/courier/webhook/steadfast", async (req, res) => {
+    try {
+      const db = getFirestore();
+      const result = await processSteadfastWebhook(db, req.headers, req.body);
+      return res.status(result.statusCode).json(result);
+    } catch (err: any) {
+      console.error("[COURIER_WEBHOOK] Error:", err.message);
+      return res.status(500).json({ success: false, message: "Webhook processing failed" });
     }
   });
 
   app.get("/api/courier/steadfast/fraud/:phone", async (req, res) => {
-    const { phone } = req.params;
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized: Admin access required" });
+    }
+    const rawPhone = req.params.phone || "";
+    const phone = rawPhone.replace(/[^0-9]/g, "");
     if (!phone) {
       return res.status(400).json({ success: false, error: "Phone number is required" });
     }
 
     try {
-      const db = getFirestore();
-      const keysDoc = await db.collection("admin_config").doc("keys").get();
-      const { steadfastApiKey, steadfastSecretKey } = keysDoc.data() || {};
-      if (!keysDoc.exists || !steadfastApiKey || !steadfastSecretKey) {
-        return res.status(500).json({ success: false, error: "Steadfast API Key settings missing. Please configure them in Dashboard Settings." });
+      let apiKey = process.env.STEADFAST_API_KEY || "";
+      let secretKey = process.env.STEADFAST_SECRET_KEY || "";
+
+      if (!apiKey || !secretKey) {
+        try {
+          const db = getFirestore();
+          const keysDoc = await db.collection("admin_config").doc("keys").get();
+          if (keysDoc.exists) {
+            const data = keysDoc.data() || {};
+            apiKey = apiKey || data.steadfastApiKey || "";
+            secretKey = secretKey || data.steadfastSecretKey || "";
+          }
+        } catch (dbErr) {
+          console.warn("Could not fetch keys from Firestore:", dbErr);
+        }
       }
 
-      const response = await axios.get(
-        `https://portal.packzy.com/api/v1/fraud_check/${phone}`,
-        {
-          headers: {
-            "Api-Key": steadfastApiKey,
-            "Secret-Key": steadfastSecretKey,
-            "Content-Type": "application/json"
-          },
-          timeout: 10000
+      if (!apiKey || !secretKey) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Steadfast API Key settings missing. Please configure them in Dashboard Settings or server .env." 
+        });
+      }
+
+      let responseData: any = null;
+      try {
+        const response = await axios.get(
+          `https://portal.packzy.com/api/v1/fraud_check/score/${phone}`,
+          {
+            headers: {
+              "Api-Key": apiKey,
+              "Secret-Key": secretKey,
+              "Content-Type": "application/json"
+            },
+            timeout: 10000
+          }
+        );
+        responseData = response.data;
+      } catch (scoreErr: any) {
+        // Fallback to legacy endpoint if /score/ is unavailable
+        if (scoreErr.response?.status === 404) {
+          const fallbackRes = await axios.get(
+            `https://portal.packzy.com/api/v1/fraud_check/${phone}`,
+            {
+              headers: {
+                "Api-Key": apiKey,
+                "Secret-Key": secretKey,
+                "Content-Type": "application/json"
+              },
+              timeout: 10000
+            }
+          );
+          responseData = fallbackRes.data;
+        } else {
+          throw scoreErr;
         }
-      );
-      res.json({ success: true, data: response.data });
+      }
+
+      const deliveryRate = responseData?.delivery_ratio !== undefined && responseData?.delivery_ratio !== null ? Number(responseData.delivery_ratio) : null;
+      const cancellationRate = responseData?.cancellation_ratio !== undefined && responseData?.cancellation_ratio !== null ? Number(responseData.cancellation_ratio) : (responseData?.return_ratio !== undefined && responseData?.return_ratio !== null ? Number(responseData.return_ratio) : null);
+      const fraudReports = responseData?.total_reports !== undefined ? Number(responseData.total_reports) : (Array.isArray(responseData?.total_fraud_reports) ? responseData.total_fraud_reports.length : (Number(responseData?.total_fraud_report) || 0));
+      const volumeBand = responseData?.volume_band || "";
+      const totalParcel = Number(responseData?.total_parcels || responseData?.total_parcel || 0);
+      const totalDelivered = Number(responseData?.total_delivered || 0);
+      const totalCancelled = Number(responseData?.total_cancelled || 0);
+
+      res.json({
+        success: true,
+        data: {
+          phone,
+          delivery_rate: deliveryRate,
+          cancellation_rate: cancellationRate,
+          delivery_ratio: deliveryRate,
+          cancellation_ratio: cancellationRate,
+          return_ratio: cancellationRate,
+          total_fraud_report: fraudReports,
+          total_reports: fraudReports,
+          volume_band: volumeBand,
+          total_parcel: totalParcel,
+          total_delivered: totalDelivered,
+          total_cancelled: totalCancelled,
+          raw: responseData
+        }
+      });
     } catch (error: any) {
       console.error("Error in steadfast-fraud check proxy:", error);
       res.status(error.response?.status || 500).json({ 
@@ -1377,6 +1796,15 @@ async function startServer() {
     // In development mode only: localhost bypass for convenience
     const isLocal = req.hostname === "localhost" || req.hostname === "127.0.0.1";
     if (isLocal && process.env.NODE_ENV !== 'production') return true;
+
+    const adminTokenHeader = req.headers['x-admin-token'];
+    if (typeof adminTokenHeader === 'string' && MASTER_ADMIN_PASSWORD) {
+      const a = Buffer.from(adminTokenHeader);
+      const b = Buffer.from(MASTER_ADMIN_PASSWORD);
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
+        return true;
+      }
+    }
 
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -1469,6 +1897,623 @@ async function startServer() {
     } catch (error: any) {
       console.error("Error saving keys on server:", error);
       res.status(500).json({ success: false, error: error.message || "Failed to save keys on server" });
+    }
+  });
+
+  app.post("/api/admin/site-config", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized access" });
+    }
+    const payload = req.body;
+    if (!payload || typeof payload !== "object") {
+      return res.status(400).json({ success: false, error: "Missing site config payload" });
+    }
+    try {
+      const db = getFirestore();
+      await db.collection("config").doc("site").set({
+        ...payload,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      res.json({ success: true, message: "Site settings updated successfully on server" });
+    } catch (error: any) {
+      console.error("Error saving site config on server:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to save site config on server" });
+    }
+  });
+
+  // =========================================================================
+  // Marketing & Ads Integration API Endpoints (Central Tracking Engine)
+  // =========================================================================
+
+  function maskSecret(str: string | undefined): string {
+    if (!str || typeof str !== 'string' || str.trim().length === 0) return "";
+    const trimmed = str.trim();
+    if (trimmed.length <= 8) return "••••••••";
+    return trimmed.substring(0, 4) + "••••••••" + trimmed.substring(trimmed.length - 4);
+  }
+
+  function isMaskedValue(str: string | undefined): boolean {
+    if (!str || typeof str !== 'string') return false;
+    return str.includes("••••");
+  }
+
+  const marketingFallbackPath = path.join(process.cwd(), "scratch", "marketing-config.json");
+  let cachedMarketingConfig: { data: any; expiresAt: number } | null = null;
+
+  async function getMarketingConfigSafe(): Promise<any> {
+    if (cachedMarketingConfig && Date.now() < cachedMarketingConfig.expiresAt) {
+      return cachedMarketingConfig.data;
+    }
+
+    try {
+      const db = getFirestore();
+      const doc = await db.collection("admin_config").doc("marketing").get();
+      if (doc.exists) {
+        const data = doc.data();
+        cachedMarketingConfig = { data, expiresAt: Date.now() + 30_000 };
+        try {
+          if (!fs.existsSync(path.dirname(marketingFallbackPath))) {
+            fs.mkdirSync(path.dirname(marketingFallbackPath), { recursive: true });
+          }
+          fs.writeFileSync(marketingFallbackPath, JSON.stringify(data, null, 2), "utf8");
+        } catch (_) {}
+        return data;
+      }
+    } catch (e: any) {
+      console.warn("[MARKETING] Firestore read warning (falling back to local cache):", e.message);
+    }
+
+    if (fs.existsSync(marketingFallbackPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(marketingFallbackPath, "utf8"));
+        cachedMarketingConfig = { data, expiresAt: Date.now() + 30_000 };
+        return data;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  async function saveMarketingConfigSafe(mergedPayload: any): Promise<void> {
+    cachedMarketingConfig = { data: mergedPayload, expiresAt: Date.now() + 30_000 };
+    try {
+      if (!fs.existsSync(path.dirname(marketingFallbackPath))) {
+        fs.mkdirSync(path.dirname(marketingFallbackPath), { recursive: true });
+      }
+      fs.writeFileSync(marketingFallbackPath, JSON.stringify(mergedPayload, null, 2), "utf8");
+    } catch (_) {}
+
+    try {
+      const db = getFirestore();
+      await db.collection("admin_config").doc("marketing").set(mergedPayload, { merge: true });
+    } catch (e: any) {
+      console.warn("[MARKETING] Firestore save warning (saved to local cache):", e.message);
+    }
+  }
+
+  app.get("/api/admin/marketing-config", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized access" });
+    }
+    try {
+      const data = await getMarketingConfigSafe();
+
+      const defaultConfig = {
+        meta: {
+          enabled: true,
+          pixelId: "1358996272808579",
+          accessToken: "",
+          testEventCode: "",
+          capiEnabled: true
+        },
+        tiktok: {
+          enabled: true,
+          pixelId: "DBPHK73C77U4J2JR78JG",
+          accessToken: "",
+          testEventCode: "",
+          eventsApiEnabled: true
+        },
+        google: {
+          enabled: true,
+          ga4MeasurementId: "G-90PDPQL0RJ",
+          googleAdsConversionId: "",
+          googleAdsConversionLabel: "",
+          enhancedConversions: true,
+          gtmContainerId: ""
+        },
+        whatsapp: {
+          enabled: true,
+          whatsappNumber: "017XXXXXXXX",
+          defaultMessage: "হ্যালো iShop BD, আমি আপনার ওয়েবসাইট থেকে পণ্য অর্ডার করতে চাই।"
+        },
+        imo: {
+          enabled: true,
+          campaignSource: "imo",
+          defaultMedium: "social_chat"
+        },
+        openAi: {
+          enabled: false,
+          apiKey: "",
+          model: "gpt-4o-mini"
+        }
+      };
+
+      const finalData = data ? {
+        meta: { ...defaultConfig.meta, ...(data.meta || {}) },
+        tiktok: { ...defaultConfig.tiktok, ...(data.tiktok || {}) },
+        google: { ...defaultConfig.google, ...(data.google || {}) },
+        whatsapp: { ...defaultConfig.whatsapp, ...(data.whatsapp || {}) },
+        imo: { ...defaultConfig.imo, ...(data.imo || {}) },
+        openAi: { ...defaultConfig.openAi, ...(data.openAi || {}) }
+      } : defaultConfig;
+
+      // Mask secrets before sending to client
+      const safeConfig = {
+        ...finalData,
+        meta: {
+          ...finalData.meta,
+          accessToken: maskSecret(finalData.meta?.accessToken),
+          hasAccessToken: !!(finalData.meta?.accessToken && finalData.meta.accessToken.trim().length > 0)
+        },
+        tiktok: {
+          ...finalData.tiktok,
+          accessToken: maskSecret(finalData.tiktok?.accessToken),
+          hasAccessToken: !!(finalData.tiktok?.accessToken && finalData.tiktok.accessToken.trim().length > 0)
+        },
+        openAi: {
+          ...finalData.openAi,
+          apiKey: maskSecret(finalData.openAi?.apiKey),
+          hasApiKey: !!(finalData.openAi?.apiKey && finalData.openAi.apiKey.trim().length > 0)
+        }
+      };
+
+      return res.json({ success: true, config: safeConfig });
+    } catch (error: any) {
+      console.error("Error reading marketing config:", error);
+      return res.status(500).json({ success: false, error: error.message || "Failed to read marketing config" });
+    }
+  });
+
+  app.post("/api/admin/marketing-config", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized access" });
+    }
+    const incoming = req.body;
+    if (!incoming) {
+      return res.status(400).json({ success: false, error: "Missing config data" });
+    }
+
+    try {
+      const existingData = (await getMarketingConfigSafe()) || {};
+
+      const resolveSecret = (incomingVal: any, existingVal: any) => {
+        if (typeof incomingVal !== 'string') return existingVal || "";
+        const trimmed = incomingVal.trim();
+        if (!trimmed) return "";
+        if (isMaskedValue(trimmed)) return existingVal || "";
+        return trimmed;
+      };
+
+      const finalMetaAccessToken = resolveSecret(incoming.meta?.accessToken, existingData?.meta?.accessToken);
+      const finalTiktokAccessToken = resolveSecret(incoming.tiktok?.accessToken, existingData?.tiktok?.accessToken);
+      const finalOpenAiApiKey = resolveSecret(incoming.openAi?.apiKey, existingData?.openAi?.apiKey);
+
+      const mergedPayload = {
+        meta: {
+          enabled: !!incoming.meta?.enabled,
+          pixelId: (incoming.meta?.pixelId || "").trim(),
+          accessToken: finalMetaAccessToken,
+          testEventCode: (incoming.meta?.testEventCode || "").trim(),
+          capiEnabled: incoming.meta?.capiEnabled !== undefined ? !!incoming.meta.capiEnabled : true
+        },
+        tiktok: {
+          enabled: !!incoming.tiktok?.enabled,
+          pixelId: (incoming.tiktok?.pixelId || "").trim(),
+          accessToken: finalTiktokAccessToken,
+          testEventCode: (incoming.tiktok?.testEventCode || "").trim(),
+          eventsApiEnabled: incoming.tiktok?.eventsApiEnabled !== undefined ? !!incoming.tiktok.eventsApiEnabled : true
+        },
+        google: {
+          enabled: !!incoming.google?.enabled,
+          ga4MeasurementId: (incoming.google?.ga4MeasurementId || "").trim(),
+          googleAdsConversionId: (incoming.google?.googleAdsConversionId || "").trim(),
+          googleAdsConversionLabel: (incoming.google?.googleAdsConversionLabel || "").trim(),
+          enhancedConversions: incoming.google?.enhancedConversions !== undefined ? !!incoming.google.enhancedConversions : true,
+          gtmContainerId: (incoming.google?.gtmContainerId || "").trim()
+        },
+        whatsapp: {
+          enabled: !!incoming.whatsapp?.enabled,
+          whatsappNumber: (incoming.whatsapp?.whatsappNumber || "").trim(),
+          defaultMessage: (incoming.whatsapp?.defaultMessage || "").trim()
+        },
+        imo: {
+          enabled: !!incoming.imo?.enabled,
+          campaignSource: (incoming.imo?.campaignSource || "imo").trim(),
+          defaultMedium: (incoming.imo?.defaultMedium || "social_chat").trim()
+        },
+        openAi: {
+          enabled: !!incoming.openAi?.enabled,
+          apiKey: finalOpenAiApiKey,
+          model: (incoming.openAi?.model || "gpt-4o-mini").trim()
+        },
+        updatedAt: new Date().toISOString()
+      };
+
+      await saveMarketingConfigSafe(mergedPayload);
+
+      return res.json({ success: true, message: "Marketing & Ads configuration saved successfully." });
+    } catch (error: any) {
+      console.error("Error saving marketing config:", error);
+      return res.status(500).json({ success: false, error: error.message || "Failed to save marketing config" });
+    }
+  });
+
+  app.post("/api/admin/marketing-test/:platform", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized access" });
+    }
+
+    const { platform } = req.params;
+    const existingData = (await getMarketingConfigSafe()) || {};
+
+    try {
+      if (platform === "meta") {
+        const { pixelId, accessToken, testEventCode } = req.body;
+        let token = accessToken;
+        if (!token || isMaskedValue(token)) {
+          token = existingData?.meta?.accessToken || "";
+        }
+        const targetPixelId = (pixelId || existingData?.meta?.pixelId || "").trim();
+
+        if (!targetPixelId) {
+          return res.status(400).json({ success: false, error: "Meta Pixel ID is required for testing." });
+        }
+
+        if (!token) {
+          return res.json({
+            success: true,
+            warning: true,
+            message: `Meta Pixel ID (${targetPixelId}) format is VALID for Browser-Side tracking. However, Server-Side CAPI requires an Access Token to test server connection.`
+          });
+        }
+
+        try {
+          const fbRes = await axios.get(`https://graph.facebook.com/v19.0/${targetPixelId}`, {
+            params: {
+              fields: "id,name",
+              access_token: token
+            },
+            timeout: 10000
+          });
+
+          const trimmedTestCode = (testEventCode || existingData?.meta?.testEventCode || "").trim();
+          let capiTestSummary = "";
+          if (trimmedTestCode) {
+            const capiBuilt = buildMetaCapiPayload(
+              {
+                meta: {
+                  enabled: true,
+                  capiEnabled: true,
+                  pixelId: targetPixelId,
+                  accessToken: token,
+                  testEventCode: trimmedTestCode,
+                },
+              },
+              {
+                eventName: "PageView",
+                eventId: `test_meta_${Date.now()}`,
+                eventSourceUrl: "https://ishopbd.com/",
+                clientIp: extractClientIp(req.headers, req.socket.remoteAddress),
+                userAgent: req.headers["user-agent"] || "iShopBD-MarketingTest/1.0",
+              }
+            );
+            if (capiBuilt) {
+              const capiRes = await axios.post(
+                `https://graph.facebook.com/v19.0/${targetPixelId}/events`,
+                capiBuilt.payload,
+                { params: { access_token: token }, timeout: 10000 }
+              );
+              capiTestSummary = ` | Test CAPI event sent (code: ${trimmedTestCode}, events_received: ${capiRes.data?.events_received ?? 1})`;
+            }
+          }
+
+          return res.json({
+            success: true,
+            message: `Meta CAPI & Pixel Connected Successfully! Pixel Name: "${fbRes.data?.name || targetPixelId}" (ID: ${fbRes.data?.id})${capiTestSummary}`,
+            data: fbRes.data
+          });
+        } catch (fbErr: any) {
+          const errMsg = fbErr.response?.data?.error?.message || fbErr.message;
+          return res.status(400).json({
+            success: false,
+            error: `Meta Connection Failed: ${errMsg}`
+          });
+        }
+      }
+
+      if (platform === "tiktok") {
+        const { pixelId, accessToken, testEventCode } = req.body;
+        let token = accessToken;
+        if (!token || isMaskedValue(token)) {
+          token = existingData?.tiktok?.accessToken || "";
+        }
+        const targetPixelId = (pixelId || existingData?.tiktok?.pixelId || "").trim();
+
+        if (!targetPixelId) {
+          return res.status(400).json({ success: false, error: "TikTok Pixel ID is required for testing." });
+        }
+
+        if (!token) {
+          return res.json({
+            success: true,
+            warning: true,
+            message: `TikTok Pixel ID (${targetPixelId}) entered. Client-side pixel will initialize. Server-Side Events API requires an Access Token for server handshake.`
+          });
+        }
+
+        try {
+          const effectiveTestCode = (testEventCode || existingData?.tiktok?.testEventCode || "TEST_HANDSHAKE").trim();
+          const ttBuilt = buildTikTokEventsPayload(
+            {
+              tiktok: {
+                enabled: true,
+                eventsApiEnabled: true,
+                pixelId: targetPixelId,
+                accessToken: token,
+                testEventCode: effectiveTestCode,
+              },
+            },
+            {
+              eventName: "PageView",
+              eventId: `test_tt_${Date.now()}`,
+              eventSourceUrl: "https://ishopbd.com/",
+              clientIp: extractClientIp(req.headers, req.socket.remoteAddress),
+              userAgent: req.headers["user-agent"] || "iShopBD-MarketingTest/1.0",
+            }
+          );
+
+          const ttRes = await axios.post(
+            "https://business-api.tiktok.com/open_api/v1.3/event/track/",
+            ttBuilt?.payload,
+            {
+              headers: {
+                "Access-Token": token,
+                "Content-Type": "application/json",
+              },
+              timeout: 10000,
+            }
+          );
+
+          if (ttRes.data?.code === 0) {
+            return res.json({
+              success: true,
+              message: `TikTok Events API Connected Successfully! (Pixel ID: ${targetPixelId}, Test Code: ${effectiveTestCode})`,
+              data: ttRes.data
+            });
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: `TikTok API Error: ${ttRes.data?.message || 'Verification failed'}`
+            });
+          }
+        } catch (ttErr: any) {
+          const errMsg = ttErr.response?.data?.message || ttErr.message;
+          return res.status(400).json({
+            success: false,
+            error: `TikTok Connection Failed: ${errMsg}`
+          });
+        }
+      }
+
+      if (platform === "google") {
+        const { ga4MeasurementId, googleAdsConversionId, googleAdsConversionLabel, gtmContainerId } = req.body;
+        const ga4 = (ga4MeasurementId || existingData?.google?.ga4MeasurementId || "").trim();
+        const adsId = (googleAdsConversionId || existingData?.google?.googleAdsConversionId || "").trim();
+        const label = (googleAdsConversionLabel || existingData?.google?.googleAdsConversionLabel || "").trim();
+        const gtmId = (gtmContainerId || existingData?.google?.gtmContainerId || "").trim();
+
+        const reports: string[] = [];
+        let hasValidConfig = false;
+
+        if (ga4) {
+          if (/^G-[A-Z0-9]+$/i.test(ga4)) {
+            reports.push(`✓ GA4 Measurement ID (${ga4}) format is valid.`);
+            hasValidConfig = true;
+          } else {
+            return res.status(400).json({ success: false, error: `Invalid GA4 ID format (${ga4}). Must start with 'G-'.` });
+          }
+        }
+
+        if (adsId) {
+          if (/^(AW-)?[0-9]+$/i.test(adsId)) {
+            reports.push(`✓ Google Ads Conversion ID (${adsId}) is valid.`);
+            hasValidConfig = true;
+          } else {
+            return res.status(400).json({ success: false, error: `Invalid Google Ads Conversion ID (${adsId}). Must be numeric or start with 'AW-'.` });
+          }
+        }
+
+        if (gtmId) {
+          if (/^GTM-[A-Z0-9]+$/i.test(gtmId)) {
+            reports.push(`✓ GTM Container ID (${gtmId}) format is valid.`);
+            hasValidConfig = true;
+          } else {
+            return res.status(400).json({ success: false, error: `Invalid GTM Container ID (${gtmId}). Must start with 'GTM-'.` });
+          }
+        }
+
+        if (label) {
+          reports.push(`✓ Google Ads Conversion Label (${label}) configured.`);
+        }
+
+        if (!hasValidConfig) {
+          return res.status(400).json({ success: false, error: "Please provide at least a valid GA4 Measurement ID, Google Ads Conversion ID, or GTM Container ID." });
+        }
+
+        return res.json({
+          success: true,
+          message: `Google Tracking Configuration Verified: ${reports.join(" ")} (Enhanced Conversions supported)`
+        });
+      }
+
+      if (platform === "whatsapp") {
+        const { whatsappNumber, defaultMessage } = req.body;
+        const phone = (whatsappNumber || existingData?.whatsapp?.whatsappNumber || "").trim();
+        if (!phone) {
+          return res.status(400).json({ success: false, error: "WhatsApp Number is required." });
+        }
+
+        const cleanNum = phone.replace(/[^0-9]/g, "");
+        if (cleanNum.length < 10) {
+          return res.status(400).json({ success: false, error: "Invalid WhatsApp phone number format. Minimum 10 digits required." });
+        }
+
+        const fullNum = cleanNum.startsWith("88") ? cleanNum : `88${cleanNum.startsWith("0") ? cleanNum.slice(1) : cleanNum}`;
+        const previewUrl = `https://wa.me/${fullNum}?text=${encodeURIComponent(defaultMessage || "Hello iShop BD")}`;
+
+        return res.json({
+          success: true,
+          message: `WhatsApp Configuration Verified! Click-to-WhatsApp link successfully generated.`,
+          previewUrl
+        });
+      }
+
+      if (platform === "imo") {
+        const { campaignSource, defaultMedium } = req.body;
+        const source = (campaignSource || existingData?.imo?.campaignSource || "imo").trim();
+        const medium = (defaultMedium || existingData?.imo?.defaultMedium || "social_chat").trim();
+        const sampleUrl = `https://ishopbd.com/?utm_source=${encodeURIComponent(source)}&utm_medium=${encodeURIComponent(medium)}&utm_campaign=winter_fashion_2026`;
+
+        return res.json({
+          success: true,
+          message: `IMO Campaign Tracking Verified! Note: IMO does not offer a public Ads API. Traffic & conversions will be tracked via URL attribution & in-app browser detection.`,
+          sampleUrl
+        });
+      }
+
+      if (platform === "openai") {
+        const { apiKey, model } = req.body;
+        let key = apiKey;
+        if (!key || isMaskedValue(key)) {
+          key = existingData?.openAi?.apiKey || "";
+        }
+
+        if (!key) {
+          return res.status(400).json({ success: false, error: "OpenAI API Key is required for testing." });
+        }
+
+        try {
+          const oaiRes = await axios.get("https://api.openai.com/v1/models", {
+            headers: {
+              "Authorization": `Bearer ${key}`
+            },
+            timeout: 10000
+          });
+
+          const modelList = (oaiRes.data?.data || []).map((m: any) => m.id);
+          const chosenModel = model || existingData?.openAi?.model || "gpt-4o-mini";
+
+          return res.json({
+            success: true,
+            message: `OpenAI API Connected Successfully! (${modelList.length} models accessible, chosen model: "${chosenModel}"). Key is securely verified for AI Marketing Assistant.`,
+            modelsCount: modelList.length
+          });
+        } catch (oaiErr: any) {
+          const errMsg = oaiErr.response?.data?.error?.message || oaiErr.message;
+          return res.status(400).json({
+            success: false,
+            error: `OpenAI Connection Failed: ${errMsg}`
+          });
+        }
+      }
+
+      return res.status(400).json({ success: false, error: `Unknown platform: ${platform}` });
+    } catch (err: any) {
+      console.error(`Error testing ${platform}:`, err);
+      return res.status(500).json({ success: false, error: err.message || "Internal test error" });
+    }
+  });
+
+  app.get("/api/marketing/public-config", async (req, res) => {
+    try {
+      const data = await getMarketingConfigSafe();
+
+      const publicConfig = {
+        meta: {
+          enabled: data?.meta?.enabled ?? true,
+          pixelId: data?.meta?.pixelId || "1358996272808579"
+        },
+        tiktok: {
+          enabled: data?.tiktok?.enabled ?? true,
+          pixelId: (data?.tiktok?.pixelId || "").trim() || "DBPHK73C77U4J2JR78JG"
+        },
+        google: {
+          enabled: data?.google?.enabled ?? true,
+          ga4MeasurementId: data?.google?.ga4MeasurementId || "G-90PDPQL0RJ",
+          googleAdsConversionId: data?.google?.googleAdsConversionId || "",
+          googleAdsConversionLabel: data?.google?.googleAdsConversionLabel || "",
+          enhancedConversions: data?.google?.enhancedConversions ?? true,
+          gtmContainerId: data?.google?.gtmContainerId || ""
+        },
+        whatsapp: {
+          enabled: data?.whatsapp?.enabled ?? true,
+          whatsappNumber: data?.whatsapp?.whatsappNumber || "017XXXXXXXX",
+          defaultMessage: data?.whatsapp?.defaultMessage || ""
+        },
+        imo: {
+          enabled: data?.imo?.enabled ?? true,
+          campaignSource: data?.imo?.campaignSource || "imo"
+        }
+      };
+
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json({ success: true, config: publicConfig });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: "Failed to load public marketing config" });
+    }
+  });
+
+  app.post("/api/track-event", async (req, res) => {
+    const rawIp = extractClientIp(req.headers, req.socket.remoteAddress) || "unknown";
+    if (!rateLimit(rawIp + ":track", 120, 60_000)) {
+      return res.status(429).json({ success: false, error: "Too many tracking requests" });
+    }
+
+    try {
+      const { eventName, eventId, eventTime, eventSourceUrl, referrer, userData, customData } = req.body || {};
+      if (!eventName || typeof eventName !== "string" || !isSupportedTrackingEvent(eventName)) {
+        return res.status(400).json({ success: false, error: "Unsupported or missing eventName" });
+      }
+      if (!eventId || typeof eventId !== "string" || eventId.length > 128) {
+        return res.status(400).json({ success: false, error: "Valid eventId is required" });
+      }
+
+      const cookies = parseCookies(req.headers.cookie);
+      const config = (await getMarketingConfigSafe()) || {};
+      const dispatchResult = await dispatchServerTrackingEvents(config, {
+        eventName,
+        eventId,
+        eventTime: typeof eventTime === "number" ? eventTime : undefined,
+        eventSourceUrl: typeof eventSourceUrl === "string" ? eventSourceUrl : req.headers.referer,
+        referrer: typeof referrer === "string" ? referrer : req.headers.referer,
+        clientIp: rawIp !== "unknown" ? rawIp : undefined,
+        userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+        userData: {
+          ...(userData && typeof userData === "object" ? userData : {}),
+          fbp: userData?.fbp || cookies._fbp,
+          fbc: userData?.fbc || cookies._fbc,
+          ttp: userData?.ttp || cookies._ttp,
+        },
+        customData: customData && typeof customData === "object" ? customData : {},
+      });
+
+      return res.json({ success: true, ...dispatchResult });
+    } catch (err: any) {
+      console.error("[TRACK-EVENT] Error:", err.message);
+      return res.status(500).json({ success: false, error: "Server tracking error" });
     }
   });
 
@@ -1648,19 +2693,38 @@ Guidelines:
       const genAI = new GoogleGenAI({
         apiKey: process.env.GEMINI_API_KEY,
       });
-      const selectedModel = (modelName && ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"].includes(modelName))
-        ? modelName 
-        : "gemini-2.0-flash";
 
-      const response = await genAI.models.generateContent({
-        model: selectedModel,
-        contents: normalizedMessages,
-        config: {
-          systemInstruction: systemInstruction,
+      const fallbackModels = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite"
+      ];
+
+      let aiReplyText = "";
+      for (const model of fallbackModels) {
+        try {
+          const response = await genAI.models.generateContent({
+            model: model,
+            contents: normalizedMessages,
+            config: {
+              systemInstruction: systemInstruction,
+            }
+          });
+          if (response.text) {
+            aiReplyText = response.text;
+            break;
+          }
+        } catch (mErr: any) {
+          console.warn(`[AI Chat] Model ${model} failed, attempting next model...`, mErr.message);
         }
-      });
+      }
 
-      const aiReplyText = response.text || "Sorry, no response could be generated.";
+      if (!aiReplyText) {
+        aiReplyText = "দুঃখিত, এই মুহূর্তে এআই সার্ভারে চাপ বেশি। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।";
+      }
 
       // If chatId is passed, also save directly in Firestore via Admin SDK
       const { chatId } = req.body;
@@ -1757,7 +2821,7 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       });
 
       const response = await genAI.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.8-flash",
         contents: prompt,
       });
 
@@ -1782,59 +2846,79 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
   });
 
 
-  // OAuth2 Token generation helper for Google FCM API using RS256 JWT
-  async function getFCMToken(serviceAccountPath: string): Promise<{ access_token: string; project_id: string }> {
-    const keyData = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
-    const header = { alg: "RS256", typ: "JWT" };
-    const now = Math.floor(Date.now() / 1000);
-    const exp = now + 3600;
-    const claim = {
-      iss: keyData.client_email,
-      scope: "https://www.googleapis.com/auth/firebase.messaging",
-      aud: keyData.token_uri,
-      exp: exp,
-      iat: now
-    };
-    const base64UrlHeader = Buffer.from(JSON.stringify(header)).toString("base64url");
-    const base64UrlClaim = Buffer.from(JSON.stringify(claim)).toString("base64url");
-    const sign = crypto.createSign("RSA-SHA256");
-    sign.update(base64UrlHeader + "." + base64UrlClaim);
-    const signature = sign.sign(keyData.private_key).toString("base64url");
-    const jwt = base64UrlHeader + "." + base64UrlClaim + "." + signature;
-    const response = await axios.post(keyData.token_uri, new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt
-    }).toString(), {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+  // OAuth2 Token generation helper for Google FCM API using google-auth-library & multiple credential sources
+  async function getFCMToken(serviceAccountPath?: string): Promise<{ access_token: string; project_id: string }> {
+    let keyData: any = null;
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      try { keyData = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON); } catch(e){}
+    }
+    if (!keyData && serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+      try { keyData = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8")); } catch(e){}
+    }
+    if (!keyData && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      keyData = {
+        client_email: process.env.FIREBASE_CLIENT_EMAIL,
+        private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        project_id: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'i-shop-bd'
+      };
+    }
+    if (!keyData) {
+      throw new Error("Service account credentials not configured");
+    }
+
+    const { JWT } = await import("google-auth-library");
+    const client = new JWT({
+      email: keyData.client_email,
+      key: keyData.private_key ? keyData.private_key.replace(/\\n/g, '\n') : undefined,
+      scopes: ["https://www.googleapis.com/auth/firebase.messaging"],
+      keyId: keyData.private_key_id
     });
+    const tokenRes = await client.getAccessToken();
+    if (!tokenRes.token) {
+      throw new Error("Failed to retrieve access token from Google");
+    }
     return {
-      access_token: response.data.access_token,
-      project_id: keyData.project_id
+      access_token: tokenRes.token,
+      project_id: keyData.project_id || "i-shop-bd"
     };
   }
 
-  // Push notification endpoint
+  // Push notification health-check & send endpoint
+  app.get("/api/send-push", async (req, res) => {
+    const fcmServiceAccountPath = secureServiceAccountPaths.find(p => fs.existsSync(p)) || "";
+    try {
+      const authData = await getFCMToken(fcmServiceAccountPath);
+      return res.json({
+        status: "ok",
+        message: "Firebase Cloud Messaging OAuth2 authentication is working properly.",
+        project_id: authData.project_id
+      });
+    } catch (err: any) {
+      return res.json({
+        status: "warning",
+        message: "FCM authentication error: " + (err.message || String(err)),
+        details: err?.response?.data || err?.message
+      });
+    }
+  });
+
   app.post("/api/send-push", async (req, res) => {
-    const { token, title = "Notification", body, link = "/" } = req.body;
+    const { token, title = "i SHOP BD Notification", body, link = "/", icon = "/logo.png" } = req.body;
     if (!token || !body) {
       return res.status(400).json({ error: "Missing token or body" });
     }
-    let serviceAccountPath = path.join(process.cwd(), "api", "service-account.json");
-    if (!fs.existsSync(serviceAccountPath)) {
-      serviceAccountPath = path.join(process.cwd(), "public", "api", "service-account.json");
-    }
-    if (!fs.existsSync(serviceAccountPath)) {
-      console.error("[CRITICAL] service-account.json key not found for FCM");
-      return res.status(500).json({ error: "Service account key not found" });
-    }
+    const fcmServiceAccountPath = secureServiceAccountPaths.find(p => fs.existsSync(p)) || "";
     try {
-      const authData = await getFCMToken(serviceAccountPath);
+      const authData = await getFCMToken(fcmServiceAccountPath);
       const fcmUrl = `https://fcm.googleapis.com/v1/projects/${authData.project_id}/messages:send`;
       const notification = {
         message: {
           token,
           notification: { title, body },
-          webpush: { fcm_options: { link } }
+          webpush: {
+            fcm_options: { link },
+            notification: { icon, badge: "/logo.png" }
+          }
         }
       };
       const response = await axios.post(fcmUrl, notification, {
@@ -1846,11 +2930,128 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       res.json(response.data);
     } catch (error: any) {
       console.error("FCM Send Error:", error?.response?.data || error.message);
-      res.status(500).json({ error: "Failed to send push notification", details: error?.response?.data || error.message });
+      res.status(502).json({
+        error: "Failed to send push notification",
+        details: error?.response?.data || error.message
+      });
     }
   });
 
-  // Submit Product Review API
+  // Get Product Reviews API (Admin SDK + REST API + Cache fallback)
+  // By default, only approved reviews (and legacy reviews without explicit status) are returned publicly.
+  app.get("/api/reviews", async (req, res) => {
+    try {
+      const productId = req.query.productId ? String(req.query.productId).trim() : "";
+      const includeAll = req.query.includeAll === "true";
+      if (!productId) {
+        return res.status(400).json({ error: "Product ID is required." });
+      }
+
+      // 1. Try Firebase Admin SDK if healthy
+      if (isAdminSdkHealthy) {
+        try {
+          const db = getFirestore();
+          const snap = await db
+            .collection("products")
+            .doc(productId)
+            .collection("reviews")
+            .orderBy("createdAt", "desc")
+            .limit(50)
+            .get();
+
+          if (!snap.empty) {
+            let reviews = snap.docs.map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                productId: data.productId || productId,
+                productName: data.productName || "",
+                userId: data.userId || "",
+                userName: data.userName || data.name || "Customer",
+                userPhoto: data.userPhoto || null,
+                rating: Number(data.rating) || 5,
+                comment: data.comment || "",
+                images: Array.isArray(data.images) ? data.images : [],
+                status: (data.status as 'pending' | 'approved' | 'rejected') || 'approved',
+                createdAt: data.createdAt?.toDate 
+                  ? data.createdAt.toDate().toISOString() 
+                  : (typeof data.createdAt === 'string' 
+                      ? data.createdAt 
+                      : (data.createdAt?.seconds 
+                          ? new Date(data.createdAt.seconds * 1000).toISOString() 
+                          : new Date().toISOString()))
+              };
+            });
+
+            if (!includeAll) {
+              reviews = reviews.filter((r) => r.status === 'approved');
+            }
+
+            return res.json({ success: true, reviews });
+          }
+        } catch (adminErr: any) {
+          console.warn("Admin SDK reviews query warning:", adminErr?.message || adminErr);
+        }
+      }
+
+      // 2. Fallback: Firestore REST API for reviews subcollection
+      try {
+        const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyClPZu-7eztcpTyOT0vVWX-znIwouTg7I8";
+        const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${encodeURIComponent(productId)}/reviews?key=${apiKey}&pageSize=50`;
+        const response: any = await axios.get(url, {
+          headers: { Referer: "http://localhost:3000/" },
+          timeout: 5000
+        });
+        if (response.data && Array.isArray(response.data.documents)) {
+          let reviews = response.data.documents.map((doc: any) => {
+            const parsed = parseFirestoreDoc(doc);
+            return {
+              id: parsed.id || doc.name.split("/").pop(),
+              productId: parsed.productId || productId,
+              productName: parsed.productName || "",
+              userId: parsed.userId || "",
+              userName: parsed.userName || parsed.name || "Customer",
+              userPhoto: parsed.userPhoto || null,
+              rating: Number(parsed.rating) || 5,
+              comment: parsed.comment || "",
+              images: Array.isArray(parsed.images) ? parsed.images : [],
+              status: (parsed.status as 'pending' | 'approved' | 'rejected') || 'approved',
+              createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString()
+            };
+          });
+
+          if (!includeAll) {
+            reviews = reviews.filter((r) => r.status === 'approved');
+          }
+
+          return res.json({ success: true, reviews });
+        }
+      } catch (restErr: any) {
+        // Subcollection might not exist or empty
+      }
+
+      // 3. Fallback: Check if product in memory has embedded reviews
+      const prods = await getCachedProducts();
+      const matched = prods.find((p) => p.id === productId || (p.slug && p.slug === productId));
+      if (matched && Array.isArray(matched.reviews) && matched.reviews.length > 0) {
+        let reviews = matched.reviews.map((r: any) => ({
+          ...r,
+          status: r.status || 'approved'
+        }));
+        if (!includeAll) {
+          reviews = reviews.filter((r: any) => r.status === 'approved');
+        }
+        return res.json({ success: true, reviews });
+      }
+
+      return res.json({ success: true, reviews: [] });
+    } catch (error: any) {
+      console.error("Fetch Reviews Error in /api/reviews:", error?.message || error);
+      return res.json({ success: true, reviews: [] });
+    }
+  });
+
+  // Submit Product Review API (Default status: pending for moderation)
   app.post("/api/reviews", async (req, res) => {
     try {
       const { productId, review } = req.body;
@@ -1861,50 +3062,51 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       const cleanProdId = String(productId).trim();
       const reviewId = String(review.id || `rev_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`);
 
+      const db = getFirestore();
+      const productRef = db.collection("products").doc(cleanProdId);
+      const productSnap = await productRef.get();
+      const productData = productSnap.exists ? productSnap.data() || {} : {};
+
+      const reviewStatus = review.status || "pending";
       const reviewData = {
         id: reviewId,
+        productId: cleanProdId,
+        productName: review.productName || productData.name || "Product",
         userId: review.userId || `guest_${Math.random().toString(36).substr(2, 5)}`,
         userName: String(review.userName || "Customer").trim(),
         userPhoto: review.userPhoto || null,
         rating: Math.min(5, Math.max(1, Number(review.rating) || 5)),
         comment: String(review.comment || "").trim(),
         images: Array.isArray(review.images) ? review.images : [],
+        status: reviewStatus,
         createdAt: review.createdAt || new Date().toISOString()
       };
-
-      const db = getFirestore();
-      const productRef = db.collection("products").doc(cleanProdId);
-      const productSnap = await productRef.get();
 
       const reviewDocRef = productRef.collection("reviews").doc(reviewId);
       await reviewDocRef.set(reviewData, { merge: true });
 
-      // Update product aggregate rating and review count
-      let newRating = reviewData.rating;
-      let newCount = 1;
+      // If review is pre-approved (e.g. from admin), update aggregate rating immediately
+      let newRating = Number(productData.rating) || 5;
+      let newCount = Number(productData.reviewCount) || 0;
 
-      if (productSnap.exists) {
-        const productData = productSnap.data() || {};
-        const currentRating = Number(productData.rating) || 0;
-        const currentCount = Number(productData.reviewCount) || 0;
-        newCount = currentCount + 1;
-        newRating = Number(((currentRating * currentCount + reviewData.rating) / newCount).toFixed(1));
+      if (reviewStatus === "approved") {
+        const allReviewsSnap = await productRef.collection("reviews").get();
+        const approvedReviews = allReviewsSnap.docs
+          .map((d) => d.data())
+          .filter((r) => r.status === "approved" || !r.status);
+        newCount = approvedReviews.length;
+        newRating = newCount > 0
+          ? Number((approvedReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / newCount).toFixed(1))
+          : 5;
 
         await productRef.set({
           rating: newRating,
           reviewCount: newCount,
           updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
-      } else {
-        await productRef.set({
-          rating: newRating,
-          reviewCount: 1,
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
-      }
 
-      // Invalidate product cache so updated rating/reviews reflect
-      invalidateProductCache();
+        invalidateProductCache();
+      }
 
       return res.json({
         success: true,
@@ -1916,6 +3118,196 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       console.error("Review Submit Error in /api/reviews:", error);
       return res.status(500).json({ error: "Failed to submit review", details: error?.message || error });
     }
+  });
+
+  // Admin Reviews List API (Fetches all reviews across products for moderation)
+  app.get("/api/admin/reviews", async (req, res) => {
+    try {
+      const db = getFirestore();
+      let allReviews: any[] = [];
+
+      try {
+        const groupSnap = await db.collectionGroup("reviews").get();
+        if (!groupSnap.empty) {
+          allReviews = groupSnap.docs.map((docSnap) => {
+            const data = docSnap.data();
+            const parentProdId = data.productId || docSnap.ref.parent.parent?.id || "";
+            return {
+              id: docSnap.id,
+              productId: parentProdId,
+              productName: data.productName || "",
+              productImage: data.productImage || "",
+              userId: data.userId || "",
+              userName: data.userName || data.name || "Customer",
+              userPhoto: data.userPhoto || null,
+              rating: Number(data.rating) || 5,
+              comment: data.comment || "",
+              images: Array.isArray(data.images) ? data.images : [],
+              status: (data.status as 'pending' | 'approved' | 'rejected') || 'approved',
+              createdAt: data.createdAt?.toDate
+                ? data.createdAt.toDate().toISOString()
+                : (typeof data.createdAt === 'string'
+                    ? data.createdAt
+                    : (data.createdAt?.seconds
+                        ? new Date(data.createdAt.seconds * 1000).toISOString()
+                        : new Date().toISOString()))
+            };
+          });
+        }
+      } catch (grpErr: any) {
+        console.warn("collectionGroup reviews fetch error, fallback to individual products:", grpErr?.message || grpErr);
+        const prods = await getCachedProducts();
+        for (const prod of prods.slice(0, 100)) {
+          try {
+            const snap = await db.collection("products").doc(prod.id).collection("reviews").get();
+            snap.docs.forEach((docSnap) => {
+              const data = docSnap.data();
+              allReviews.push({
+                id: docSnap.id,
+                productId: prod.id,
+                productName: data.productName || prod.name,
+                productImage: prod.image || "",
+                userId: data.userId || "",
+                userName: data.userName || data.name || "Customer",
+                userPhoto: data.userPhoto || null,
+                rating: Number(data.rating) || 5,
+                comment: data.comment || "",
+                images: Array.isArray(data.images) ? data.images : [],
+                status: (data.status as 'pending' | 'approved' | 'rejected') || 'approved',
+                createdAt: data.createdAt?.toDate
+                  ? data.createdAt.toDate().toISOString()
+                  : (typeof data.createdAt === 'string'
+                      ? data.createdAt
+                      : new Date().toISOString())
+              });
+            });
+          } catch (e) {}
+        }
+      }
+
+      // Attach product names/images if missing
+      if (allReviews.length > 0) {
+        const cachedProds = await getCachedProducts();
+        const prodMap = new Map(cachedProds.map(p => [p.id, p]));
+        allReviews = allReviews.map(r => {
+          const matchedProd = prodMap.get(r.productId);
+          return {
+            ...r,
+            productName: r.productName || matchedProd?.name || "Product",
+            productImage: r.productImage || matchedProd?.image || ""
+          };
+        });
+      }
+
+      // Sort newest first
+      allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      return res.json({ success: true, reviews: allReviews });
+    } catch (error: any) {
+      console.error("Admin reviews fetch error:", error);
+      return res.status(500).json({ error: "Failed to fetch admin reviews", details: error?.message || error });
+    }
+  });
+
+  // Admin Review Status Update API (Approve / Reject review)
+  app.post("/api/admin/reviews/status", async (req, res) => {
+    try {
+      const { productId, reviewId, status } = req.body;
+      if (!productId || !reviewId || !status) {
+        return res.status(400).json({ error: "productId, reviewId, and status are required." });
+      }
+
+      if (!["pending", "approved", "rejected"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status. Must be pending, approved, or rejected." });
+      }
+
+      const db = getFirestore();
+      const productRef = db.collection("products").doc(String(productId).trim());
+      const reviewRef = productRef.collection("reviews").doc(String(reviewId).trim());
+
+      await reviewRef.set({ status, updatedAt: new Date().toISOString() }, { merge: true });
+
+      // Recalculate product rating & reviewCount based on approved reviews only
+      const allReviewsSnap = await productRef.collection("reviews").get();
+      const approvedReviews = allReviewsSnap.docs
+        .map((d) => d.data())
+        .filter((r) => r.status === "approved" || !r.status);
+      
+      const newCount = approvedReviews.length;
+      const newRating = newCount > 0
+        ? Number((approvedReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / newCount).toFixed(1))
+        : 5;
+
+      await productRef.set({
+        rating: newRating,
+        reviewCount: newCount,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      invalidateProductCache();
+
+      return res.json({
+        success: true,
+        status,
+        rating: newRating,
+        reviewCount: newCount
+      });
+    } catch (error: any) {
+      console.error("Admin review status update error:", error);
+      return res.status(500).json({ error: "Failed to update review status", details: error?.message || error });
+    }
+  });
+
+  // Admin Review Delete API
+  app.delete("/api/admin/reviews", async (req, res) => {
+    try {
+      const productId = String(req.body.productId || req.query.productId || "").trim();
+      const reviewId = String(req.body.reviewId || req.query.reviewId || "").trim();
+
+      if (!productId || !reviewId) {
+        return res.status(400).json({ error: "productId and reviewId are required." });
+      }
+
+      const db = getFirestore();
+      const productRef = db.collection("products").doc(productId);
+      const reviewRef = productRef.collection("reviews").doc(reviewId);
+
+      await reviewRef.delete();
+
+      // Recalculate product rating & reviewCount
+      const allReviewsSnap = await productRef.collection("reviews").get();
+      const approvedReviews = allReviewsSnap.docs
+        .map((d) => d.data())
+        .filter((r) => r.status === "approved" || !r.status);
+
+      const newCount = approvedReviews.length;
+      const newRating = newCount > 0
+        ? Number((approvedReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / newCount).toFixed(1))
+        : 5;
+
+      await productRef.set({
+        rating: newRating,
+        reviewCount: newCount,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      invalidateProductCache();
+
+      return res.json({ success: true, rating: newRating, reviewCount: newCount });
+    } catch (error: any) {
+      console.error("Admin review delete error:", error);
+      return res.status(500).json({ error: "Failed to delete review", details: error?.message || error });
+    }
+  });
+
+  // Static uploads directory & fallback proxy to live server for localhost
+  const uploadsDir = path.join(process.cwd(), "public", "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
+  }
+  app.use("/uploads", express.static(uploadsDir));
+  app.get("/uploads/*", (req, res) => {
+    res.redirect(`https://ishopbd.com${req.originalUrl}`);
   });
 
   // Dynamic Product Image Route for Open Graph Previews & Lean Cache Images
@@ -1931,16 +3323,19 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       const prods = await getCachedProducts();
       const matched = prods.find(p => p.id === productId || (p.slug && p.slug === productId));
       if (matched) {
-        if (!isNaN(index) && Array.isArray(matched.images) && matched.images[index]) {
-          imageStr = matched.images[index];
-        } else {
-          imageStr = matched.image;
+        const rawCandidate = (!isNaN(index) && Array.isArray(matched.images) && matched.images[index])
+          ? matched.images[index]
+          : matched.image;
+        if (rawCandidate && !String(rawCandidate).startsWith('/api/product-image/')) {
+          imageStr = rawCandidate;
         }
       }
 
-      // 2. Fallback to Firestore REST API if not found in memory
+      // 2. Fallback to Firestore REST API if not found or if cache has circular /api/ link
       if (!imageStr) {
-        const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
+        const resolvedId = matched?.id || productId;
+        const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyClPZu-7eztcpTyOT0vVWX-znIwouTg7I8";
+        const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${resolvedId}?key=${apiKey}`;
         const response = await axios.get(url, { timeout: 5000 }).catch(() => null);
         const data = response?.data;
         if (data && data.fields) {
@@ -1971,6 +3366,18 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
             }
             return res.send(imgBuffer);
           }
+        } else if (imageStr.startsWith("/uploads/") || imageStr.startsWith("uploads/")) {
+          const cleanPath = imageStr.startsWith('/') ? imageStr.slice(1) : imageStr;
+          const localPath = path.join(process.cwd(), 'public', cleanPath);
+          if (fs.existsSync(localPath)) {
+            const ext = path.extname(localPath).toLowerCase();
+            const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
+            res.setHeader("Content-Type", contentType);
+            res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+            return res.sendFile(localPath);
+          } else {
+            return res.redirect(`https://ishopbd.com/${cleanPath}`);
+          }
         } else if (imageStr.startsWith("http://") || imageStr.startsWith("https://")) {
           // Direct URL — SSRF protection: only allow known image CDNs
           const ALLOWED_IMAGE_HOSTS = [
@@ -1979,6 +3386,8 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
             'lh3.googleusercontent.com',
             'i.imgur.com',
             'res.cloudinary.com',
+            'ishopbd.com',
+            'www.ishopbd.com'
           ];
           try {
             const parsedUrl = new URL(imageStr);
@@ -2009,6 +3418,12 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
     }
   });
 
+  // Health check & Keep-alive endpoint
+  app.get('/api/ping', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.status(200).send('pong');
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
@@ -2021,10 +3436,6 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
     const distPath = path.join(process.cwd(), 'dist');
     // Set 1-year cache for static assets (CSS, JS, images)
     app.use(express.static(distPath, { maxAge: '1y', index: false }));
-    // Prevent caching of index.html and inject Open Graph meta tags dynamically
-    app.get('/api/ping', (req, res) => {
-    res.status(200).send('pong');
-  });
 
   app.get('*', async (req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
@@ -2049,19 +3460,66 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
           let lastPart = parts[parts.length - 1];
           let productId = (lastPart && lastPart.length >= 6) ? lastPart : rawIdentifier;
 
-          let url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}`;
-          let response = await axios.get(url, { timeout: 4000 }).catch(() => null);
-          
-          if (!response?.data?.fields && productId !== rawIdentifier) {
-            url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${rawIdentifier}`;
-            response = await axios.get(url, { timeout: 4000 }).catch(() => null);
-          }
+          const allProds = await getCachedProducts().catch(() => []);
+          let cachedProd = allProds.find((p: any) => p.id === productId || p.id === rawIdentifier || getProductSlug(p) === rawIdentifier || (p.slug && p.slug === rawIdentifier));
 
-          const data = response?.data;
+          let name = cachedProd?.name;
+          let description = cachedProd?.description || "";
+          let brand = cachedProd?.brand || "i SHOP BD";
+          let price = Number(cachedProd?.price || 0);
+          let stockVal = cachedProd?.stock !== undefined ? Number(cachedProd.stock) : 1;
+          let inStock = stockVal > 0;
+          let category = cachedProd?.category || "";
+          let prodSlug = cachedProd?.slug;
+          let resolvedId = cachedProd?.id || productId;
+          let isFreeDelivery = Boolean(cachedProd?.isFreeDelivery);
+          let weight = Number(cachedProd?.weight || 0);
+          let createdAt: unknown = cachedProd?.createdAt;
+          let mpn = cachedProd?.code || resolvedId;
+          let rating = Number(cachedProd?.rating || 0);
+          let reviewCount = Number(cachedProd?.reviewCount || 0);
+
+          if (!cachedProd) {
+            const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyClPZu-7eztcpTyOT0vVWX-znIwouTg7I8";
+            let url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${productId}?key=${apiKey}`;
+            let response = await axios.get(url, { timeout: 4000 }).catch(() => null);
+            
+            if (!response?.data?.fields && productId !== rawIdentifier) {
+              url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${rawIdentifier}?key=${apiKey}`;
+              response = await axios.get(url, { timeout: 4000 }).catch(() => null);
+              if (response?.data?.fields) {
+                resolvedId = rawIdentifier;
+              }
+            }
+
+            const data = response?.data;
+            if (data && data.fields) {
+              name = data.fields.name?.stringValue || "Product Details";
+              description = data.fields.description?.stringValue || "";
+              brand = data.fields.brand?.stringValue || "i SHOP BD";
+              category = data.fields.category?.stringValue || "";
+              if (data.fields.price) {
+                price = Number(data.fields.price.integerValue || data.fields.price.doubleValue || data.fields.price.stringValue || 0);
+              }
+              stockVal = data.fields.stock ? Number(data.fields.stock.integerValue || data.fields.stock.doubleValue || data.fields.stock.stringValue || 0) : 1;
+              inStock = stockVal > 0;
+              prodSlug = data.fields.slug?.stringValue;
+              isFreeDelivery = Boolean(data.fields.isFreeDelivery?.booleanValue);
+              if (data.fields.weight) {
+                weight = Number(data.fields.weight.integerValue || data.fields.weight.doubleValue || data.fields.weight.stringValue || 0);
+              }
+              createdAt = data.fields.createdAt?.stringValue || data.fields.createdAt?.timestampValue;
+              mpn = data.fields.code?.stringValue || resolvedId;
+              if (data.fields.rating) {
+                rating = Number(data.fields.rating.integerValue || data.fields.rating.doubleValue || data.fields.rating.stringValue || 0);
+              }
+              if (data.fields.reviewCount) {
+                reviewCount = Number(data.fields.reviewCount.integerValue || data.fields.reviewCount.doubleValue || data.fields.reviewCount.stringValue || 0);
+              }
+            }
+          }
           
-          if (data && data.fields) {
-            const name = data.fields.name?.stringValue || "Product Details";
-            let description = data.fields.description?.stringValue || "";
+          if (name) {
             description = description.replace(/[\r\n]+/g, ' ').replace(/"/g, '&quot;').trim();
             if (description.length > 150) {
               description = description.substring(0, 147) + "...";
@@ -2070,44 +3528,59 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
               description = `${name} - Buy gadgets & lifestyle accessories online at i SHOP BD.`;
             }
             
-            const brand = data.fields.brand?.stringValue || "i SHOP BD";
-            let price = 0;
-            if (data.fields.price) {
-              price = Number(data.fields.price.integerValue || data.fields.price.doubleValue || data.fields.price.stringValue || 0);
-            }
-            const stockVal = data.fields.stock ? Number(data.fields.stock.integerValue || data.fields.stock.doubleValue || data.fields.stock.stringValue || 0) : 1;
-            const inStock = stockVal > 0;
-            
             const protocol = req.headers['x-forwarded-proto'] || req.protocol;
             const host = req.get('host');
-            const imageUrl = `${protocol}://${host}/api/product-image/${productId}`;
-            const cleanSlug = getProductSlug({ id: productId, name, slug: data.fields.slug?.stringValue });
+            const imageUrl = `${protocol}://${host}/api/product-image/${resolvedId}`;
+            const cleanSlug = getProductSlug({ id: resolvedId, name, slug: prodSlug });
             const productPath = `/p/${cleanSlug}`;
             const currentUrl = `${protocol}://${host}${productPath}`;
+            const catSlug = category ? category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "";
             
-            const productSchema = {
-              "@context": "https://schema.org/",
-              "@type": "Product",
-              "name": name,
-              "image": imageUrl,
-              "description": description,
-              "brand": {
-                "@type": "Brand",
-                "name": brand
-              },
-              "offers": {
-                "@type": "Offer",
-                "url": currentUrl,
-                "priceCurrency": "BDT",
-                "price": price,
-                "availability": inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-                "itemCondition": "https://schema.org/NewCondition"
-              }
+            const productSchema = buildProductStructuredData({
+              id: resolvedId,
+              name,
+              description,
+              image: imageUrl,
+              url: currentUrl,
+              brand,
+              mpn,
+              price,
+              inStock,
+              isFreeDelivery,
+              weight,
+              createdAt,
+              rating,
+              reviewCount,
+            });
+
+            const breadcrumbSchema = {
+              "@context": "https://schema.org",
+              "@type": "BreadcrumbList",
+              "itemListElement": [
+                {
+                  "@type": "ListItem",
+                  "position": 1,
+                  "name": "Home",
+                  "item": `${protocol}://${host}/`
+                },
+                ...(category ? [{
+                  "@type": "ListItem",
+                  "position": 2,
+                  "name": category,
+                  "item": `${protocol}://${host}/category/${catSlug}`
+                }] : []),
+                {
+                  "@type": "ListItem",
+                  "position": category ? 3 : 2,
+                  "name": name,
+                  "item": currentUrl
+                }
+              ]
             };
             
-            // Inject canonical URL and Product Schema
+            // Inject canonical URL and Product & Breadcrumb Schemas
             html = html.replace('<!-- CANONICAL_URL_PLACEHOLDER -->', `<link rel="canonical" href="${currentUrl}" />`);
-            html = html.replace('</head>', `<script type="application/ld+json">${JSON.stringify(productSchema)}</script></head>`);
+            html = html.replace('</head>', `<script type="application/ld+json">${JSON.stringify(productSchema)}</script><script type="application/ld+json">${JSON.stringify(breadcrumbSchema)}</script></head>`);
             
             // Re-inject meta tags
             html = html.replace(/<title>[^<]*<\/title>/i, `<title>${name} - i SHOP BD</title>`);
@@ -2126,6 +3599,13 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
             // Inject visible HTML for Googlebot SEO
             const fallbackHtml = `
               <div id="seo-fallback" style="opacity:0; position:absolute; z-index:-1;">
+                <nav aria-label="Breadcrumb">
+                  <ol>
+                    <li><a href="/">Home</a></li>
+                    ${category ? `<li><a href="/category/${catSlug}">${category}</a></li>` : ''}
+                    <li>${name}</li>
+                  </ol>
+                </nav>
                 <h1>${name}</h1>
                 <img src="${imageUrl}" alt="${name}" />
                 <p>${description}</p>
@@ -2218,15 +3698,34 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
               "itemListElement": categoryProducts.slice(0, 24).map((p, idx) => ({
                 "@type": "ListItem",
                 "position": idx + 1,
-                "url": `${protocol}://${host}/product/${getProductSlug(p)}`,
+                "url": `${protocol}://${host}/p/${getProductSlug(p)}`,
                 "name": p.name,
                 "image": p.image || imageUrl
               }))
             }
           };
 
+          const categoryBreadcrumbSchema = {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": `${protocol}://${host}/`
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": formattedName,
+                "item": currentUrl
+              }
+            ]
+          };
+
           html = html.replace('<!-- CANONICAL_URL_PLACEHOLDER -->', `<link rel="canonical" href="${currentUrl}" />`);
-          html = html.replace('</head>', `<script type="application/ld+json">${JSON.stringify(categorySchema)}</script></head>`);
+          html = html.replace('</head>', `<script type="application/ld+json">${JSON.stringify(categorySchema)}</script><script type="application/ld+json">${JSON.stringify(categoryBreadcrumbSchema)}</script></head>`);
           
           html = html.replace(/<title>[^<]*<\/title>/i, `<title>${categorySeo.title}</title>`);
           html = html.replace(/<meta name="description" content="[^"]*"\s*\/?>/i, `<meta name="description" content="${categorySeo.description}" />`);
@@ -2242,18 +3741,24 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
           html = html.replace(/<meta property="twitter:description" content="[^"]*"\s*\/?>/i, `<meta property="twitter:description" content="${categorySeo.description}" />`);
           html = html.replace(/<meta property="twitter:image" content="[^"]*"\s*\/?>/i, `<meta property="twitter:image" content="${imageUrl}" />`);
 
-          if (categoryProducts.length > 0) {
-            const fallbackHtml = `
-              <div id="seo-category-fallback" style="opacity:0; position:absolute; z-index:-1;">
-                <h1>${categorySeo.title}</h1>
-                <p>${categorySeo.description}</p>
-                <ul>
-                  ${categoryProducts.map(p => `<li><a href="/product/${getProductSlug(p)}">${p.name} - ৳${p.price}</a></li>`).join('')}
-                </ul>
-              </div>
-            `;
-            html = html.replace('<div id="root">', `<div id="root">${fallbackHtml}`);
-          }
+          const productListHtml = categoryProducts.length > 0 
+            ? `<ul>${categoryProducts.map(p => `<li><a href="/p/${getProductSlug(p)}">${p.name} - ৳${p.price}</a></li>`).join('')}</ul>`
+            : '';
+
+          const fallbackHtml = `
+            <div id="seo-category-fallback" style="opacity:0; position:absolute; z-index:-1;">
+              <nav aria-label="Breadcrumb">
+                <ol>
+                  <li><a href="/">Home</a></li>
+                  <li>${formattedName}</li>
+                </ol>
+              </nav>
+              <h1>${categorySeo.title}</h1>
+              <p>${categorySeo.description}</p>
+              ${productListHtml}
+            </div>
+          `;
+          html = html.replace('<div id="root">', `<div id="root">${fallbackHtml}`);
         }
       }
       
@@ -2266,7 +3771,15 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
       try {
         const initialProds = await getCachedProducts();
         if (initialProds && initialProds.length > 0) {
-          html = html.replace('</head>', `<script>window.__INITIAL_PRODUCTS__ = ${JSON.stringify(initialProds)};</script></head>`);
+          const leanInitial = toLeanProducts(initialProds);
+          html = html.replace('</head>', `<script>window.__INITIAL_PRODUCTS__ = ${JSON.stringify(leanInitial)};</script></head>`);
+        }
+      } catch (e) {}
+
+      try {
+        const initialBanners = await getCachedBanners();
+        if (initialBanners && initialBanners.length > 0) {
+          html = html.replace('</head>', `<script>window.__INITIAL_BANNERS__ = ${JSON.stringify(initialBanners)};</script></head>`);
         }
       } catch (e) {}
 
@@ -2281,11 +3794,27 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
     res.status(500).json({ error: 'Internal server error' });
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     if (process.env.NODE_ENV === "production") {
       console.log("Running in PRODUCTION mode");
     }
+    // Proactive background pre-warm in parallel
+    Promise.all([
+      getCachedProducts().then(p => console.log(`[CACHE] Pre-warmed ${p.length} products into memory`)).catch(() => {}),
+      getCachedBanners().then(b => console.log(`[CACHE] Pre-warmed ${b.length} banners into memory`)).catch(() => {})
+    ]);
+
+    // Automated Courier Status Sync (Steadfast & Pathao) every 10 minutes
+    startCourierBackgroundSync(() => getFirestore(), 10);
+
+    // Keep-Alive Self-Ping: Prevents server process cold-sleep every 4.5 minutes
+    setInterval(() => {
+      const pingUrl = process.env.NODE_ENV === "production"
+        ? "https://ishopbd.com/api/ping"
+        : `http://localhost:${PORT}/api/ping`;
+      axios.get(pingUrl, { timeout: 5000 }).catch(() => {});
+    }, 4.5 * 60 * 1000);
   });
 }
 

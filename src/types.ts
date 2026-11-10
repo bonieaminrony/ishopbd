@@ -16,6 +16,10 @@ export interface Review {
   comment: string;
   images?: string[];
   createdAt: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  productId?: string;
+  productName?: string;
+  productImage?: string;
 }
 
 export interface WholesaleTier {
@@ -64,6 +68,9 @@ export interface Product {
   features?: string;
   inTheBox?: string;
   specifications?: { key?: string; name?: string; value: string }[];
+  bundleProductIds?: string[];
+  bundleDiscount?: number;
+  bundleDiscountType?: 'percentage' | 'fixed';
   subcategory?: string;
   createdAt?: any;
   updatedAt?: any;
@@ -114,3 +121,18 @@ export interface AbandonedCart {
   timestamp: any;
   smsSent: boolean;
 }
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+  color?: string;
+  size?: string;
+  variant?: string;
+  selectedColor?: string;
+  selectedSize?: string;
+  selectedVariant?: string;
+  buyingPrice?: number;
+  [key: string]: any;
+}
+
+

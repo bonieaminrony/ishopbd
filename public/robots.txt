@@ -1,13 +1,27 @@
 User-agent: *
 Allow: /
-
-# Block admin/internal paths from indexing
-Disallow: /api/
+Allow: /api/product-image/
+Allow: /api/products
+Allow: /api/banners
+Allow: /api/marketing/public-config
+Disallow: /api/admin/
+Disallow: /api/courier/
+Disallow: /api/send-
+Disallow: /api/verify-admin
+Disallow: /api/confirm-order
+Disallow: /api/upload
+Disallow: /api/chat
+Disallow: /api/ai-search
+Disallow: /api/track-event
+Disallow: /api/invalidate-
+Disallow: /api/steadfast-
+Disallow: /api/ping
 Disallow: /scratch/
 
 # Allow Googlebot to crawl images
 User-agent: Googlebot-Image
 Allow: /
+Allow: /api/product-image/
 
 # Sitemap location
 Sitemap: https://ishopbd.com/sitemap.xml

@@ -2,6 +2,75 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, CheckCircle2, ChevronRight, Package, Clock, Truck, Home, X, Search, RefreshCcw, ShoppingBag } from 'lucide-react';
 
+const TRACKING_STEPS = ["pending", "confirmed", "shipped", "delivered"];
+
+function resolveTrackingStatusIndex(trackingResult: any): number {
+  const normalizedOrderStatus = trackingResult?.status === "processing" ? "confirmed" : trackingResult?.status;
+  let idx = TRACKING_STEPS.indexOf(normalizedOrderStatus);
+  const liveStatus = String(
+    trackingResult?.steadfastStatus ||
+    trackingResult?.pathaoStatus ||
+    trackingResult?.courierStatus ||
+    ""
+  ).toLowerCase().trim();
+
+  if (liveStatus) {
+    if (liveStatus.includes("partial_delivered") || liveStatus.includes("delivered")) {
+      idx = 3;
+    } else if (
+      liveStatus.includes("transit") ||
+      liveStatus.includes("shipped") ||
+      liveStatus.includes("dispatched") ||
+      liveStatus.includes("dispatch") ||
+      liveStatus.includes("pickup") ||
+      liveStatus.includes("picked") ||
+      liveStatus.includes("in_review") ||
+      liveStatus.includes("hold") ||
+      liveStatus.includes("assigned")
+    ) {
+      idx = 2;
+    } else if (
+      liveStatus.includes("cancel") ||
+      liveStatus.includes("return") ||
+      liveStatus.includes("reject") ||
+      liveStatus.includes("delivery_failed") ||
+      liveStatus.includes("unknown")
+    ) {
+      idx = -1;
+    }
+  }
+  return idx;
+}
+
+function translateCourierStatusDisplay(raw: string): { translatedStatus: string; statusColorClass: string } {
+  const rawStatus = String(raw || "").toLowerCase();
+  let translatedStatus = raw;
+  let statusColorClass = "text-orange-600 bg-orange-50 border-orange-100";
+
+  if (rawStatus.includes("in_transit") || rawStatus.includes("transit") || rawStatus.includes("dispatched") || rawStatus.includes("dispatch") || rawStatus.includes("shipped")) {
+    translatedStatus = "On the way to customer (In Transit)";
+    statusColorClass = "text-blue-600 bg-blue-50 border-blue-100";
+  } else if (rawStatus.includes("partial_delivered")) {
+    translatedStatus = "Partially Delivered (Courier)";
+    statusColorClass = "text-emerald-600 bg-emerald-50 border-emerald-100";
+  } else if (rawStatus.includes("delivered")) {
+    translatedStatus = "Delivery Completed";
+    statusColorClass = "text-green-600 bg-green-50 border-green-100";
+  } else if (rawStatus.includes("cancel") || rawStatus.includes("return") || rawStatus.includes("reject") || rawStatus.includes("delivery_failed")) {
+    translatedStatus = "Cancelled / Returned (Courier)";
+    statusColorClass = "text-red-600 bg-red-50 border-red-100";
+  } else if (rawStatus.includes("hold") || rawStatus.includes("suspend")) {
+    translatedStatus = "Order on Hold (Courier)";
+    statusColorClass = "text-amber-600 bg-amber-50 border-amber-100";
+  } else if (rawStatus.includes("in_review") || rawStatus.includes("pending") || rawStatus.includes("processing") || rawStatus.includes("created") || rawStatus.includes("unassigned")) {
+    translatedStatus = "Courier Booking in Progress";
+    statusColorClass = "text-indigo-600 bg-indigo-50 border-indigo-100";
+  } else if (rawStatus.includes("picked") || rawStatus.includes("pickup") || rawStatus.includes("received") || rawStatus.includes("assigned")) {
+    translatedStatus = "Parcel Picked Up by Courier";
+    statusColorClass = "text-sky-600 bg-sky-50 border-sky-100";
+  }
+  return { translatedStatus, statusColorClass };
+}
 export interface TrackingModalProps {
   setIsTrackingOpen: any;
   trackingInput: any;
@@ -93,21 +162,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                           
                           {/* Active progress connecting line */}
                           {(() => {
-                            const statusList = ['pending', 'confirmed', 'shipped', 'delivered'];
-                            let currentStatusStatus = trackingResult.status === 'processing' ? 'confirmed' : trackingResult.status;
-                            let currentStatusIdx = statusList.indexOf(currentStatusStatus);
-
-                            if (trackingResult.steadfastStatus) {
-                              const st = trackingResult.steadfastStatus.toLowerCase();
-                              if (st.includes('delivered')) currentStatusIdx = 3;
-                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatched') || st.includes('picked_up')) currentStatusIdx = 2;
-                              else if (st.includes('cancelled')) currentStatusIdx = -1;
-                            } else if (trackingResult.pathaoStatus) {
-                              const st = trackingResult.pathaoStatus.toLowerCase();
-                              if (st.includes('delivered')) currentStatusIdx = 3;
-                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatch') || st.includes('pickup')) currentStatusIdx = 2;
-                              else if (st.includes('cancel') || st.includes('return')) currentStatusIdx = -1;
-                            }
+                            const currentStatusIdx = resolveTrackingStatusIndex(trackingResult);
                             
                             const percent = currentStatusIdx >= 0 ? (currentStatusIdx / 3) * 75 : 0;
                             return (
@@ -124,21 +179,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                             { key: 'shipped', label: 'In Transit', icon: Truck },
                             { key: 'delivered', label: 'Delivered', icon: Home }
                           ].map((step, index) => {
-                            const statusList = ['pending', 'confirmed', 'shipped', 'delivered'];
-                            let currentStatusStatus = trackingResult.status === 'processing' ? 'confirmed' : trackingResult.status;
-                            let currentStatusIdx = statusList.indexOf(currentStatusStatus);
-
-                            if (trackingResult.steadfastStatus) {
-                              const st = trackingResult.steadfastStatus.toLowerCase();
-                              if (st.includes('delivered')) currentStatusIdx = 3;
-                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatched') || st.includes('picked_up')) currentStatusIdx = 2;
-                              else if (st.includes('cancelled')) currentStatusIdx = -1;
-                            } else if (trackingResult.pathaoStatus) {
-                              const st = trackingResult.pathaoStatus.toLowerCase();
-                              if (st.includes('delivered')) currentStatusIdx = 3;
-                              else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatch') || st.includes('pickup')) currentStatusIdx = 2;
-                              else if (st.includes('cancel') || st.includes('return')) currentStatusIdx = -1;
-                            }
+                            const currentStatusIdx = resolveTrackingStatusIndex(trackingResult);
 
                             const isCompleted = currentStatusIdx >= index;
                             const isCurrent = currentStatusIdx === index;
@@ -153,7 +194,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                                 } ${isCurrent ? 'ring-4 ring-orange-100 animate-pulse' : ''}`}>
                                   <StepIcon size={18} />
                                 </div>
-                                <span className={`text-[9px] md:text-[10px] font-black mt-2 text-center whitespace-nowrap block ${
+                                <span className={`text-[8px] sm:text-[9px] md:text-[10px] font-black mt-1.5 sm:mt-2 text-center leading-tight break-words block max-w-[70px] ${
                                   isCompleted ? 'text-secondary font-black' : 'text-gray-400 font-bold'
                                 }`}>
                                   {step.label}
@@ -235,31 +276,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                       <div>
                         <p className="text-xs text-gray-500 font-bold mb-1.5">SteadFast Courier Live Update</p>
                         {(() => {
-                          const rawStatus = String(trackingResult.steadfastStatus).toLowerCase();
-                          
-                          // Translate Steadfast status
-                          let translatedStatus = trackingResult.steadfastStatus;
-                          let statusColorClass = 'text-orange-600 bg-orange-50 border-orange-100';
-                          
-                          if (rawStatus.includes('in_transit') || rawStatus.includes('transit') || rawStatus.includes('dispatched')) {
-                            translatedStatus = 'On the way to customer (In Transit)';
-                            statusColorClass = 'text-blue-600 bg-blue-50 border-blue-100';
-                          } else if (rawStatus.includes('delivered')) {
-                            translatedStatus = 'Delivery Completed';
-                            statusColorClass = 'text-green-600 bg-green-50 border-green-100';
-                          } else if (rawStatus.includes('cancelled') || rawStatus.includes('returned')) {
-                            translatedStatus = 'Cancelled / Returned (Courier)';
-                            statusColorClass = 'text-red-600 bg-red-50 border-red-100';
-                          } else if (rawStatus.includes('hold')) {
-                            translatedStatus = 'Order on Hold (Courier)';
-                            statusColorClass = 'text-amber-600 bg-amber-50 border-amber-100';
-                          } else if (rawStatus.includes('pending') || rawStatus.includes('processing')) {
-                            translatedStatus = 'Courier Booking in Progress';
-                            statusColorClass = 'text-indigo-600 bg-indigo-50 border-indigo-100';
-                          } else if (rawStatus.includes('picked_up') || rawStatus.includes('received')) {
-                            translatedStatus = 'Parcel Picked Up by Courier';
-                            statusColorClass = 'text-sky-600 bg-sky-50 border-sky-100';
-                          }
+                          const { translatedStatus, statusColorClass } = translateCourierStatusDisplay(trackingResult.steadfastStatus);
                           
                           return (
                             <div className={`border rounded-xl p-3.5 flex items-start gap-3.5 ${statusColorClass}`}>
@@ -272,10 +289,10 @@ export default function TrackingModal(props: TrackingModalProps) {
                                 </p>
                                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-current/10">
                                   <p className="text-[10px] font-bold opacity-80">
-                                    Courier Tracking ID: #{trackingResult.couriers?.trackingId}
+                                    Courier Tracking ID: #{trackingResult.couriers?.trackingId || trackingResult.courierTrackingId || trackingResult.trackingId || trackingResult.courierConsignmentId}
                                   </p>
                                   <a 
-                                    href={`https://steadfast.com.bd/t/${trackingResult.couriers?.trackingId}`}
+                                    href={`https://steadfast.com.bd/t/${trackingResult.couriers?.trackingId || trackingResult.courierTrackingId || trackingResult.trackingId}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-[9px] font-black underline hover:opacity-80 transition-opacity"
@@ -293,31 +310,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                       <div>
                         <p className="text-xs text-gray-500 font-bold mb-1.5">Pathao Courier Live Update</p>
                         {(() => {
-                          const rawStatus = String(trackingResult.pathaoStatus).toLowerCase();
-                          
-                          // Translate Pathao status
-                          let translatedStatus = trackingResult.pathaoStatus;
-                          let statusColorClass = 'text-orange-600 bg-orange-50 border-orange-100';
-                          
-                          if (rawStatus.includes('transit') || rawStatus.includes('dispatch') || rawStatus.includes('shipped')) {
-                            translatedStatus = 'On the way to customer (In Transit)';
-                            statusColorClass = 'text-blue-600 bg-blue-50 border-blue-100';
-                          } else if (rawStatus.includes('delivered')) {
-                            translatedStatus = 'Delivery Completed';
-                            statusColorClass = 'text-green-600 bg-green-50 border-green-100';
-                          } else if (rawStatus.includes('cancel') || rawStatus.includes('return') || rawStatus.includes('reject')) {
-                            translatedStatus = 'Cancelled / Returned (Courier)';
-                            statusColorClass = 'text-red-600 bg-red-50 border-red-100';
-                          } else if (rawStatus.includes('hold') || rawStatus.includes('suspend')) {
-                            translatedStatus = 'Order on Hold (Courier)';
-                            statusColorClass = 'text-amber-600 bg-amber-50 border-amber-100';
-                          } else if (rawStatus.includes('pending') || rawStatus.includes('created') || rawStatus.includes('unassigned')) {
-                            translatedStatus = 'Courier Booking in Progress';
-                            statusColorClass = 'text-indigo-600 bg-indigo-50 border-indigo-100';
-                          } else if (rawStatus.includes('pickup') || rawStatus.includes('received') || rawStatus.includes('assigned')) {
-                            translatedStatus = 'Parcel Picked Up by Courier';
-                            statusColorClass = 'text-sky-600 bg-sky-50 border-sky-100';
-                          }
+                          const { translatedStatus, statusColorClass } = translateCourierStatusDisplay(trackingResult.pathaoStatus);
                           
                           return (
                             <div className={`border rounded-xl p-3.5 flex items-start gap-3.5 ${statusColorClass}`}>
@@ -330,7 +323,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                                 </p>
                                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-current/10">
                                   <p className="text-[10px] font-bold opacity-80">
-                                    Courier Tracking ID: #{trackingResult.couriers?.trackingId}
+                                    Courier Tracking ID: #{trackingResult.couriers?.trackingId || trackingResult.courierTrackingId || trackingResult.trackingId || trackingResult.courierConsignmentId}
                                   </p>
                                   <a 
                                     href={`https://pathaocourier.com.bd/`}
@@ -347,7 +340,29 @@ export default function TrackingModal(props: TrackingModalProps) {
                         })()}
                       </div>
                     )}
-                    {!trackingResult.steadfastStatus && !trackingResult.pathaoStatus && (
+                    {!trackingResult.steadfastStatus && !trackingResult.pathaoStatus && trackingResult.courierStatus && (() => {
+                      const { translatedStatus, statusColorClass } = translateCourierStatusDisplay(trackingResult.courierStatus);
+                      const courierTrackingCode = trackingResult.couriers?.trackingId || trackingResult.courierTrackingId || trackingResult.trackingId || trackingResult.courierConsignmentId;
+                      return (
+                        <div>
+                          <p className="text-xs text-gray-500 font-bold mb-1.5">{trackingResult.couriers?.service || trackingResult.courierName || "Courier"} Live Update</p>
+                          <div className={`border rounded-xl p-3.5 flex items-start gap-3.5 ${statusColorClass}`}>
+                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                              <Truck size={16} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs font-black leading-tight">{translatedStatus}</p>
+                              {courierTrackingCode && (
+                                <p className="text-[10px] font-bold opacity-80 mt-2 pt-2 border-t border-current/10">
+                                  Courier Tracking ID: #{courierTrackingCode}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {!trackingResult.steadfastStatus && !trackingResult.pathaoStatus && !trackingResult.courierStatus && (
                       <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-blue-100/50 flex items-center justify-center text-blue-600 shrink-0">
                           <Truck size={16} />
@@ -370,21 +385,7 @@ export default function TrackingModal(props: TrackingModalProps) {
                         ].map((step, index) => {
                           let isCompleted = false;
                           let isCurrent = false;
-                          const statusList = ['pending', 'confirmed', 'shipped', 'delivered'];
-                          let currentStatusStatus = trackingResult.status === 'processing' ? 'confirmed' : trackingResult.status;
-                          let currentStatusIdx = statusList.indexOf(currentStatusStatus);
-                          
-                          if (trackingResult.steadfastStatus) {
-                            const st = trackingResult.steadfastStatus.toLowerCase();
-                            if (st.includes('delivered')) currentStatusIdx = 3;
-                            else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatched') || st.includes('picked_up')) currentStatusIdx = 2;
-                            else if (st.includes('cancelled')) currentStatusIdx = -1;
-                          } else if (trackingResult.pathaoStatus) {
-                            const st = trackingResult.pathaoStatus.toLowerCase();
-                            if (st.includes('delivered')) currentStatusIdx = 3;
-                            else if (st.includes('transit') || st.includes('shipped') || st.includes('dispatch') || st.includes('pickup')) currentStatusIdx = 2;
-                            else if (st.includes('cancel') || st.includes('return')) currentStatusIdx = -1;
-                          }
+                          const currentStatusIdx = resolveTrackingStatusIndex(trackingResult);
                           
                           if (currentStatusIdx >= index) isCompleted = true;
                           if (currentStatusIdx === index) isCurrent = true;

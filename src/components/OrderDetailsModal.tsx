@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle } from 'lucide-react';
+import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -19,6 +19,8 @@ export interface OrderDetailsModalProps {
   sendToCourier: (order: any) => void;
   handleUpdateOrderStatus: (orderId: string, status: string) => void;
   getProductPrice: (product: any, quantity?: number) => number;
+  syncSingleCourierStatus?: (orderId: string) => void;
+  syncingOrderId?: string | null;
 }
 
 export default function OrderDetailsModal({
@@ -36,6 +38,8 @@ export default function OrderDetailsModal({
   sendToCourier,
   handleUpdateOrderStatus,
   getProductPrice,
+  syncSingleCourierStatus,
+  syncingOrderId = null,
 }: OrderDetailsModalProps) {
   if (!selectedOrderForDetails) return null;
 
@@ -55,13 +59,13 @@ export default function OrderDetailsModal({
         className="relative bg-white w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-[2.5rem] shadow-2xl flex flex-col"
       >
         {/* Modal Header */}
-        <div className="p-6 border-b flex justify-between items-center bg-gray-50/50">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-primary/10 text-primary rounded-2xl">
-              <History size={24} />
+        <div className="p-4 sm:p-6 border-b flex justify-between items-center bg-gray-50/50 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl">
+              <History size={22} />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-secondary">অর্ডার ডিটেইলস</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-secondary">অর্ডার ডিটেইলস</h3>
               <p className="text-xs text-gray-400 font-bold tracking-wider uppercase">
                 Order ID: #{String(selectedOrderForDetails.displayId || selectedOrderForDetails.id).slice(-6).toUpperCase()}
               </p>
@@ -69,15 +73,15 @@ export default function OrderDetailsModal({
           </div>
           <button
             onClick={() => setSelectedOrderForDetails(null)}
-            className="p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+            className="p-2 sm:p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
           >
             <X size={20} className="text-gray-400" />
           </button>
         </div>
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6 no-scrollbar">
           {/* Customer Section */}
-          <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100">
+          <div className="bg-gray-50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                 <User size={12} /> কাস্টমার ইনফরমেশন
@@ -373,6 +377,47 @@ export default function OrderDetailsModal({
               ))}
             </div>
           </div>
+          {/* Courier Delivery Status Card */}
+          {(() => {
+            const cTrack = selectedOrderForDetails.couriers?.trackingId || selectedOrderForDetails.courierTrackingId || selectedOrderForDetails.trackingId || selectedOrderForDetails.courierConsignmentId;
+            const cStatus = selectedOrderForDetails.courierStatus || selectedOrderForDetails.steadfastStatus || selectedOrderForDetails.pathaoStatus;
+            const cLabel = selectedOrderForDetails.courierStatusLabel || cStatus;
+            const cService = selectedOrderForDetails.courierName || selectedOrderForDetails.couriers?.service || (selectedOrderForDetails.pathaoStatus ? 'Pathao' : 'Steadfast');
+            if (!cTrack && !cStatus) return null;
+            return (
+              <div className="bg-sky-50/70 border border-sky-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Truck size={15} className="text-sky-600" />
+                    <span className="text-xs font-black text-sky-900">{cService} ডেলিভারি স্ট্যাটাস</span>
+                    {cLabel && (
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white border border-sky-200 text-sky-700">
+                        {cLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-sky-800/80 font-medium">
+                    {cTrack && <span className="font-mono font-bold">Tracking: {cTrack}</span>}
+                    {selectedOrderForDetails.courierLastSyncedAt && (
+                      <span>Last Sync: {new Date(selectedOrderForDetails.courierLastSyncedAt).toLocaleString("bn-BD")}</span>
+                    )}
+                  </div>
+                </div>
+                {syncSingleCourierStatus && cTrack && (
+                  <button
+                    type="button"
+                    disabled={syncingOrderId === selectedOrderForDetails.id}
+                    onClick={() => syncSingleCourierStatus(selectedOrderForDetails.id)}
+                    className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-60 shrink-0 cursor-pointer"
+                  >
+                    <RefreshCcw size={13} className={syncingOrderId === selectedOrderForDetails.id ? "animate-spin" : ""} />
+                    {syncingOrderId === selectedOrderForDetails.id ? "সিঙ্ক হচ্ছে..." : "Sync Status Now"}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Totals Section */}
           <div className="bg-secondary text-white rounded-[2rem] p-8 space-y-4">
             <div className="flex justify-between items-center text-secondary-foreground opacity-60">

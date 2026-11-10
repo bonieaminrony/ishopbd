@@ -13,7 +13,9 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="/logo.png" as="image" type="image/png" fetchpriority="high" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
+    <link rel="preload" href="/logo.webp" as="image" type="image/webp" fetchpriority="high" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
     <noscript>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" />
@@ -27,13 +29,15 @@
     <meta name="google-site-verification" content="googlea7215920fe1a9449" />
     <meta name="geo.region" content="BD" />
     <meta name="geo.placename" content="Bangladesh" />
-    <meta name="language" content="Bengali, English" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2026.1">
-    <link rel="icon" type="image/png" sizes="48x48" href="/icon-48x48.png?v=2026.1">
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png?v=2026.1">
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png?v=2026.1">
-    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192x192.png?v=2026.1">
-    <link rel="shortcut icon" href="/favicon.ico?v=2026.1">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="48x48" href="/icon-48x48.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/icon-96x96.png">
+    <link rel="icon" type="image/png" sizes="144x144" href="/icon-144x144.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180x180.png">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    <link rel="shortcut icon" href="/favicon.ico">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
@@ -152,40 +156,21 @@
     <meta name="theme-color" content="#ff4d4f" />
     <link rel="apple-touch-icon" href="/icon-192x192.png" />
 
-    <!-- Deferred Third-Party Analytics (GTM & FB Pixel) -->
+    <!-- Analytics & Pixels (Meta, GA4, Google Ads, GTM) are initialized dynamically via src/utils/tracking.ts -->
+    <!-- TikTok Pixel Code Start -->
     <script>
-      function initAnalytics() {
-        // Google Tag Manager
-        var gtm = document.createElement('script');
-        gtm.async = true;
-        gtm.src = 'https://www.googletagmanager.com/gtag/js?id=G-90PDPQL0RJ';
-        document.head.appendChild(gtm);
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        window.gtag = gtag;
-        gtag('js', new Date());
-        gtag('config', 'G-90PDPQL0RJ');
+    !function (w, d, t) {
+      w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(
+      var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
+      ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
 
-        // Facebook Pixel
-        !function(f,b,e,v,n,t,s)
-        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-        n.queue=[];t=b.createElement(e);t.async=!0;
-        t.src=v;s=b.getElementsByTagName(e)[0];
-        s.parentNode.insertBefore(t,s)}(window,document,'script',
-        'https://connect.facebook.net/en_US/fbevents.js');
-        if (window.fbq) {
-          fbq('init', '1358996272808579');
-          fbq('track', 'PageView');
-        }
-      }
-      if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() { setTimeout(initAnalytics, 1500); });
-      } else {
-        window.addEventListener('load', function() { setTimeout(initAnalytics, 1500); });
-      }
+
+      ttq.load('DBPHK73C77U4J2JR78JG');
+      ttq.page();
+    }(window, document, 'ttq');
     </script>
+    <!-- TikTok Pixel Code End -->
+    <script>window.__ishopbdTtqHeadPagePixel = 'DBPHK73C77U4J2JR78JG';</script>
   </head>
   <body>
     <noscript>

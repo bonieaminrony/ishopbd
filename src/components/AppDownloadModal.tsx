@@ -179,10 +179,10 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0, y: 30 }}
         transition={{ type: "spring", damping: 25, stiffness: 220 }}
-        className="relative bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[500px]"
+        className="relative bg-white w-full max-w-3xl rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-y-auto max-h-[92vh] md:max-h-none grid grid-cols-1 md:grid-cols-12 min-h-0"
       >
         {/* Left Banner Column (Visual App Preview) */}
-        <div className="md:col-span-5 bg-gradient-to-br from-primary via-red-500 to-rose-600 p-8 flex flex-col justify-between relative overflow-hidden text-white min-h-[250px] md:min-h-auto">
+        <div className="md:col-span-5 bg-gradient-to-br from-primary via-red-500 to-rose-600 p-6 md:p-8 flex flex-col justify-between relative overflow-hidden text-white min-h-[220px] md:min-h-auto">
           {/* Decorative background shapes */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-black/10 rounded-full blur-3xl pointer-events-none" />
@@ -240,7 +240,7 @@ export default function AppDownloadModal({ isOpen, onClose, siteConfig, deferred
         </div>
 
         {/* Right Content Column */}
-        <div className="md:col-span-7 p-8 flex flex-col justify-between relative bg-white">
+        <div className="md:col-span-7 p-5 sm:p-8 flex flex-col justify-between relative bg-white">
           {/* Close Button */}
           <button
             onClick={onClose}

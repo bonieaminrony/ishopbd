@@ -23,11 +23,11 @@ export default function PolicyModal({ activePolicy, setActivePolicy, siteConfig 
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
-        className="bg-white w-full max-w-2xl max-h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+        className="bg-white w-full max-w-2xl max-h-[88vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary text-white">
-          <h3 className="text-xl font-bold">
+        <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-primary text-white shrink-0">
+          <h3 className="text-lg sm:text-xl font-bold">
             {activePolicy === "about" && "আমাদের সম্পর্কে"}
             {activePolicy === "privacy" && "গোপনীয়তা নীতি"}
             {activePolicy === "refund" && "রিফান্ড পলিসি"}
@@ -37,10 +37,10 @@ export default function PolicyModal({ activePolicy, setActivePolicy, siteConfig 
             onClick={() => setActivePolicy(null)}
             className="p-2 hover:bg-white/20 rounded-full transition-colors"
           >
-            <X size={24} />
+            <X size={22} />
           </button>
         </div>
-        <div className="p-8 overflow-y-auto text-secondary leading-relaxed space-y-6 overflow-x-hidden no-scrollbar">
+        <div className="p-5 sm:p-8 overflow-y-auto text-secondary leading-relaxed space-y-6 overflow-x-hidden no-scrollbar">
           {activePolicy === "about" && (
             <div className="space-y-4">
               <p className="font-bold text-lg text-primary">

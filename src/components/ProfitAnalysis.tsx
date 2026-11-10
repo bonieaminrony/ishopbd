@@ -521,8 +521,8 @@ export default function ProfitAnalysis({ orderHistory, products, expenses }: Pro
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full">
+      <div className="w-full space-y-6">
         
         {/* Actions Bar: Month Selector & Export */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">

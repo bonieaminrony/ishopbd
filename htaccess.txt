@@ -8,23 +8,42 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteEngine On
   RewriteBase /
 
+  # Preserve Authorization & X-Admin-Token headers for PHP on Apache/LiteSpeed
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+  RewriteCond %{HTTP:X-Admin-Token} .
+  RewriteRule .* - [E=HTTP_X_ADMIN_TOKEN:%{HTTP:X-Admin-Token}]
+
   # Redirect direct index.html and index.php requests to app.php to bypass CDN cache
   RewriteRule ^index\.html$ app.php [L]
   RewriteRule ^index\.php$ app.php [L]
 
   # Route API endpoints to PHP scripts on shared hosting
+  RewriteRule ^api/ping$ api/ping.php [L]
   RewriteRule ^api/send-sms$ api/send-sms.php [L]
   RewriteRule ^api/send-bulk-sms$ api/send-bulk-sms.php [L]
   RewriteRule ^api/confirm-order$ api/confirm-order.php [L]
   RewriteRule ^api/send-email$ api/send-email.php [L]
   RewriteRule ^api/send-push$ api/send-push.php [L]
   RewriteRule ^api/chat$ api/chat.php [L]
+  RewriteRule ^api/ai-search$ api/ai-search.php [L]
   RewriteRule ^api/courier/steadfast/bulk$ api/steadfast-bulk.php [L]
   RewriteRule ^api/steadfast-status$ api/steadfast-status.php [L]
   RewriteRule ^api/courier/steadfast/fraud/([^/]+)$ api/steadfast-fraud.php?phone=$1 [L,QSA]
   RewriteRule ^api/products$ api/products.php [L]
   RewriteRule ^api/invalidate-product-cache$ api/invalidate-product-cache.php [L]
+  RewriteRule ^api/banners$ api/banners.php [L,QSA]
+  RewriteRule ^api/invalidate-banner-cache$ api/invalidate-banner-cache.php [L,QSA]
   RewriteRule ^api/verify-admin$ api/verify-admin.php [L]
+  RewriteRule ^api/marketing/public-config$ api/marketing.php?action=public-config [L,QSA]
+  RewriteRule ^api/admin/marketing-config$ api/marketing.php?action=admin-config [L,QSA]
+  RewriteRule ^api/admin/marketing-test/([a-zA-Z0-9_-]+)$ api/marketing.php?action=test&platform=$1 [L,QSA]
+  RewriteRule ^api/track-event$ api/track-event.php [L]
+  RewriteRule ^api/admin/courier/sync-all$ api/courier-sync.php?action=sync-all [L,QSA]
+  RewriteRule ^api/admin/courier/sync/([^/]+)$ api/courier-sync.php?action=sync-one&orderId=$1 [L,QSA]
+  RewriteRule ^api/courier/webhook/steadfast$ api/courier-sync.php?action=webhook [L,QSA]
+  RewriteRule ^api/admin/keys$ api/courier-sync.php?action=keys [L,QSA]
+  RewriteRule ^api/admin/site-config$ api/courier-sync.php?action=save-site-config [L,QSA]
   RewriteRule ^api/product-image/(.*)$ api/product-image.php?id=$1 [L,QSA]
 
   # Route Firebase Auth endpoints to PHP proxy
@@ -35,12 +54,17 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^ - [R=404,L]
 
+  # Block any direct HTTP access to credentials, sensitive json files, and env files
+  RewriteRule ^api/.*\.json$ - [F,L]
+  RewriteRule ^.*service-account.*$ - [F,L]
+  RewriteRule ^\.env - [F,L]
+
   # SPA Routing: Send all non-file non-directory non-api requests to app.php
   RewriteCond %{REQUEST_URI} !^/api [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteCond %{REQUEST_FILENAME} !-l
-  RewriteRule . /app.php [L]
+  RewriteRule ^(.*)$ /app.php?__route__=$1 [L,QSA]
 </IfModule>
 
 # =========================================================
@@ -91,8 +115,8 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   </IfModule>
 </FilesMatch>
 
-# Disable caching for HTML and entry PHP files so updates are immediate
-<FilesMatch "(index\.html|app\.php|index\.php)$">
+# Disable caching for HTML and PHP files
+<FilesMatch "\.(html|php)$">
   <IfModule mod_headers.c>
     Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
@@ -101,7 +125,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
 </FilesMatch>
 
 # =========================================================
-# SECURITY HEADERS
+# SECURITY RULES & HEADERS
 # =========================================================
 
 # Block direct browser access to unlisted PHP files
@@ -112,9 +136,20 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
 </FilesMatch>
 
 # Allow only the specific API and entry PHP files
-<FilesMatch "^(index|app|products|invalidate-product-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy)\.php$">
+<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|ping|marketing|track-event|courier-sync)\.php$">
   <IfModule mod_authz_core.c>
     Require all granted
+  </IfModule>
+</FilesMatch>
+
+# Block web access to service-account.json, sensitive credentials, and cache JSON files
+<FilesMatch ".*(service-account|products_cache|banners_cache|\.env).*">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
   </IfModule>
 </FilesMatch>
 

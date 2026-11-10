@@ -4,7 +4,8 @@
 // Security: API keys kept server-side, never exposed to browser
 // ================================================================
 
-// --- CORS: Only allow your own domain ---
+require_once __DIR__ . '/_marketing_lib.php';
+
 $allowedOrigins = [
     'https://ishopbd.com',
     'https://www.ishopbd.com',
@@ -36,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit;
 }
 
-// --- RATE LIMITING ---
 session_start();
 $clientIP = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 $clientIP = trim(explode(',', $clientIP)[0]);
@@ -60,44 +60,32 @@ if ($rateData['count'] > $rateMaxCalls) {
     exit;
 }
 
-// --- ENV READER ---
-function getEnvVar($key, $default = '') {
-    $paths = [
-        __DIR__ . '/../../.env',
-        __DIR__ . '/../.env',
-        $_SERVER['DOCUMENT_ROOT'] . '/../.env',
-        $_SERVER['DOCUMENT_ROOT'] . '/.env',
-    ];
-    foreach ($paths as $path) {
-        $realPath = realpath($path);
-        if ($realPath && file_exists($realPath)) {
-            $lines = file($realPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || $line[0] === '#') continue;
-                $parts = explode('=', $line, 2);
-                if (count($parts) === 2 && trim($parts[0]) === $key) {
-                    return trim(trim($parts[1]), "\"'");
-                }
-            }
-        }
-    }
-    return $default;
-}
-
-// --- GET TRACKING ID FROM URL ---
-// URL pattern: /api/steadfast-status?id=TRACKING_ID
 $trackingId = isset($_GET['id']) ? preg_replace('/[^a-zA-Z0-9\-_]/', '', trim($_GET['id'])) : '';
-
 if (empty($trackingId)) {
     http_response_code(400);
     echo json_encode(["success" => false, "message" => "Tracking ID required"]);
     exit;
 }
 
-// --- LOAD CREDENTIALS SERVER-SIDE ---
-$apiKey    = getEnvVar('STEADFAST_API_KEY');
-$secretKey = getEnvVar('STEADFAST_SECRET_KEY');
+$apiKey    = marketingGetEnvVar('STEADFAST_API_KEY');
+$secretKey = marketingGetEnvVar('STEADFAST_SECRET_KEY');
+
+if (empty($apiKey) || empty($secretKey)) {
+    $sa = marketingGetServiceAccount();
+    $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
+    $dsToken = marketingGetDatastoreToken($sa);
+    if ($dsToken) {
+        $kCh = curl_init("https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/admin_config/keys");
+        curl_setopt_array($kCh, [CURLOPT_HTTPHEADER => ["Authorization: Bearer $dsToken"], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8]);
+        $kResp = json_decode(curl_exec($kCh) ?: '', true);
+        curl_close($kCh);
+        if (isset($kResp['fields'])) {
+            $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
+            $apiKey = $apiKey ?: ($kData['steadfastApiKey'] ?? '');
+            $secretKey = $secretKey ?: ($kData['steadfastSecretKey'] ?? '');
+        }
+    }
+}
 
 if (empty($apiKey) || empty($secretKey)) {
     http_response_code(500);
@@ -105,8 +93,8 @@ if (empty($apiKey) || empty($secretKey)) {
     exit;
 }
 
-// --- PROXY REQUEST TO STEADFAST ---
-$url = "https://portal.packzy.com/api/v1/status/by-trackingcode/" . urlencode($trackingId);
+$endpoint = ctype_digit($trackingId) ? "status_by_cid/" : "status_by_trackingcode/";
+$url = "https://portal.packzy.com/api/v1/" . $endpoint . urlencode($trackingId);
 
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $url);
@@ -123,7 +111,6 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
 
 $response  = curl_exec($ch);
 $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlError = curl_error($ch);
 curl_close($ch);
 
 if ($response === false) {

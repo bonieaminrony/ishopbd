@@ -4,7 +4,7 @@ import fs from 'fs';
 async function run() {
   const client = new ftp.Client();
   try {
-    await client.access({host: '187.127.183.159', user: 'u286107709', password: 'Aminbro@1122', secure: false});
+    await client.access({host: '187.127.183.159', user: 'u286107709', password: 'REDACTED_PASSWORD', secure: false});
     const list = await client.list('/domains/ishopbd.com/public_html/api');
     
     for (const file of list) {

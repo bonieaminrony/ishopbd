@@ -125,7 +125,8 @@ export const DEFAULT_BANNERS = [
     id: 1,
     title: "সেরা মানের পণ্য, আমাদের অঙ্গীকার",
     subtitle: "১০০% অরিজিনাল গ্যারান্টি",
-    image: "https://images.unsplash.com/photo-1441984907796-39575fe82c71?w=1600&h=900&fit=crop",
+    image: "/ishopbd_hero_banner.webp",
+    type: "hero",
   },
 ];
 

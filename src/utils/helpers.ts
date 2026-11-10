@@ -370,13 +370,88 @@ export const findCategoryBySlug = (categories: any[], slug: string): any => {
     const name = (typeof c === 'string' ? c : c?.name || '').toLowerCase();
     if (decoded.includes('fan') && name.includes('fan')) return true;
     if ((decoded.includes('power') || decoded.includes('bank')) && (name.includes('power') || name.includes('bank'))) return true;
+    if (decoded.includes('mic') && (name.includes('mic') || name.includes('audio') || name.includes('sound'))) return true;
     if (decoded.includes('watch') && name.includes('watch')) return true;
     if ((decoded.includes('headphone') || decoded.includes('earbud') || decoded.includes('earphone')) && name.includes('headphone')) return true;
+    if (decoded.includes('jacket') && (name.includes('jacket') || name.includes('winter') || name.includes('clothing'))) return true;
+    if (decoded.includes('organic') && (name.includes('organic') || name.includes('food') || name.includes('grocery'))) return true;
     return false;
   });
   if (found) return found;
 
   return null;
+};
+
+/**
+ * Universal product to category / subcategory matching engine
+ * Used by SSR and client-side filtering to ensure complete category listings
+ */
+export const matchProductToCategory = (product: any, categoryOrSlug: string): boolean => {
+  if (!product || product.deleted || product.isPublished === false || !categoryOrSlug) return false;
+  const target = categoryOrSlug.trim().toLowerCase();
+  if (target === 'all') return true;
+
+  const targetSlug = slugify(target);
+  const pCat = (product.category || '').trim().toLowerCase();
+  const pSubcat = (product.subcategory || '').trim().toLowerCase();
+  const pCatSlug = slugify(pCat);
+  const pSubcatSlug = slugify(pSubcat);
+  const name = (product.name || '').toLowerCase();
+
+  // 1. Direct equality with category or subcategory name or slug
+  if (pCat === target || pSubcat === target || pCatSlug === targetSlug || pSubcatSlug === targetSlug) {
+    return true;
+  }
+
+  // 2. High-intent semantic mapping for known categories
+  switch (targetSlug) {
+    case 'power-bank':
+    case 'powerbank':
+      return pCatSlug.includes('power-bank') || pSubcatSlug.includes('power-bank') ||
+             name.includes('power bank') || name.includes('powerbank') || name.includes('পাওয়ার ব্যাংক');
+    case 'charger-fan':
+    case 'fan':
+    case 'rechargeable-fan':
+      return pCatSlug.includes('electrical') || pSubcatSlug.includes('fan') || pCatSlug.includes('fan') ||
+             name.includes('fan') || name.includes('ফ্যান');
+    case 'microphone':
+    case 'wireless-mic':
+    case 'mic':
+      return pSubcatSlug.includes('microphone') || pSubcatSlug.includes('mic') ||
+             name.includes('microphone') || name.includes('মাইক্রোফোন') || name.includes('lavalier') ||
+             /\bmic\b/i.test(name);
+    case 'smart-watch':
+    case 'smartwatch':
+      return pSubcatSlug.includes('smart-watch') || pSubcatSlug.includes('smartwatch') ||
+             name.includes('smart watch') || name.includes('smartwatch') || name.includes('স্মার্ট ওয়াচ');
+    case 'lifestyle-watch':
+    case 'watch':
+    case 'watches':
+      return pCatSlug.includes('lifestyle') || pSubcatSlug.includes('watch') ||
+             name.includes('watch') || name.includes('ঘড়ি');
+    case 'headphone':
+    case 'earbuds':
+    case 'earphone':
+      return pSubcatSlug.includes('headphone') || pSubcatSlug.includes('earbud') || pSubcatSlug.includes('neckband') ||
+             name.includes('headphone') || name.includes('earbud') || name.includes('neckband') || name.includes('হেডফোন');
+    case 'mobile-accessories':
+    case 'gadgets':
+      return pCatSlug.includes('gadget') || pSubcatSlug.includes('stick') || pSubcatSlug.includes('bracket') ||
+             pSubcatSlug.includes('tripod') || name.includes('tripod') || name.includes('mount') || name.includes('bracket') || name.includes('selfie');
+    case 'jacket':
+    case 'winter-collection':
+      return pCatSlug.includes('jacket') || pSubcatSlug.includes('jacket') ||
+             name.includes('jacket') || name.includes('জ্যাকেট') || name.includes('winter') || name.includes('hoodie');
+    case 'organic-food':
+    case 'organic':
+      return pCatSlug.includes('organic') || pSubcatSlug.includes('organic') ||
+             name.includes('organic') || name.includes('আম') || name.includes('mango') || name.includes('মধু');
+    default: {
+      const cleanTarget = targetSlug.replace(/-/g, ' ');
+      return pCatSlug.includes(targetSlug) || pSubcatSlug.includes(targetSlug) ||
+             (cleanTarget.length >= 3 && name.includes(cleanTarget));
+    }
+  }
 };
 
 export const normalizeProduct = (p: any): any => {

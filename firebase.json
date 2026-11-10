@@ -7,7 +7,10 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/service-account*.json",
+      "**/.env*",
+      "**/products_cache*.json"
     ],
     "rewrites": [
       {

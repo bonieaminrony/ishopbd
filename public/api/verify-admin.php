@@ -114,7 +114,7 @@ if (empty($masterPassword)) {
     exit;
 }
 
-if ($isMasterEmail && $inputPassword === $masterPassword) {
+if ($isMasterEmail && hash_equals($masterPassword, $inputPassword)) {
     echo json_encode(["success" => true, "type" => "master"]);
     exit;
 }

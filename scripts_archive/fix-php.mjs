@@ -4,7 +4,7 @@ import fs from 'fs';
 async function run() {
   const client = new ftp.Client();
   try {
-    await client.access({host: '187.127.183.159', user: 'u286107709', password: 'Aminbro@1122', secure: false});
+    await client.access({host: '187.127.183.159', user: 'u286107709', password: 'REDACTED_PASSWORD', secure: false});
     
     let content = fs.readFileSync('verify-admin.php', 'utf8');
     
@@ -14,7 +14,7 @@ async function run() {
     // Add fallback for master password
     content = content.replace(
       /\$masterPassword = getEnvVar\('MASTER_ADMIN_PASSWORD'\);/,
-      `$masterPassword = getEnvVar('MASTER_ADMIN_PASSWORD', 'islamic786');\nif (empty($masterPassword)) { $masterPassword = 'islamic786'; }`
+      `$masterPassword = getEnvVar('MASTER_ADMIN_PASSWORD', 'REDACTED_PASSWORD');\nif (empty($masterPassword)) { $masterPassword = 'REDACTED_PASSWORD'; }`
     );
     
     // Update rate limiting IP extraction logic just like I did in server.ts

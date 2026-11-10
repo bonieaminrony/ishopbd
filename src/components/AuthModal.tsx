@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, ArrowRight } from 'lucide-react';
+import { User, ArrowRight, X } from 'lucide-react';
 
 export interface AuthModalProps {
   setIsAuthModalOpen: any;
@@ -52,16 +52,23 @@ export default function AuthModal(props: AuthModalProps) {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="bg-white w-full max-w-[460px] rounded-3xl p-10 shadow-2xl relative z-10 overflow-hidden border border-gray-100"
+              className="bg-white w-full max-w-[460px] rounded-3xl p-6 sm:p-8 md:p-10 shadow-2xl relative z-10 overflow-hidden border border-gray-100 max-h-[92vh] overflow-y-auto no-scrollbar"
             >
-              <div className="text-center mb-8">
-                <div className="w-12 h-12 bg-red-50 text-primary rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <button
+                onClick={() => setIsAuthModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all touch-manipulation"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+              <div className="text-center mb-6 sm:mb-8">
+                <div className="w-12 h-12 bg-red-50 text-primary rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-sm">
                   <User size={24} />
                 </div>
-                <h3 className="text-2xl font-bold text-secondary tracking-tight">
+                <h3 className="text-xl sm:text-2xl font-bold text-secondary tracking-tight">
                   {authModalType === "login" ? "Welcome Back" : "Create Account"}
                 </h3>
-                <p className="text-sm text-gray-400 font-medium mt-1">
+                <p className="text-xs sm:text-sm text-gray-400 font-medium mt-1">
                   {authModalType === "login" ? "Please login to track your orders" : "Create a new account to start shopping"}
                 </p>
               </div>

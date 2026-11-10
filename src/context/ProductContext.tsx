@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { Product, Category } from '../types';
 import { findProductBySlugOrId, normalizeProducts, normalizeProduct, safeGetLocalStorage } from '../utils/helpers';
 import { STORAGE_KEYS, purgeLegacyCaches } from '../constants/data';

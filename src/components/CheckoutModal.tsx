@@ -838,18 +838,18 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   </div>
                 </div>
 
-                <div className="pt-1 sticky bottom-4 z-50 shadow-2xl md:shadow-none md:static">
+                <div className="pt-2 sticky bottom-3 z-30 shadow-2xl md:shadow-none md:static pb-[max(env(safe-area-inset-bottom,0px),0px)]">
                   <button
                     type="submit"
                     form="checkout-form"
                     disabled={isOrderProcessing}
-                    className="w-full bg-primary hover:bg-primary/95 text-white font-bold text-sm py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50 font-sans"
+                    className="w-full bg-gradient-to-r from-primary to-red-600 hover:from-red-600 hover:to-primary text-white font-black text-sm sm:text-base py-3.5 sm:py-4 rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 font-sans touch-manipulation cursor-pointer"
                   >
                     {isOrderProcessing ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                     ) : (
                       <>
-                        Complete Order <ArrowRight size={16} className="animate-pulse" />
+                        Complete Order <ArrowRight size={18} className="animate-pulse shrink-0" />
                       </>
                     )}
                   </button>

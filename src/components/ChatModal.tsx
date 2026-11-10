@@ -47,7 +47,7 @@ export default function ChatModal(props: ChatModalProps) {
             initial={{ opacity: 0, y: 100, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 100, scale: 0.9 }}
-            className="w-full md:w-[400px] h-[600px] bg-white md:rounded-[2.5rem] shadow-2xl flex flex-col pointer-events-auto overflow-hidden relative"
+            className="w-full md:w-[400px] h-[85vh] max-h-[650px] md:h-[600px] bg-white rounded-t-3xl md:rounded-[2.5rem] shadow-2xl flex flex-col pointer-events-auto overflow-hidden relative pb-[env(safe-area-inset-bottom,0px)]"
           >
             {/* Chat Header */}
             <div className="bg-primary p-6 text-white flex items-center justify-between shrink-0">

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ishopbd-cache-v10';
+const CACHE_NAME = 'ishopbd-cache-v11';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/logo.png',

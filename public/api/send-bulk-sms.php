@@ -61,11 +61,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // --- ADMIN SECURITY CHECK ---
-$adminToken = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? $_SERVER['X_ADMIN_TOKEN'] ?? '';
-$masterPassword = getEnvVar('MASTER_ADMIN_PASSWORD');
-if (empty($masterPassword) || empty($adminToken) || $adminToken !== $masterPassword) {
+$rawAdminToken = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? $_SERVER['X_ADMIN_TOKEN'] ?? $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+$adminToken = trim(strpos($rawAdminToken, 'Bearer ') === 0 ? substr($rawAdminToken, 7) : $rawAdminToken);
+$validToken = trim(getEnvVar('ADMIN_API_TOKEN') ?: getEnvVar('MASTER_ADMIN_PASSWORD'));
+
+if (empty($validToken) || empty($adminToken) || $adminToken !== $validToken) {
     http_response_code(403);
-    echo json_encode(["success" => false, "message" => "Unauthorized: Admin access required"]);
+    echo json_encode(["success" => false, "message" => "Unauthorized: Valid admin token required"]);
     exit;
 }
 

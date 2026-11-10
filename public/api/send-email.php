@@ -1,10 +1,10 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Content-Type: application/json; charset=UTF-8");
+require_once __DIR__ . '/_marketing_lib.php';
+
+marketingSetCorsHeaders('POST, OPTIONS');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
     exit(0);
 }
 
@@ -14,50 +14,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Function to parse .env file
-function getEnvVar($key, $default = '') {
-    $paths = [
-        __DIR__ . '/.env',
-        __DIR__ . '/../.env',
-        __DIR__ . '/../../.env',
-        $_SERVER['DOCUMENT_ROOT'] . '/.env',
-        $_SERVER['DOCUMENT_ROOT'] . '/../.env'
-    ];
-    foreach ($paths as $path) {
-        if (file_exists($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || $line[0] === '#') continue;
-                $parts = explode('=', $line, 2);
-                if (count($parts) === 2) {
-                    $name = trim($parts[0]);
-                    $value = trim($parts[1]);
-                    $value = trim($value, "\"'");
-                    if ($name === $key) {
-                        return $value;
-                    }
-                }
-            }
-        }
-    }
-    return $default;
+if (!marketingVerifyIsAdmin()) {
+    http_response_code(401);
+    echo json_encode(["success" => false, "message" => "Unauthorized access"]);
+    exit;
 }
 
 $input = file_get_contents("php://input");
 $data = json_decode($input, true);
 
-$to = isset($data['to']) ? trim($data['to']) : '';
-$subject = isset($data['subject']) ? trim($data['subject']) : '';
-$message = isset($data['message']) ? trim($data['message']) : '';
+$to = isset($data['to']) ? str_replace(["\r", "\n"], '', trim((string)$data['to'])) : '';
+$subject = isset($data['subject']) ? str_replace(["\r", "\n"], ' ', trim((string)$data['subject'])) : '';
+$message = isset($data['message']) ? trim((string)$data['message']) : '';
 
-if (empty($to) || empty($subject) || empty($message)) {
+if (empty($to) || empty($subject) || empty($message) || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Missing to, subject, or message"]);
+    echo json_encode(["success" => false, "message" => "Invalid or missing email parameters"]);
     exit;
 }
 
-$emailUser = getEnvVar('EMAIL_USER', 'ishopbd.online@gmail.com');
+$emailUser = str_replace(["\r", "\n"], '', marketingGetEnvVar('EMAIL_USER', 'ishopbd.online@gmail.com'));
 $headers = "From: i SHOP BD <" . $emailUser . ">\r\n" .
            "Reply-To: " . $emailUser . "\r\n" .
            "Content-Type: text/plain; charset=UTF-8\r\n" .

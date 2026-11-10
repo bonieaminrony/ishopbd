@@ -131,6 +131,26 @@ if (preg_match('/^01[3-9]\d{8}$/', $phone)) {
     $phone = '88' . $phone;
 }
 
+require_once __DIR__ . '/_marketing_lib.php';
+$isSmsAdmin = marketingVerifyIsAdmin();
+if (!$isSmsAdmin) {
+    $phoneLimitFile = sys_get_temp_dir() . '/ishopbd_sms_phone_' . md5($phone) . '.json';
+    $phoneTimestamps = [];
+    if (file_exists($phoneLimitFile)) {
+        $decoded = json_decode(@file_get_contents($phoneLimitFile), true);
+        if (is_array($decoded)) {
+            $phoneTimestamps = array_values(array_filter($decoded, function($ts) use ($now) { return is_int($ts) && ($now - $ts) < 300; }));
+        }
+    }
+    if (count($phoneTimestamps) >= 3) {
+        http_response_code(429);
+        echo json_encode(["success" => false, "message" => "Too many SMS requests for this phone number. Please try again later."]);
+        exit;
+    }
+    $phoneTimestamps[] = $now;
+    @file_put_contents($phoneLimitFile, json_encode($phoneTimestamps), LOCK_EX);
+}
+
 // --- SEND SMS ---
 $params = [
     'api_key'  => $smsApiKey,

@@ -1,0 +1,938 @@
+import axios from "axios";
+import crypto from "crypto";
+
+export interface CourierCredentials {
+  steadfastApiKey?: string;
+  steadfastSecretKey?: string;
+  steadfastWebhookSecret?: string;
+  pathaoClientId?: string;
+  pathaoClientSecret?: string;
+  pathaoUsername?: string;
+  pathaoPassword?: string;
+}
+
+export interface OrderCourierInfo {
+  service: "Steadfast" | "Pathao" | "RedX" | string;
+  trackingId: string;
+  consignmentId: string;
+}
+
+export type NormalizedCourierCategory =
+  | "booked"
+  | "in_transit"
+  | "on_hold"
+  | "delivered"
+  | "returned"
+  | "cancelled"
+  | "unknown";
+
+export interface CourierTransitionEvaluation {
+  shouldTransition: boolean;
+  targetOrderStatus: "shipped" | "delivered" | "returned" | "cancelled" | null;
+  normalizedCategory: NormalizedCourierCategory;
+  label: string;
+  statusProtected: boolean;
+  reason: string;
+}
+
+interface StatusRule {
+  category: NormalizedCourierCategory;
+  label: string;
+  targetOrderStatus: "shipped" | "delivered" | "returned" | "cancelled" | null;
+  allowedCurrentStatuses: string[];
+  reason: string;
+}
+
+const COURIER_STATUS_RULES: Record<string, StatusRule> = {
+  // Steadfast & Pathao initial / booked states
+  in_review: {
+    category: "booked",
+    label: "In Review (Booked)",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Consignment booked with courier; awaiting pickup.",
+  },
+  pending: {
+    category: "booked",
+    label: "Pending Pickup",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Consignment pending courier pickup.",
+  },
+  pickup_requested: {
+    category: "booked",
+    label: "Pickup Requested",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Courier pickup requested.",
+  },
+  hold: {
+    category: "on_hold",
+    label: "On Hold",
+    targetOrderStatus: null,
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Delivery temporarily on hold by courier.",
+  },
+  on_hold: {
+    category: "on_hold",
+    label: "On Hold",
+    targetOrderStatus: null,
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Delivery temporarily on hold by courier.",
+  },
+  picked: {
+    category: "in_transit",
+    label: "Picked Up",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel picked up by courier rider.",
+  },
+  picked_up: {
+    category: "in_transit",
+    label: "Picked Up",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel picked up by courier rider.",
+  },
+  at_sorting_hub: {
+    category: "in_transit",
+    label: "At Sorting Hub",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel arrived at courier sorting hub.",
+  },
+  in_transit: {
+    category: "in_transit",
+    label: "In Transit",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel is in transit to customer.",
+  },
+  transit: {
+    category: "in_transit",
+    label: "In Transit",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel is in transit to customer.",
+  },
+  delivery_ongoing: {
+    category: "in_transit",
+    label: "Out for Delivery",
+    targetOrderStatus: "shipped",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Rider is out for delivery.",
+  },
+  delivered: {
+    category: "delivered",
+    label: "Delivered",
+    targetOrderStatus: "delivered",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel successfully delivered to customer.",
+  },
+  partial_delivered: {
+    category: "delivered",
+    label: "Partially Delivered",
+    targetOrderStatus: "delivered",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel partially delivered to customer.",
+  },
+  partial_delivery: {
+    category: "delivered",
+    label: "Partially Delivered",
+    targetOrderStatus: "delivered",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Parcel partially delivered to customer.",
+  },
+  delivered_approval_pending: {
+    category: "delivered",
+    label: "Delivered (Approval Pending)",
+    targetOrderStatus: "delivered",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped"],
+    reason: "Courier marked parcel delivered (approval pending).",
+  },
+  cancelled: {
+    category: "cancelled",
+    label: "Cancelled",
+    targetOrderStatus: "cancelled",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Courier shipment cancelled.",
+  },
+  cancelled_by_customer: {
+    category: "cancelled",
+    label: "Cancelled by Customer",
+    targetOrderStatus: "cancelled",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Shipment cancelled by customer.",
+  },
+  cancelled_by_merchant: {
+    category: "cancelled",
+    label: "Cancelled by Merchant",
+    targetOrderStatus: "cancelled",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Shipment cancelled by merchant.",
+  },
+  cancelled_approval_pending: {
+    category: "cancelled",
+    label: "Cancelled (Pending)",
+    targetOrderStatus: "cancelled",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Courier shipment cancelled (approval pending).",
+  },
+  return: {
+    category: "returned",
+    label: "Returning",
+    targetOrderStatus: "returned",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Parcel is being returned by courier.",
+  },
+  returned: {
+    category: "returned",
+    label: "Returned",
+    targetOrderStatus: "returned",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Parcel returned to merchant.",
+  },
+  return_received: {
+    category: "returned",
+    label: "Return Received",
+    targetOrderStatus: "returned",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Returned parcel received by merchant.",
+  },
+  delivery_failed: {
+    category: "returned",
+    label: "Delivery Failed",
+    targetOrderStatus: "returned",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Courier delivery attempt failed.",
+  },
+  failed: {
+    category: "returned",
+    label: "Delivery Failed",
+    targetOrderStatus: "returned",
+    allowedCurrentStatuses: ["pending", "confirmed", "processing", "shipped", "delivered"],
+    reason: "Courier delivery failed.",
+  },
+};
+
+const TERMINAL_COURIER_STATUSES = new Set([
+  "delivered",
+  "partial_delivered",
+  "partial_delivery",
+  "returned",
+  "return_received",
+  "cancelled",
+  "cancelled_by_customer",
+  "cancelled_by_merchant",
+]);
+
+export function normalizeCourierStatusKey(rawStatus?: string | null): string {
+  if (!rawStatus) return "unknown";
+  return String(rawStatus).trim().toLowerCase().replace(/[\s\-]+/g, "_");
+}
+
+export function isTerminalCourierStatus(rawStatus?: string | null): boolean {
+  return TERMINAL_COURIER_STATUSES.has(normalizeCourierStatusKey(rawStatus));
+}
+
+export function formatCourierStatusLabel(rawStatus?: string | null): {
+  code: string;
+  category: NormalizedCourierCategory;
+  label: string;
+} {
+  const code = normalizeCourierStatusKey(rawStatus);
+  const rule = COURIER_STATUS_RULES[code];
+  if (rule) {
+    return { code, category: rule.category, label: rule.label };
+  }
+  return {
+    code,
+    category: "unknown",
+    label: rawStatus ? String(rawStatus).replace(/_/g, " ") : "Unknown",
+  };
+}
+
+/**
+ * Evaluates whether an i SHOP BD order's status should transition given a courier status.
+ * Enforces Manual Status Protection (similar to Rivo Fashion):
+ *  - Manually cancelled/returned orders are never rolled back.
+ *  - Delivered orders ignore stale transit/review/hold pings.
+ */
+export function evaluateCourierOrderTransition(
+  currentOrderStatusRaw: string | undefined | null,
+  rawCourierStatus: string | undefined | null
+): CourierTransitionEvaluation {
+  const currentStatus = String(currentOrderStatusRaw || "pending").trim().toLowerCase();
+  const norm = normalizeCourierStatusKey(rawCourierStatus);
+  const rule = COURIER_STATUS_RULES[norm];
+
+  if (!rule) {
+    return {
+      shouldTransition: false,
+      targetOrderStatus: null,
+      normalizedCategory: "unknown",
+      label: rawCourierStatus ? String(rawCourierStatus) : "Unknown",
+      statusProtected: false,
+      reason: `Unknown courier status: ${rawCourierStatus || "empty"}`,
+    };
+  }
+
+  // Protected terminal manual states
+  if (currentStatus === "cancelled" || currentStatus === "returned") {
+    return {
+      shouldTransition: false,
+      targetOrderStatus: null,
+      normalizedCategory: rule.category,
+      label: rule.label,
+      statusProtected: true,
+      reason: `Manual Status Protection: Order is already ${currentStatus}.`,
+    };
+  }
+
+  // Delivered orders ignore stale in-transit / in-review / hold events
+  if (currentStatus === "delivered") {
+    const isPostDeliveryReturnOrCancel = rule.category === "returned" || rule.category === "cancelled";
+    if (!isPostDeliveryReturnOrCancel) {
+      return {
+        shouldTransition: false,
+        targetOrderStatus: null,
+        normalizedCategory: rule.category,
+        label: rule.label,
+        statusProtected: true,
+        reason: "Manual Status Protection: Order is already delivered; stale transit ping ignored.",
+      };
+    }
+  }
+
+  if (!rule.targetOrderStatus) {
+    return {
+      shouldTransition: false,
+      targetOrderStatus: null,
+      normalizedCategory: rule.category,
+      label: rule.label,
+      statusProtected: false,
+      reason: rule.reason,
+    };
+  }
+
+  if (currentStatus === rule.targetOrderStatus) {
+    return {
+      shouldTransition: false,
+      targetOrderStatus: rule.targetOrderStatus,
+      normalizedCategory: rule.category,
+      label: rule.label,
+      statusProtected: false,
+      reason: `Order is already ${rule.targetOrderStatus}.`,
+    };
+  }
+
+  if (!rule.allowedCurrentStatuses.includes(currentStatus)) {
+    return {
+      shouldTransition: false,
+      targetOrderStatus: null,
+      normalizedCategory: rule.category,
+      label: rule.label,
+      statusProtected: true,
+      reason: `Current status "${currentStatus}" cannot transition to "${rule.targetOrderStatus}".`,
+    };
+  }
+
+  return {
+    shouldTransition: true,
+    targetOrderStatus: rule.targetOrderStatus,
+    normalizedCategory: rule.category,
+    label: rule.label,
+    statusProtected: false,
+    reason: rule.reason,
+  };
+}
+
+/**
+ * Normalizes legacy & new courier fields on i SHOP BD order documents.
+ */
+export function extractOrderCourierInfo(order: any): OrderCourierInfo | null {
+  if (!order || typeof order !== "object") return null;
+  const trackingId = String(
+    order.couriers?.trackingId ||
+      order.courierTrackingId ||
+      order.trackingId ||
+      ""
+  ).trim();
+  const consignmentId = String(
+    order.couriers?.consignmentId ||
+      order.courierConsignmentId ||
+      order.consignmentId ||
+      ""
+  ).trim();
+
+  if (!trackingId && !consignmentId) return null;
+
+  let service = String(
+    order.couriers?.service ||
+      order.courierName ||
+      ""
+  ).trim();
+
+  if (!service) {
+    if (order.pathaoStatus) service = "Pathao";
+    else service = "Steadfast";
+  }
+
+  return {
+    service,
+    trackingId: trackingId || consignmentId,
+    consignmentId,
+  };
+}
+
+export async function loadCourierCredentials(db: FirebaseFirestore.Firestore): Promise<CourierCredentials> {
+  const creds: CourierCredentials = {
+    steadfastApiKey: process.env.STEADFAST_API_KEY || "",
+    steadfastSecretKey: process.env.STEADFAST_SECRET_KEY || "",
+    steadfastWebhookSecret: process.env.STEADFAST_WEBHOOK_SECRET || "",
+    pathaoClientId: process.env.PATHAO_CLIENT_ID || "",
+    pathaoClientSecret: process.env.PATHAO_CLIENT_SECRET || "",
+    pathaoUsername: process.env.PATHAO_USERNAME || "",
+    pathaoPassword: process.env.PATHAO_PASSWORD || "",
+  };
+
+  try {
+    const keysDoc = await db.collection("admin_config").doc("keys").get();
+    if (keysDoc.exists) {
+      const data = keysDoc.data() || {};
+      creds.steadfastApiKey = data.steadfastApiKey || creds.steadfastApiKey;
+      creds.steadfastSecretKey = data.steadfastSecretKey || creds.steadfastSecretKey;
+      creds.steadfastWebhookSecret = data.steadfastWebhookSecret || creds.steadfastWebhookSecret;
+      creds.pathaoClientId = data.pathaoClientId || creds.pathaoClientId;
+      creds.pathaoClientSecret = data.pathaoClientSecret || creds.pathaoClientSecret;
+      creds.pathaoUsername = data.pathaoUsername || creds.pathaoUsername;
+      creds.pathaoPassword = data.pathaoPassword || creds.pathaoPassword;
+    }
+  } catch (err: any) {
+    console.warn("[COURIER] Firestore keys read warning:", err.message);
+  }
+
+  return creds;
+}
+
+export async function fetchSteadfastLiveStatus(
+  creds: CourierCredentials,
+  identifiers: { consignmentId?: string; trackingId?: string; invoiceId?: string }
+): Promise<{ rawStatus: string; endpoint: string; rawResponse: any }> {
+  const apiKey = (creds.steadfastApiKey || "").trim();
+  const secretKey = (creds.steadfastSecretKey || "").trim();
+  if (!apiKey || !secretKey) {
+    throw new Error("Steadfast API Key or Secret Key is not configured.");
+  }
+
+  const headers = {
+    "Api-Key": apiKey,
+    "Secret-Key": secretKey,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  const candidates: string[] = [];
+  const cid = (identifiers.consignmentId || "").trim();
+  const tid = (identifiers.trackingId || "").trim();
+  const inv = (identifiers.invoiceId || "").trim();
+
+  if (cid && /^\d+$/.test(cid)) {
+    candidates.push(`status_by_cid/${encodeURIComponent(cid)}`);
+  }
+  if (tid) {
+    if (/^\d+$/.test(tid)) {
+      const cidPath = `status_by_cid/${encodeURIComponent(tid)}`;
+      if (!candidates.includes(cidPath)) candidates.push(cidPath);
+    } else {
+      candidates.push(`status_by_trackingcode/${encodeURIComponent(tid)}`);
+    }
+  }
+  if (inv) {
+    candidates.push(`status_by_invoice/${encodeURIComponent(inv)}`);
+  }
+
+  if (candidates.length === 0) {
+    throw new Error("No consignment ID, tracking code, or invoice ID available for Steadfast status check.");
+  }
+
+  let lastErr: any = null;
+  for (const endpoint of candidates) {
+    try {
+      const res = await axios.get(`https://portal.packzy.com/api/v1/${endpoint}`, {
+        headers,
+        timeout: 10000,
+      });
+      const rawStatus = res.data?.delivery_status || res.data?.status;
+      if (rawStatus && typeof rawStatus === "string") {
+        return { rawStatus: rawStatus.trim(), endpoint, rawResponse: res.data };
+      }
+      lastErr = new Error(res.data?.message || "Steadfast returned no delivery_status");
+    } catch (err: any) {
+      lastErr = err;
+      // Only fall through to next identifier if 404 or not found
+      const status = err.response?.status;
+      if (status && status >= 500) throw err;
+    }
+  }
+
+  throw lastErr || new Error("Failed to fetch Steadfast status.");
+}
+
+let cachedPathaoToken: { token: string; expiresAt: number } | null = null;
+
+export async function fetchPathaoLiveStatus(
+  creds: CourierCredentials,
+  trackingId: string
+): Promise<{ rawStatus: string; rawResponse: any }> {
+  const { pathaoClientId, pathaoClientSecret, pathaoUsername, pathaoPassword } = creds;
+  if (!pathaoClientId || !pathaoClientSecret || !pathaoUsername || !pathaoPassword) {
+    throw new Error("Pathao credentials are not configured.");
+  }
+
+  let token = cachedPathaoToken && Date.now() < cachedPathaoToken.expiresAt ? cachedPathaoToken.token : "";
+  if (!token) {
+    const tokenRes = await axios.post(
+      "https://api-hermes.pathao.com/aladdin/api/v1/issue-token",
+      {
+        client_id: pathaoClientId,
+        client_secret: pathaoClientSecret,
+        username: pathaoUsername,
+        password: pathaoPassword,
+        grant_type: "password",
+      },
+      {
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        timeout: 12000,
+      }
+    );
+    token = tokenRes.data?.access_token || "";
+    if (!token) throw new Error("Failed to authenticate with Pathao");
+    cachedPathaoToken = { token, expiresAt: Date.now() + 45 * 60 * 1000 };
+  }
+
+  const trackRes = await axios.get(
+    `https://api-hermes.pathao.com/aladdin/api/v1/orders/${encodeURIComponent(trackingId)}/track`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      timeout: 12000,
+    }
+  );
+
+  const rawStatus =
+    trackRes.data?.data?.order?.order_status ||
+    trackRes.data?.data?.order?.transfer_status ||
+    trackRes.data?.data?.order_status ||
+    "";
+  if (!rawStatus) {
+    throw new Error("Pathao returned no order status");
+  }
+  return { rawStatus: String(rawStatus).trim(), rawResponse: trackRes.data };
+}
+
+export interface SyncOrderResult {
+  orderId: string;
+  service: string;
+  trackingId: string;
+  rawCourierStatus: string;
+  courierLabel: string;
+  oldOrderStatus: string;
+  newOrderStatus: string;
+  updated: boolean;
+  statusProtected: boolean;
+  reason: string;
+  syncedAt: string;
+}
+
+export async function applyCourierUpdateToOrderDoc(
+  db: FirebaseFirestore.Firestore,
+  orderRef: FirebaseFirestore.DocumentReference,
+  orderData: any,
+  service: string,
+  rawCourierStatus: string,
+  source: string,
+  extraInfo?: { consignmentId?: string; trackingId?: string }
+): Promise<SyncOrderResult> {
+  const oldOrderStatus = String(orderData.status || "pending").toLowerCase();
+  const evalRes = evaluateCourierOrderTransition(oldOrderStatus, rawCourierStatus);
+  const newOrderStatus =
+    evalRes.shouldTransition && evalRes.targetOrderStatus ? evalRes.targetOrderStatus : oldOrderStatus;
+
+  const prevCourierStatus =
+    orderData.courierStatus ||
+    (service.toLowerCase().includes("pathao") ? orderData.pathaoStatus : orderData.steadfastStatus) ||
+    "";
+
+  const syncedAt = new Date().toISOString();
+  const isPathao = service.toLowerCase().includes("pathao");
+  const updatePayload: Record<string, any> = {
+    courierStatus: rawCourierStatus,
+    courierStatusNormalized: evalRes.normalizedCategory,
+    courierStatusLabel: evalRes.label,
+    courierLastSyncedAt: syncedAt,
+    courierSyncSource: source,
+    courierStatusDetail: evalRes.reason,
+  };
+
+  if (isPathao) {
+    updatePayload.pathaoStatus = rawCourierStatus;
+  } else {
+    updatePayload.steadfastStatus = rawCourierStatus;
+  }
+  if (extraInfo?.consignmentId && !orderData.courierConsignmentId) {
+    updatePayload.courierConsignmentId = extraInfo.consignmentId;
+  }
+  if (evalRes.shouldTransition && evalRes.targetOrderStatus) {
+    updatePayload.status = evalRes.targetOrderStatus;
+    if (evalRes.targetOrderStatus === "cancelled" || evalRes.targetOrderStatus === "returned") {
+      updatePayload.paymentMethod = "N/A";
+    }
+  }
+
+  await orderRef.set(updatePayload, { merge: true });
+
+  const orderUpdated = newOrderStatus !== oldOrderStatus;
+  const courierChanged = normalizeCourierStatusKey(prevCourierStatus) !== normalizeCourierStatusKey(rawCourierStatus);
+
+  // Send customer notification when automated sync transitions order status
+  if (orderUpdated && orderData.userId && orderData.userId !== "guest") {
+    try {
+      const statusLabelMap: Record<string, string> = {
+        shipped: "In Transit (কুরিয়ারে আছে)",
+        delivered: "Delivered (ডেলিভারি সম্পন্ন)",
+        returned: "Returned",
+        cancelled: "Cancelled",
+      };
+      const statusDisplay = statusLabelMap[newOrderStatus] || newOrderStatus;
+      await db.collection("notifications").doc(`order_${orderRef.id}`).set(
+        {
+          title: `Order ${statusDisplay} (#${orderRef.id})`,
+          message: `প্রিয় ${orderData.customerName || "গ্রাহক"}, আপনার অর্ডার (#${orderRef.id}) এর কুরিয়ার স্ট্যাটাস: ${evalRes.label}।`,
+          link: `order:${orderRef.id}`,
+          orderId: orderRef.id,
+          status: newOrderStatus,
+          courierStatus: rawCourierStatus,
+          userId: orderData.userId,
+          userEmail: orderData.customerEmail || "",
+          updatedAt: syncedAt,
+          sender: "system",
+          type: "direct",
+        },
+        { merge: true }
+      );
+    } catch (notifErr: any) {
+      console.warn(`[COURIER_SYNC] Notification update failed for ${orderRef.id}:`, notifErr.message);
+    }
+  }
+
+  return {
+    orderId: orderRef.id,
+    service,
+    trackingId: extraInfo?.trackingId || "",
+    rawCourierStatus,
+    courierLabel: evalRes.label,
+    oldOrderStatus,
+    newOrderStatus,
+    updated: orderUpdated || courierChanged,
+    statusProtected: evalRes.statusProtected,
+    reason: evalRes.reason,
+    syncedAt,
+  };
+}
+
+export async function syncSingleOrderCourierStatus(
+  db: FirebaseFirestore.Firestore,
+  orderId: string,
+  options: { source?: string; credentials?: CourierCredentials } = {}
+): Promise<SyncOrderResult> {
+  const orderRef = db.collection("orders").doc(orderId);
+  const snap = await orderRef.get();
+  if (!snap.exists) {
+    throw new Error(`Order ${orderId} not found`);
+  }
+  const orderData = snap.data() || {};
+  const courierInfo = extractOrderCourierInfo(orderData);
+  if (!courierInfo) {
+    throw new Error(`Order ${orderId} has no courier tracking ID or consignment ID`);
+  }
+
+  const creds = options.credentials || (await loadCourierCredentials(db));
+  const isPathao = courierInfo.service.toLowerCase().includes("pathao");
+  const isSteadfast = courierInfo.service.toLowerCase().includes("steadfast");
+
+  if (!isPathao && !isSteadfast) {
+    throw new Error(`Automated status polling is currently supported for Steadfast and Pathao (got ${courierInfo.service}).`);
+  }
+
+  let rawStatus = "";
+  if (isPathao) {
+    const res = await fetchPathaoLiveStatus(creds, courierInfo.trackingId);
+    rawStatus = res.rawStatus;
+  } else {
+    const res = await fetchSteadfastLiveStatus(creds, {
+      consignmentId: courierInfo.consignmentId,
+      trackingId: courierInfo.trackingId,
+      invoiceId: orderData.orderId || orderId,
+    });
+    rawStatus = res.rawStatus;
+  }
+
+  return await applyCourierUpdateToOrderDoc(
+    db,
+    orderRef,
+    orderData,
+    courierInfo.service,
+    rawStatus,
+    options.source || "ADMIN_MANUAL_SYNC",
+    {
+      consignmentId: courierInfo.consignmentId,
+      trackingId: courierInfo.trackingId,
+    }
+  );
+}
+
+export interface BatchSyncResponse {
+  success: boolean;
+  message?: string;
+  summary: {
+    total: number;
+    synced: number;
+    updated: number;
+    failed: number;
+    skipped: number;
+  };
+  results: Array<SyncOrderResult | { orderId: string; status: "ERROR" | "SKIPPED"; error: string }>;
+}
+
+export async function syncAllActiveCourierOrders(
+  db: FirebaseFirestore.Firestore,
+  options: { force?: boolean; limit?: number; source?: string; credentials?: CourierCredentials } = {}
+): Promise<BatchSyncResponse> {
+  const creds = options.credentials || (await loadCourierCredentials(db));
+  const hasSteadfast = !!(creds.steadfastApiKey && creds.steadfastSecretKey);
+  const hasPathao = !!(creds.pathaoClientId && creds.pathaoClientSecret && creds.pathaoUsername && creds.pathaoPassword);
+
+  if (!hasSteadfast && !hasPathao) {
+    return {
+      success: false,
+      message: "Steadfast বা Pathao API Key কনফিগার করা নেই।",
+      summary: { total: 0, synced: 0, updated: 0, failed: 0, skipped: 0 },
+      results: [],
+    };
+  }
+
+  const maxDocs = Math.max(1, Math.min(Number(options.limit) || 60, 200));
+  const force = Boolean(options.force);
+
+  const snapshot = await db
+    .collection("orders")
+    .orderBy("createdAt", "desc")
+    .limit(Math.max(maxDocs * 3, 150))
+    .get();
+
+  const targets: Array<{ ref: FirebaseFirestore.DocumentReference; data: any; courier: OrderCourierInfo }> = [];
+
+  for (const docSnap of snapshot.docs) {
+    if (targets.length >= maxDocs) break;
+    const data = docSnap.data() || {};
+    if (data.deleted) continue;
+
+    const courier = extractOrderCourierInfo(data);
+    if (!courier) continue;
+
+    const svcLower = courier.service.toLowerCase();
+    const isSteadfast = svcLower.includes("steadfast");
+    const isPathao = svcLower.includes("pathao");
+    if ((isSteadfast && !hasSteadfast) || (isPathao && !hasPathao) || (!isSteadfast && !isPathao)) {
+      continue;
+    }
+
+    if (!force) {
+      const orderStatus = String(data.status || "").toLowerCase();
+      if (orderStatus === "cancelled" || orderStatus === "returned") continue;
+      const existingCourierSt = data.courierStatus || data.steadfastStatus || data.pathaoStatus;
+      if (orderStatus === "delivered" && isTerminalCourierStatus(existingCourierSt)) continue;
+    }
+
+    targets.push({ ref: docSnap.ref, data, courier });
+  }
+
+  const summary = {
+    total: targets.length,
+    synced: 0,
+    updated: 0,
+    failed: 0,
+    skipped: 0,
+  };
+  const results: BatchSyncResponse["results"] = [];
+  const source = options.source || "COURIER_SYNC";
+
+  // Bounded concurrency (5 requests at a time)
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+    const chunk = targets.slice(i, i + BATCH_SIZE);
+    const settled = await Promise.all(
+      chunk.map(async ({ ref, data, courier }) => {
+        try {
+          const isPathao = courier.service.toLowerCase().includes("pathao");
+          let rawStatus = "";
+          if (isPathao) {
+            rawStatus = (await fetchPathaoLiveStatus(creds, courier.trackingId)).rawStatus;
+          } else {
+            rawStatus = (
+              await fetchSteadfastLiveStatus(creds, {
+                consignmentId: courier.consignmentId,
+                trackingId: courier.trackingId,
+                invoiceId: data.orderId || ref.id,
+              })
+            ).rawStatus;
+          }
+
+          const res = await applyCourierUpdateToOrderDoc(db, ref, data, courier.service, rawStatus, source, {
+            consignmentId: courier.consignmentId,
+            trackingId: courier.trackingId,
+          });
+          summary.synced++;
+          if (res.updated) summary.updated++;
+          return res;
+        } catch (err: any) {
+          summary.failed++;
+          return {
+            orderId: ref.id,
+            status: "ERROR" as const,
+            error: err.response?.data?.message || err.message || "Courier API sync failed",
+          };
+        }
+      })
+    );
+    results.push(...settled);
+  }
+
+  return {
+    success: true,
+    summary,
+    results,
+  };
+}
+
+export function verifyWebhookToken(
+  configuredSecret: string | undefined,
+  headers: Record<string, string | string[] | undefined>
+): boolean {
+  const secret = (configuredSecret || "").trim();
+  if (!secret) return false;
+  const rawHeader =
+    headers["x-steadfast-webhook-token"] ||
+    headers["x-webhook-token"] ||
+    headers["authorization"] ||
+    "";
+  const token = Array.isArray(rawHeader) ? rawHeader[0] : String(rawHeader);
+  const cleaned = token.replace(/^Bearer\s+/i, "").trim();
+  if (!cleaned) return false;
+  const a = Buffer.from(cleaned);
+  const b = Buffer.from(secret);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export async function processSteadfastWebhook(
+  db: FirebaseFirestore.Firestore,
+  headers: Record<string, string | string[] | undefined>,
+  body: any
+): Promise<{ success: boolean; statusCode: number; message?: string; result?: SyncOrderResult }> {
+  const creds = await loadCourierCredentials(db);
+  if (!verifyWebhookToken(creds.steadfastWebhookSecret, headers)) {
+    return { success: false, statusCode: 401, message: "Unauthorized webhook token" };
+  }
+
+  const cid = body?.consignment_id || body?.consignment?.consignment_id;
+  const trackingCode = body?.tracking_code || body?.consignment?.tracking_code;
+  const invoice = body?.invoice || body?.consignment?.invoice;
+  const status = body?.status || body?.delivery_status || body?.consignment?.status;
+
+  if (!cid && !trackingCode && !invoice) {
+    return { success: false, statusCode: 400, message: "Missing consignment_id, tracking_code, or invoice" };
+  }
+  if (!status) {
+    return { success: false, statusCode: 400, message: "Missing courier status" };
+  }
+
+  let matchedDoc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot | null = null;
+  if (invoice) {
+    const direct = await db.collection("orders").doc(String(invoice)).get();
+    if (direct.exists) matchedDoc = direct;
+  }
+  if (!matchedDoc && trackingCode) {
+    for (const field of ["courierTrackingId", "couriers.trackingId", "trackingId"]) {
+      const q = await db.collection("orders").where(field, "==", String(trackingCode)).limit(1).get();
+      if (!q.empty) {
+        matchedDoc = q.docs[0];
+        break;
+      }
+    }
+  }
+  if (!matchedDoc && cid) {
+    for (const field of ["courierConsignmentId", "courierTrackingId", "couriers.consignmentId"]) {
+      const q = await db.collection("orders").where(field, "==", String(cid)).limit(1).get();
+      if (!q.empty) {
+        matchedDoc = q.docs[0];
+        break;
+      }
+    }
+  }
+
+  if (!matchedDoc || !matchedDoc.exists) {
+    return { success: false, statusCode: 404, message: "Matching order not found" };
+  }
+
+  const result = await applyCourierUpdateToOrderDoc(
+    db,
+    matchedDoc.ref,
+    matchedDoc.data() || {},
+    "Steadfast",
+    String(status).trim(),
+    "COURIER_WEBHOOK",
+    {
+      consignmentId: cid ? String(cid) : undefined,
+      trackingId: trackingCode ? String(trackingCode) : undefined,
+    }
+  );
+
+  return { success: true, statusCode: 200, result };
+}
+
+let backgroundSyncTimer: NodeJS.Timeout | null = null;
+
+export function startCourierBackgroundSync(
+  getDb: () => FirebaseFirestore.Firestore,
+  intervalMinutes = 10
+): void {
+  if (backgroundSyncTimer) clearInterval(backgroundSyncTimer);
+
+  const runSync = async () => {
+    try {
+      const db = getDb();
+      const res = await syncAllActiveCourierOrders(db, {
+        force: false,
+        limit: 50,
+        source: "COURIER_BACKGROUND_SYNC",
+      });
+      if (res.success && res.summary.total > 0) {
+        console.log(
+          `[COURIER_SYNC] Checked ${res.summary.total} orders -> synced=${res.summary.synced}, updated=${res.summary.updated}, failed=${res.summary.failed}`
+        );
+      }
+    } catch (err: any) {
+      console.warn("[COURIER_SYNC] Background sync warning:", err.message);
+    }
+  };
+
+  setTimeout(runSync, 15_000).unref?.();
+  const intervalMs = Math.max(2, intervalMinutes) * 60 * 1000;
+  backgroundSyncTimer = setInterval(runSync, intervalMs);
+  backgroundSyncTimer.unref?.();
+  console.log(`[COURIER_SYNC] Automated courier polling enabled (every ${intervalMinutes} mins).`);
+}

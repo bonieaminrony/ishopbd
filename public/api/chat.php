@@ -1,7 +1,7 @@
 <?php
 // ================================================================
-// i SHOP BD - AI Chat Gateway (Gemini 3.6 Flash)
-// Security: CORS locked, Rate Limiting, Bengali Support
+// i SHOP BD - AI Chat Gateway (Gemini 3.6 Flash / Active Fallback)
+// Security: CORS locked, Rate Limiting, Bengali & English Support
 // ================================================================
 
 $allowedOrigins = [
@@ -19,7 +19,7 @@ if (in_array($origin, $allowedOrigins)) {
 } else {
     header("Access-Control-Allow-Origin: https://ishopbd.com");
 }
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json; charset=UTF-8");
 header("X-Content-Type-Options: nosniff");
@@ -101,21 +101,31 @@ if (!is_array($data)) {
     exit;
 }
 
-// Build contents array for Gemini API
+// Build contents array for Gemini API (supports contents, messages, chatHistory, message)
 $contents = [];
 
 if (!empty($data['contents']) && is_array($data['contents'])) {
     $contents = $data['contents'];
-} elseif (!empty($data['messages']) && is_array($data['messages'])) {
-    foreach ($data['messages'] as $m) {
-        $role = ($m['role'] === 'assistant' || $m['role'] === 'model') ? 'model' : 'user';
-        $text = isset($m['content']) ? $m['content'] : (isset($m['parts'][0]['text']) ? $m['parts'][0]['text'] : '');
-        if (!empty($text)) {
-            $contents[] = [
-                'role' => $role,
-                'parts' => [['text' => (string)$text]]
-            ];
+} else {
+    $history = $data['chatHistory'] ?? $data['messages'] ?? [];
+    if (is_array($history)) {
+        foreach ($history as $m) {
+            $role = ($m['role'] === 'assistant' || $m['role'] === 'model') ? 'model' : 'user';
+            $text = isset($m['content']) ? $m['content'] : (isset($m['text']) ? $m['text'] : (isset($m['parts'][0]['text']) ? $m['parts'][0]['text'] : ''));
+            if (!empty($text)) {
+                $contents[] = [
+                    'role' => $role,
+                    'parts' => [['text' => (string)$text]]
+                ];
+            }
         }
+    }
+    $currentMsg = $data['message'] ?? $data['prompt'] ?? $data['query'] ?? $data['text'] ?? '';
+    if (!empty($currentMsg)) {
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [['text' => (string)$currentMsg]]
+        ];
     }
 }
 
@@ -125,12 +135,31 @@ if (empty($contents)) {
     exit;
 }
 
-// Ensure first message is user role
-while (!empty($contents) && $contents[0]['role'] !== 'user') {
-    array_shift($contents);
+// Group consecutive same-role messages to satisfy Gemini API constraints
+$normalizedContents = [];
+$lastRole = null;
+foreach ($contents as $msg) {
+    $msgRole = ($msg['role'] === 'assistant' || $msg['role'] === 'model') ? 'model' : 'user';
+    $msgText = $msg['parts'][0]['text'] ?? '';
+    if (empty($msgText)) continue;
+
+    if ($msgRole === $lastRole && count($normalizedContents) > 0) {
+        $normalizedContents[count($normalizedContents) - 1]['parts'][0]['text'] .= "\n" . $msgText;
+    } else {
+        $normalizedContents[] = [
+            'role' => $msgRole,
+            'parts' => [['text' => $msgText]]
+        ];
+        $lastRole = $msgRole;
+    }
 }
 
-if (empty($contents)) {
+// Ensure first message is user role
+while (!empty($normalizedContents) && $normalizedContents[0]['role'] !== 'user') {
+    array_shift($normalizedContents);
+}
+
+if (empty($normalizedContents)) {
     http_response_code(400);
     echo json_encode(["success" => false, "error" => "No valid user message found."]);
     exit;
@@ -152,7 +181,7 @@ $systemInstruction = "You are a helpful and friendly AI assistant for 'i SHOP BD
 "- Keep responses concise and helpful.";
 
 $payload = [
-    "contents" => $contents,
+    "contents" => $normalizedContents,
     "systemInstruction" => [
         "parts" => [
             ["text" => $systemInstruction]
@@ -160,13 +189,24 @@ $payload = [
     ]
 ];
 
-// Call Gemini 2.5 Flash API (fallback to gemini-1.5-flash)
-$modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash"];
+// Active and supported Gemini models in fallback order
+$modelsToTry = [
+    "gemini-3.6-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3-flash-preview",
+    "gemma-4-31b-it",
+    "gemini-3.5-flash",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash"
+];
+
 $response = false;
 $httpCode = 0;
+$lastError = null;
 
 foreach ($modelsToTry as $model) {
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . $geminiApiKey;
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . urlencode($geminiApiKey);
+    
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
@@ -175,38 +215,57 @@ foreach ($modelsToTry as $model) {
         'Content-Type: application/json'
     ]);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
     curl_close($ch);
 
     if ($httpCode === 200 && $response !== false) {
-        break;
+        $parsed = json_decode($response, true);
+        if (!empty($parsed['candidates'][0]['content']['parts'][0]['text'])) {
+            break;
+        }
     }
+
+    if ($response) {
+        $decodedErr = json_decode($response, true);
+        if (!empty($decodedErr['error']['message'])) {
+            $lastError = $decodedErr['error']['message'];
+        }
+    }
+
+    // Small delay between fallback attempts to avoid tight retry spikes
+    usleep(150000); // 150ms
 }
 
-if ($response === false || $httpCode >= 400) {
-    http_response_code($httpCode > 0 ? $httpCode : 502);
-    $errRes = json_decode($response, true);
-    echo json_encode([
-        "success" => false,
-        "error" => $errRes['error']['message'] ?? "Failed to communicate with AI.",
-        "details" => $errRes ?? $response
-    ]);
-    exit;
-}
-
-$resData = json_decode($response, true);
+$resData = json_decode($response ?: '{}', true);
 $aiText = "";
 
 if (!empty($resData['candidates'][0]['content']['parts'][0]['text'])) {
-    $aiText = $resData['candidates'][0]['content']['parts'][0]['text'];
+    $aiText = trim($resData['candidates'][0]['content']['parts'][0]['text']);
+}
+
+if (empty($aiText)) {
+    // If upstream AI had a temporary spike or failed, return helpful customer response gracefully
+    $fallbackText = "আই শপ বিডি (i SHOP BD)-তে আপনাকে স্বাগতম! আমাদের শপের যেকোনো পণ্য অর্ডার করতে প্রোডাক্ট পেজ থেকে 'Buy Now' অথবা 'Add to Cart' বাটনে ক্লিক করুন। যেকোনো তথ্যের জন্য আমাদের সাপোর্ট সেন্টারে যোগাযোগ করতে পারেন।";
+    http_response_code(200);
+    echo json_encode([
+        "success" => true,
+        "text" => $fallbackText,
+        "reply" => $fallbackText,
+        "fallback" => true
+    ]);
+    exit;
 }
 
 http_response_code(200);
 echo json_encode([
     "success" => true,
     "text" => $aiText,
+    "reply" => $aiText,
     "candidates" => $resData['candidates'] ?? []
 ]);
+?>

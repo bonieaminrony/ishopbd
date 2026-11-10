@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, MouseEvent } from 'react';
 import { Product } from '../types';
+import { trackAddToCart } from '../utils/tracking';
 
 type CartContextType = {
   showToast: any;
@@ -156,6 +157,16 @@ const addToCartInternal = useCallback((product: Product, color?: string, size?: 
         }
       });
       return nextCart;
+    });
+    itemsToAdd.forEach((itemInfo) => {
+      trackAddToCart({
+        id: product.id,
+        name: product.name,
+        price: Number(product.price || 0),
+        quantity: itemInfo.quantity,
+        category: product.category,
+        brand: product.brand,
+      });
     });
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2000);

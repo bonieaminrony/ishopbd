@@ -44,9 +44,9 @@ export default function DepositModal(props: DepositModalProps) {
               initial={{ scale: 0.9, opacity: 0, y: 30 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 30 }}
-              className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col overflow-hidden z-10"
+              className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col overflow-hidden z-10 max-h-[92vh]"
             >
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary text-white">
+              <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-primary text-white shrink-0">
                 <h3 className="text-xl font-black flex items-center gap-2">
                   <PlusCircle size={24} /> টাকা যোগ করুন (ডিপোজিট)
                 </h3>
@@ -57,7 +57,7 @@ export default function DepositModal(props: DepositModalProps) {
                   <X size={20} />
                 </button>
               </div>
-              <form onSubmit={handleDepositSubmit} className="p-8 space-y-6">
+              <form onSubmit={handleDepositSubmit} className="p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 overflow-y-auto no-scrollbar">
                 <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
                     পরিমাণ নির্বাচন করুন (টাকা)

@@ -19,12 +19,14 @@ service cloud.firestore {
     
     // Master accounts for bootstrap and recovery
     function isMaster() {
-      return isSignedIn() && 'email' in request.auth.token && (
-        request.auth.token.email.lower() == "bonieaminrony@gmail.com" ||
-        request.auth.token.email.lower() == "islamicsoktitv@gmail.com" ||
-        request.auth.token.email.lower() == "ishopbd.online@gmail.com" ||
-        request.auth.token.email.lower() == "ifilmbd2025@gmail.com"
-      );
+      return isSignedIn() && 
+             request.auth.token.get('email_verified', false) == true &&
+             'email' in request.auth.token && (
+               request.auth.token.email.lower() == "bonieaminrony@gmail.com" ||
+               request.auth.token.email.lower() == "islamicsoktitv@gmail.com" ||
+               request.auth.token.email.lower() == "ishopbd.online@gmail.com" ||
+               request.auth.token.email.lower() == "ifilmbd2025@gmail.com"
+             );
     }
 
     function isAdmin() { 
@@ -102,6 +104,11 @@ service cloud.firestore {
       return (!('messages' in data) || (data.messages is list && data.messages.size() <= 500));
     }
 
+    function isValidIncompleteOrder(data) {
+      return (!('phone' in data) || (data.phone is string && data.phone.size() <= 100)) &&
+             (!('items' in data) || (data.items is list && data.items.size() <= 50));
+    }
+
     function isValidRefundRequest(data) {
       return data.keys().hasAll(['orderId', 'userId', 'amount', 'status', 'createdAt']) &&
              data.orderId is string && data.orderId.size() <= 128 &&
@@ -160,6 +167,7 @@ service cloud.firestore {
       match /reviews/{reviewId} {
         allow read: if true;
         allow create: if isValidId(reviewId) && isValidReview(incoming()) && (incoming().createdAt == request.time || incoming().createdAt is string);
+        allow update: if isModerator();
         allow delete: if isModerator() || (isSignedIn() && existing().userId == request.auth.uid);
       }
     }
@@ -177,7 +185,12 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && (isModerator() || (isSignedIn() && resource.data.userId == request.auth.uid) || (resource.data.get('userId', '') == 'guest'));
       allow list: if isModerator() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isValidOrder(incoming()); // Allow creating orders directly from frontend
+      allow create: if isValidOrder(incoming()) && (
+        isModerator() || (
+          isNewOrderPending(incoming()) &&
+          (!('userId' in incoming()) || incoming().userId == 'guest' || (isSignedIn() && incoming().userId == request.auth.uid))
+        )
+      );
       allow update: if isModerator() || (
         isOwner(existing().get('userId', '')) && 
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
@@ -196,7 +209,10 @@ service cloud.firestore {
     }
 
     match /support_chats/{chatId} {
-      allow read, write: if true;
+      allow get: if isValidId(chatId) && (isModerator() || isOwner(chatId) || chatId.matches('^guest_[a-zA-Z0-9_-]{5,}$'));
+      allow list: if isModerator();
+      allow create, update: if isValidId(chatId) && isValidSupportChat(incoming()) && (isModerator() || isOwner(chatId) || chatId.matches('^guest_[a-zA-Z0-9_-]{5,}$'));
+      allow delete: if isModerator();
     }
 
     match /admins/{adminId} {
@@ -229,7 +245,8 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create, update, delete: if isModerator() && isValidNotification(incoming());
     }
 
     match /refund_requests/{refundId} {
@@ -264,7 +281,8 @@ service cloud.firestore {
 
     match /incomplete_orders/{orderId} {
       allow read: if isModerator();
-      allow write: if true;
+      allow create, update: if isValidId(orderId) && isValidIncompleteOrder(incoming());
+      allow delete: if isModerator();
     }
 
     match /expenses/{expenseId} {

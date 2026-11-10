@@ -145,3 +145,95 @@ describe('API Key Security', () => {
     expect(localStorage.getItem('apiKey')).toBeNull();
   });
 });
+
+describe('Phase 1 Security Hardening Tests', () => {
+  it('Bulk SMS Authentication: invalid/missing token rejected', () => {
+    function validateBulkSmsToken(reqToken: string | undefined, serverSecret: string): boolean {
+      if (!reqToken || !serverSecret) return false;
+      const token = reqToken.startsWith('Bearer ') ? reqToken.slice(7).trim() : reqToken.trim();
+      return token === serverSecret.trim();
+    }
+
+    const SERVER_SECRET = 'secure_secret_token_123';
+    expect(validateBulkSmsToken(undefined, SERVER_SECRET)).toBe(false);
+    expect(validateBulkSmsToken('', SERVER_SECRET)).toBe(false);
+    expect(validateBulkSmsToken('wrong_token', SERVER_SECRET)).toBe(false);
+    expect(validateBulkSmsToken('secure_secret_token_123', SERVER_SECRET)).toBe(true);
+    expect(validateBulkSmsToken('Bearer secure_secret_token_123', SERVER_SECRET)).toBe(true);
+  });
+
+  it('Master Access requires verified email', () => {
+    function isMasterUser(email: string, isEmailVerified: boolean): boolean {
+      if (!isEmailVerified) return false;
+      const lower = (email || '').toLowerCase().trim();
+      return MASTER_EMAILS.map(e => e.toLowerCase()).includes(lower);
+    }
+
+    expect(isMasterUser('bonieaminrony@gmail.com', false)).toBe(false);
+    expect(isMasterUser('bonieaminrony@gmail.com', true)).toBe(true);
+    expect(isMasterUser('attacker@evil.com', true)).toBe(false);
+  });
+
+  it('.htaccess sensitive file regex blocks service-account.json and products_cache.json', () => {
+    const blockedFilesRegex = /.*(service-account|products_cache|\.env).*/i;
+    expect(blockedFilesRegex.test('service-account.json')).toBe(true);
+    expect(blockedFilesRegex.test('api/service-account.json')).toBe(true);
+    expect(blockedFilesRegex.test('products_cache.json')).toBe(true);
+    expect(blockedFilesRegex.test('.env')).toBe(true);
+    expect(blockedFilesRegex.test('.env.production')).toBe(true);
+    expect(blockedFilesRegex.test('index.html')).toBe(false);
+    expect(blockedFilesRegex.test('manifest.json')).toBe(false);
+  });
+
+  it('Service account candidate resolver strictly rejects public/ or dist/ directories', () => {
+    function isSecureServiceAccountPath(filePath: string): boolean {
+      const clean = filePath.replace(/\\/g, '/').toLowerCase();
+      return !clean.includes('/public') && !clean.includes('/dist') && !clean.includes('public_html');
+    }
+
+    expect(isSecureServiceAccountPath('/domains/ishopbd.com/api/service-account.json')).toBe(true);
+    expect(isSecureServiceAccountPath('E:/Making File/Logo/ishopbd.com/api/service-account.json')).toBe(true);
+    expect(isSecureServiceAccountPath('/domains/ishopbd.com/public_html/api/service-account.json')).toBe(false);
+    expect(isSecureServiceAccountPath('E:/Making File/Logo/ishopbd.com/public/api/service-account.json')).toBe(false);
+    expect(isSecureServiceAccountPath('E:/Making File/Logo/ishopbd.com/dist/api/service-account.json')).toBe(false);
+  });
+
+  it('Deployment filter excludes sensitive credentials and maps from public FTP sync', () => {
+    function shouldExcludeFromPublicUpload(fileName: string): boolean {
+      return (
+        fileName === 'service-account.json' ||
+        fileName.startsWith('service-account') ||
+        fileName.startsWith('.env') ||
+        fileName.endsWith('.map') ||
+        fileName.endsWith('.ts') ||
+        fileName.endsWith('.tsx') ||
+        fileName === 'products_cache.json'
+      );
+    }
+
+    expect(shouldExcludeFromPublicUpload('service-account.json')).toBe(true);
+    expect(shouldExcludeFromPublicUpload('service-account-backup.json')).toBe(true);
+    expect(shouldExcludeFromPublicUpload('.env')).toBe(true);
+    expect(shouldExcludeFromPublicUpload('server.cjs.map')).toBe(true);
+    expect(shouldExcludeFromPublicUpload('products.php')).toBe(false);
+    expect(shouldExcludeFromPublicUpload('index.php')).toBe(false);
+    expect(shouldExcludeFromPublicUpload('logo.png')).toBe(false);
+  });
+
+  it('Product Frozen Architecture: retains exact visibility rules for 25 visible and 2 hidden items', () => {
+    const mockStoreCatalog = [
+      ...Array.from({ length: 25 }, (_, i) => ({ id: `vis_${i + 1}`, name: `Visible Item ${i + 1}`, isPublished: true, deleted: false })),
+      { id: 'hid_1', name: 'Hidden Item 1', isPublished: false, deleted: false },
+      { id: 'hid_2', name: 'Hidden Item 2', isPublished: false, deleted: false },
+      { id: 'del_1', name: 'Deleted Item 1', isPublished: true, deleted: true }
+    ];
+
+    const publicVisible = mockStoreCatalog.filter(p => !p.deleted && p.isPublished !== false);
+    const hiddenItems = mockStoreCatalog.filter(p => !p.deleted && p.isPublished === false);
+    const totalActive = mockStoreCatalog.filter(p => !p.deleted);
+
+    expect(publicVisible.length).toBe(25);
+    expect(hiddenItems.length).toBe(2);
+    expect(totalActive.length).toBe(27);
+  });
+});

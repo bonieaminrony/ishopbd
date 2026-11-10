@@ -82,7 +82,7 @@ describe('DEFAULT_BANNERS', () => {
 
   it('প্রতিটি banner-এ image URL থাকতে হবে', () => {
     DEFAULT_BANNERS.forEach((b) => {
-      expect(b.image).toMatch(/^https?:\/\//);
+      expect(b.image).toMatch(/^(https?:\/\/|\/)/);
     });
   });
 });

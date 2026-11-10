@@ -28,7 +28,7 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-[2.5rem] overflow-hidden shadow-2xl"
+              className="relative w-full max-w-lg bg-white rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
             >
               <div className="absolute top-6 right-6 z-10">
                 <button
@@ -38,7 +38,7 @@ export default function DeliveryInfoModal(props: DeliveryInfoModalProps) {
                   <X size={20} />
                 </button>
               </div>
-              <div className="p-8">
+              <div className="p-5 sm:p-8 overflow-y-auto no-scrollbar">
                 <div className="flex items-center gap-4 mb-8">
                   <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
                     <Truck className="text-primary" size={28} />

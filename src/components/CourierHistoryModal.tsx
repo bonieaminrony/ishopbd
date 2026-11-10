@@ -93,6 +93,11 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                           {(() => {
                             const report = courierReports[courierModalPhone] || { total_parcel: 0, total_delivered: 0, total_cancelled: 0, total_fraud_report: 0 };
                             
+                            const hasRate = report.delivery_rate !== undefined || report.cancellation_rate !== undefined;
+                            const steadfastTotal = report.total_parcel > 0 ? report.total_parcel : (report.volume_band ? report.volume_band.toUpperCase() : (hasRate ? 'ACTIVE' : 0));
+                            const steadfastSuccess = report.total_parcel > 0 ? report.total_delivered : (report.delivery_rate !== undefined ? `${report.delivery_rate}%` : 0);
+                            const steadfastCancel = report.total_parcel > 0 ? report.total_cancelled : (report.cancellation_rate !== undefined ? `${report.cancellation_rate}%` : 0);
+
                             // Define row data
                             const rows = [
                               {
@@ -115,9 +120,9 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                                     <span className="font-extrabold tracking-tighter">SteadFast</span>
                                   </div>
                                 ),
-                                total: report.total_parcel,
-                                success: report.total_delivered,
-                                cancel: report.total_cancelled
+                                total: steadfastTotal,
+                                success: steadfastSuccess,
+                                cancel: steadfastCancel
                               },
                               {
                                 name: "REDX",
@@ -143,9 +148,9 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                                 cancel: 0
                               }
                             ];
-                            const sumTotal = rows.reduce((acc, r) => acc + r.total, 0);
-                            const sumSuccess = rows.reduce((acc, r) => acc + r.success, 0);
-                            const sumCancel = rows.reduce((acc, r) => acc + r.cancel, 0);
+                            const sumTotal = report.total_parcel;
+                            const sumSuccess = report.total_delivered;
+                            const sumCancel = report.total_cancelled;
                             return (
                               <>
                                 {rows.map((row, idx) => (
@@ -169,13 +174,13 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                                     মোট
                                   </td>
                                   <td className="p-3 bg-purple-50 text-purple-950 font-black border-x border-gray-150">
-                                    {sumTotal}
+                                    {sumTotal > 0 ? sumTotal : (report.volume_band ? report.volume_band.toUpperCase() : '-')}
                                   </td>
                                   <td className="p-3 bg-emerald-50 text-emerald-950 font-black border-r border-gray-150">
-                                    {sumSuccess}
+                                    {sumSuccess > 0 ? sumSuccess : (report.delivery_rate !== undefined ? `${report.delivery_rate}%` : '-')}
                                   </td>
                                   <td className="p-3 bg-rose-50 text-rose-950 font-black">
-                                    {sumCancel}
+                                    {sumCancel > 0 ? sumCancel : (report.cancellation_rate !== undefined ? `${report.cancellation_rate}%` : '-')}
                                   </td>
                                 </tr>
                               </>
@@ -190,9 +195,15 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                       const sumTotal = report.total_parcel;
                       const sumSuccess = report.total_delivered;
                       const sumCancel = report.total_cancelled;
-                      const successRate = sumTotal > 0 ? Math.round((sumSuccess / sumTotal) * 100) : 0;
-                      const cancelRate = sumTotal > 0 ? Math.round((sumCancel / sumTotal) * 100) : 0;
-                      if (sumTotal === 0) {
+                      const successRate = report.delivery_rate !== undefined 
+                        ? report.delivery_rate 
+                        : (sumTotal > 0 ? Math.round((sumSuccess / sumTotal) * 100) : 0);
+                      const cancelRate = report.cancellation_rate !== undefined 
+                        ? report.cancellation_rate 
+                        : (sumTotal > 0 ? Math.round((sumCancel / sumTotal) * 100) : 0);
+                      
+                      const hasData = sumTotal > 0 || report.delivery_rate !== undefined || report.cancellation_rate !== undefined || report.total_fraud_report > 0;
+                      if (!hasData) {
                         return (
                           <div className="mt-4 p-3.5 text-center text-[10px] font-bold text-gray-400 bg-gray-55 rounded-xl border border-dashed border-gray-200">
                             কোন কুরিয়ার হিস্ট্রি পাওয়া যায়নি
@@ -202,7 +213,7 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                       return (
                         <div className="mt-4 flex flex-col gap-2">
                           <div className="h-6 w-full rounded-full overflow-hidden flex font-black text-[9px] text-white shadow-inner border border-gray-100/50">
-                            {sumSuccess > 0 && (
+                            {successRate > 0 && (
                               <div
                                 style={{ width: `${successRate}%` }}
                                 className="bg-emerald-500/80 backdrop-blur-sm flex items-center justify-center px-2 transition-all duration-500"
@@ -210,7 +221,7 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                                 {successRate}% সফল
                               </div>
                             )}
-                            {sumCancel > 0 && (
+                            {cancelRate > 0 && (
                               <div
                                 style={{ width: `${cancelRate}%` }}
                                 className="bg-rose-500/80 backdrop-blur-sm flex items-center justify-center px-2 transition-all duration-500"

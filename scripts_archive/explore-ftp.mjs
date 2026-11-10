@@ -4,7 +4,7 @@ const FTP_CONFIG = {
   host: '187.127.183.159',
   port: 21,
   user: 'u286107709',
-  password: 'n3GuM$aUuHKB9@X',
+  password: 'REDACTED_PASSWORD',
   secure: false
 };
 

@@ -13,6 +13,18 @@ import React, {
 import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import ShopList from './components/ShopList';
+import {
+  initTracking,
+  trackViewContent,
+  trackAddToWishlist,
+  trackInitiateCheckout,
+  trackPurchase,
+  trackSearch,
+  trackContact,
+  getStoredAttribution,
+} from './utils/tracking';
+import { getAdminAuthHeaders } from './utils/adminAuth';
+import { buildProductStructuredData } from './utils/productSchema';
 
 // Dynamic Code-Splitting for Heavy / Secondary Modals
 const ProductDetails = lazy(() => import('./components/ProductDetails'));
@@ -150,6 +162,7 @@ import {
   onSnapshot,
   getDocFromServer,
   collection,
+  collectionGroup,
   query,
   where,
   getDocs,
@@ -426,30 +439,42 @@ function App() {
             shortId: foundOrder.shortId || String(foundOrder.orderId || foundOrder.id).slice(-6).toUpperCase()
           };
 
-          if (order.couriers && order.couriers.trackingId && order.couriers.service === "Steadfast") {
+          const resolvedCourierTrackId =
+            order.couriers?.trackingId ||
+            order.courierTrackingId ||
+            order.trackingId ||
+            order.courierConsignmentId;
+          const resolvedCourierSvc = (
+            order.couriers?.service ||
+            order.courierName ||
+            (order.pathaoStatus ? "Pathao" : "Steadfast")
+          ).toLowerCase();
+
+          if (resolvedCourierTrackId && resolvedCourierSvc.includes("steadfast")) {
             try {
               // API keys are kept server-side; proxy handles auth
-              const response = await fetch(`/api/steadfast-status?id=${encodeURIComponent(order.couriers.trackingId)}`);
+              const response = await fetch(`/api/steadfast-status?id=${encodeURIComponent(resolvedCourierTrackId)}`);
               const data = await response.json();
               if (data.success && data.data && data.data.delivery_status) {
                  setTrackingResult({ ...order, steadfastStatus: data.data.delivery_status });
               } else {
-                 setTrackingResult({ ...order, steadfastStatus: "Steadfast এ খোঁজ পাওয়া যায়নি" });
+                 setTrackingResult({ ...order, steadfastStatus: order.steadfastStatus || order.courierStatus || "Steadfast এ খোঁজ পাওয়া যায়নি" });
               }
             } catch (e) {
-              setTrackingResult({ ...order, steadfastStatus: "Failed to fetch status" });
+              setTrackingResult({ ...order, steadfastStatus: order.steadfastStatus || order.courierStatus || "Failed to fetch status" });
             }
-          } else if (order.couriers && order.couriers.trackingId && order.couriers.service === "Pathao") {
+          } else if (resolvedCourierTrackId && resolvedCourierSvc.includes("pathao")) {
             try {
-              const response = await fetch(`/api/pathao-status?id=${encodeURIComponent(order.couriers.trackingId)}`);
+              const response = await fetch(`/api/pathao-status?id=${encodeURIComponent(resolvedCourierTrackId)}`);
               const data = await response.json();
-              if (data.success && data.data && data.data.data && data.data.data.order && data.data.data.order.transfer_status) {
-                 setTrackingResult({ ...order, pathaoStatus: data.data.data.order.transfer_status });
+              const pStatus = data.data?.data?.order?.order_status || data.data?.data?.order?.transfer_status;
+              if (data.success && pStatus) {
+                 setTrackingResult({ ...order, pathaoStatus: pStatus });
               } else {
-                 setTrackingResult({ ...order, pathaoStatus: "Pathao এ খোঁজ পাওয়া যায়নি" });
+                 setTrackingResult({ ...order, pathaoStatus: order.pathaoStatus || order.courierStatus || "Pathao এ খোঁজ পাওয়া যায়নি" });
               }
             } catch (e) {
-              setTrackingResult({ ...order, pathaoStatus: "Failed to fetch status" });
+              setTrackingResult({ ...order, pathaoStatus: order.pathaoStatus || order.courierStatus || "Failed to fetch status" });
             }
           } else {
             setTrackingResult(order);
@@ -584,6 +609,7 @@ function App() {
           status: "pending",
           createdAt: serverTimestamp(),
           userId: user?.uid || "guest",
+          attribution: getStoredAttribution(),
         };
         try {
           // Concurrently create order and decrement stock in Firestore
@@ -670,24 +696,25 @@ function App() {
             }
           } catch(e) {}
 
-          // Track Purchase
+          // Track Purchase (Browser + Server-Side CAPI/Events API with Event ID Deduplication)
           try {
-            if ((window as any).fbq) {
-              (window as any).fbq('track', 'Purchase', {value: totalAmount, currency: 'BDT'});
-            }
-            if ((window as any).gtag) {
-              (window as any).gtag('event', 'purchase', {
-                transaction_id: orderId,
-                value: totalAmount,
-                currency: 'BDT',
-                items: checkoutItems.map(i => ({
-                  item_id: i.product.id,
-                  item_name: i.product.name,
-                  price: i.product.price,
-                  quantity: i.quantity
-                }))
-              });
-            }
+            trackPurchase({
+              orderId,
+              value: totalAmount,
+              items: checkoutItems.map((i: any) => ({
+                id: i.product.id,
+                name: i.product.name,
+                price: getProductPrice(i.product, i.quantity),
+                quantity: i.quantity,
+                category: i.product.category,
+                brand: i.product.brand,
+              })),
+              customerName,
+              customerPhone: newOrder.customerPhone,
+              email: checkoutEmail || user?.email || undefined,
+              district: checkoutDistrict,
+              userId: user?.uid || "guest",
+            });
           } catch (err) {}
           setCompletedOrderReceipt({ ...newOrder, orderId });
           setIsCheckoutOpen(false);
@@ -787,7 +814,8 @@ function App() {
             status: 'pending',
             createdAt: serverTimestamp(),
             orderType: 'direct_buy',
-            userId: user?.uid || "guest"
+            userId: user?.uid || "guest",
+            attribution: getStoredAttribution(),
           };
 
           // Concurrently create order and decrement stock in Firestore
@@ -854,24 +882,30 @@ function App() {
             }
           } catch(e) {}
 
-          // Track Purchase
+          // Track Purchase (Browser + Server-Side CAPI/Events API with Event ID Deduplication)
           try {
-            if ((window as any).fbq) {
-              (window as any).fbq('track', 'Purchase', {value: orderData.total, currency: 'BDT'});
+            const inlineItems = orderData.items.map((i: any) => ({
+              id: i.product.id,
+              name: i.product.name,
+              price: i.price || i.product.price,
+              quantity: i.quantity,
+              category: i.product.category,
+              brand: i.product.brand,
+            }));
+            if (lastInlineCheckoutProductRef.current !== orderData.items[0]?.product?.id) {
+              lastInlineCheckoutProductRef.current = orderData.items[0]?.product?.id || null;
+              trackInitiateCheckout(inlineItems, orderData.subtotal || orderData.total);
             }
-            if ((window as any).gtag) {
-              (window as any).gtag('event', 'purchase', {
-                transaction_id: orderData.orderId,
-                value: orderData.total,
-                currency: 'BDT',
-                items: orderData.items.map((i: any) => ({
-                  item_id: i.product.id,
-                  item_name: i.product.name,
-                  price: i.product.price,
-                  quantity: i.quantity
-                }))
-              });
-            }
+            trackPurchase({
+              orderId: orderData.orderId,
+              value: orderData.total,
+              items: inlineItems,
+              customerName: inlineOrderName,
+              customerPhone: inlineOrderPhone,
+              email: user?.email || undefined,
+              district: inlineOrderDistrict,
+              userId: user?.uid || "guest",
+            });
           } catch (err) {}
           // Show receipt
           setCompletedOrderReceipt(orderData);
@@ -1025,11 +1059,19 @@ function App() {
     null,
   );
   const [currentBanner, setCurrentBanner] = useState(0);
+  const [bannerDirection, setBannerDirection] = useState(1);
+  const [isBannerHovered, setIsBannerHovered] = useState(false);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const lastTrackedSearchRef = useRef<string>("");
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchInput);
+      const q = searchInput.trim();
+      if (q.length >= 2 && q !== lastTrackedSearchRef.current) {
+        lastTrackedSearchRef.current = q;
+        trackSearch(q);
+      }
     }, 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
@@ -1244,6 +1286,75 @@ function App() {
     }
   };
 
+  const lastTrackedViewRef = useRef<string | null>(null);
+  const wasCheckoutOpenRef = useRef<boolean>(false);
+  const lastInlineCheckoutProductRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void initTracking();
+  }, []);
+
+  useEffect(() => {
+    const activeProd = isProductDetailsOpen && selectedProduct ? selectedProduct : landingProduct;
+    if (!activeProd || !activeProd.id) {
+      if (!isProductDetailsOpen && !landingProduct) {
+        lastTrackedViewRef.current = null;
+      }
+      return;
+    }
+    const viewKey = `${landingProduct && !isProductDetailsOpen ? "landing" : "modal"}:${activeProd.id}`;
+    if (lastTrackedViewRef.current === viewKey) return;
+    lastTrackedViewRef.current = viewKey;
+    trackViewContent({
+      id: activeProd.id,
+      name: activeProd.name,
+      price: Number(activeProd.price || 0),
+      category: activeProd.category,
+      brand: activeProd.brand,
+    });
+  }, [isProductDetailsOpen, selectedProduct?.id, landingProduct?.id]);
+
+  useEffect(() => {
+    if (isCheckoutOpen && checkoutItems.length > 0 && !wasCheckoutOpenRef.current) {
+      wasCheckoutOpenRef.current = true;
+      const items = checkoutItems.map((i: any) => ({
+        id: i.product.id,
+        name: i.product.name,
+        price: getProductPrice(i.product, i.quantity),
+        quantity: i.quantity,
+        category: i.product.category,
+        brand: i.product.brand,
+      }));
+      const totalVal = items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
+      trackInitiateCheckout(items, totalVal);
+    } else if (!isCheckoutOpen) {
+      wasCheckoutOpenRef.current = false;
+    }
+  }, [isCheckoutOpen, checkoutItems]);
+
+  useEffect(() => {
+    if (!isProductDetailsOpen || !selectedProduct?.id) {
+      lastInlineCheckoutProductRef.current = null;
+      return;
+    }
+    if (inlinePhoneFocused && lastInlineCheckoutProductRef.current !== selectedProduct.id) {
+      lastInlineCheckoutProductRef.current = selectedProduct.id;
+      const qty = Math.max(1, Number(tempSelectedQty || 1));
+      const unitPrice = getProductPrice(selectedProduct, qty);
+      trackInitiateCheckout(
+        [{
+          id: selectedProduct.id,
+          name: selectedProduct.name,
+          price: unitPrice,
+          quantity: qty,
+          category: selectedProduct.category,
+          brand: selectedProduct.brand,
+        }],
+        unitPrice * qty
+      );
+    }
+  }, [inlinePhoneFocused, isProductDetailsOpen, selectedProduct?.id]);
+
   const [savedProfiles, setSavedProfiles] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem("ishopbd_saved_profiles");
@@ -1369,18 +1480,37 @@ function App() {
   };
   const [isMultiOrderSelectionOpen, setIsMultiOrderSelectionOpen] =
     useState(false);
+  const sortBannersByOrder = (list: any[]) =>
+    [...list].sort((a, b) => Number(a?.order ?? 0) - Number(b?.order ?? 0));
+
   const [activeBanners, setActiveBanners] = useState<any[]>(() => {
     try {
+      if (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_BANNERS__) && (window as any).__INITIAL_BANNERS__.length > 0) {
+        return sortBannersByOrder((window as any).__INITIAL_BANNERS__);
+      }
       const cached = localStorage.getItem(STORAGE_KEYS.BANNERS);
-      return cached ? JSON.parse(cached) : [];
+      const parsed = cached ? JSON.parse(cached) : [];
+      return Array.isArray(parsed) && parsed.length > 0 ? sortBannersByOrder(parsed) : [];
     } catch {
       return [];
     }
   });
-  const heroBanners = useMemo(() => activeBanners.filter(b => (b.type || 'hero') === 'hero'), [activeBanners]);
-  const secondaryBanners = useMemo(() => activeBanners.filter(b => b.type === 'secondary'), [activeBanners]);
-  const rightTopBanner = useMemo(() => activeBanners.find(b => b.type === 'right_top'), [activeBanners]);
-  const rightBottomBanner = useMemo(() => activeBanners.find(b => b.type === 'right_bottom'), [activeBanners]);
+  const [isBannersResolved, setIsBannersResolved] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_BANNERS__) && (window as any).__INITIAL_BANNERS__.length > 0) {
+        return true;
+      }
+      const cached = localStorage.getItem(STORAGE_KEYS.BANNERS);
+      const parsed = cached ? JSON.parse(cached) : [];
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch {
+      return false;
+    }
+  });
+  const heroBanners = useMemo(() => {
+    return sortBannersByOrder(activeBanners.filter(b => (b.type || 'hero') === 'hero'));
+  }, [activeBanners]);
+  const secondaryBanners = useMemo(() => sortBannersByOrder(activeBanners.filter(b => b.type === 'secondary')), [activeBanners]);
   const productsByCategory = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const p of products) {
@@ -1605,40 +1735,75 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     const saved = localStorage.getItem("ishopbd_blacklist");
     return saved ? JSON.parse(saved) : [];
   });
-  const [courierReports, setCourierReports] = useState<Record<string, { total_parcel: number; total_delivered: number; total_cancelled: number; total_fraud_report: number }>>({});
+  const [courierReports, setCourierReports] = useState<Record<string, { 
+    total_parcel: number; 
+    total_delivered: number; 
+    total_cancelled: number; 
+    total_fraud_report: number;
+    delivery_rate?: number;
+    cancellation_rate?: number;
+    volume_band?: string;
+  }>>({});
   const [loadingCourierReports, setLoadingCourierReports] = useState<Record<string, boolean>>({});
   const [isCourierHistoryModalOpen, setIsCourierHistoryModalOpen] = useState(false);
   const [courierModalPhone, setCourierModalPhone] = useState("");
   const checkCourierReport = async (phone: string) => {
     if (!phone) return;
-    setLoadingCourierReports(prev => ({ ...prev, [phone]: true }));
+    const cleanPhone = phone.replace(/[^0-9]/g, "");
+    if (!cleanPhone) return;
+    setLoadingCourierReports(prev => ({ ...prev, [phone]: true, [cleanPhone]: true }));
     try {
-      const response = await axios.get(`/api/courier/steadfast/fraud/${phone}`);
-      if (response.data && response.data.success) {
-        const report = response.data.data?.data || response.data.data;
-        const total_parcel = Number(report?.total_parcel || report?.total_parcel_count || 0);
+      const headers = await getAdminAuthHeaders(false);
+      const response = await axios.get(`/api/courier/steadfast/fraud/${cleanPhone}`, { headers });
+      const resData = response.data;
+      if (resData && (resData.success || resData.status === 200 || resData.delivery_ratio !== undefined)) {
+        const report = resData.data?.data || resData.data || resData;
+        const total_parcel = Number(report?.total_parcel || report?.total_parcels || report?.total_parcel_count || 0);
         const total_delivered = Number(report?.total_delivered || report?.total_delivered_count || 0);
         const total_cancelled = Number(report?.total_cancelled || report?.total_cancelled_count || 0);
-        const total_fraud_report = Number(report?.total_fraud_report || report?.total_fraud_reports || 0);
+        const total_fraud_report = Number(report?.total_fraud_report || report?.total_reports || (Array.isArray(report?.total_fraud_reports) ? report.total_fraud_reports.length : 0));
+        
+        const delivery_rate = report?.delivery_rate !== undefined && report?.delivery_rate !== null 
+          ? Number(report.delivery_rate) 
+          : (report?.delivery_ratio !== null && report?.delivery_ratio !== undefined 
+            ? Number(report.delivery_ratio) 
+            : (total_parcel > 0 ? Math.round((total_delivered / total_parcel) * 100) : undefined));
+
+        const cancellation_rate = report?.cancellation_rate !== undefined && report?.cancellation_rate !== null
+          ? Number(report.cancellation_rate)
+          : (report?.cancellation_ratio !== null && report?.cancellation_ratio !== undefined
+            ? Number(report.cancellation_ratio)
+            : (report?.return_ratio !== null && report?.return_ratio !== undefined
+              ? Number(report.return_ratio)
+              : (total_parcel > 0 ? Math.round((total_cancelled / total_parcel) * 100) : undefined)));
+
+        const volume_band = report?.volume_band || "";
+
+        const parsedData = {
+          total_parcel,
+          total_delivered,
+          total_cancelled,
+          total_fraud_report,
+          delivery_rate,
+          cancellation_rate,
+          volume_band,
+        };
+
         setCourierReports(prev => ({
           ...prev,
-          [phone]: {
-            total_parcel,
-            total_delivered,
-            total_cancelled,
-            total_fraud_report,
-          }
+          [phone]: parsedData,
+          [cleanPhone]: parsedData,
         }));
       } else {
-        const errorMsg = response.data?.error || "কুরিয়ার ডাটা পাওয়া যায়নি";
+        const errorMsg = resData?.error || resData?.message || "কুরিয়ার ডাটা পাওয়া যায়নি";
         toast.error(errorMsg);
       }
     } catch (err: any) {
       console.error("Error checking courier report:", err);
-      const errMsg = err.response?.data?.error || "কুরিয়ার ডাটা ফেচ করতে সমস্যা হয়েছে";
+      const errMsg = err.response?.data?.error || err.response?.data?.message || "কুরিয়ার ডাটা ফেচ করতে সমস্যা হয়েছে";
       toast.error(errMsg);
     } finally {
-      setLoadingCourierReports(prev => ({ ...prev, [phone]: false }));
+      setLoadingCourierReports(prev => ({ ...prev, [phone]: false, [cleanPhone]: false }));
     }
   };
   type LangCode = "en" | "bn";
@@ -1703,6 +1868,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   const [isLangModalOpen, setIsLangModalOpen] = useState(false);
   const [isAppDownloadModalOpen, setIsAppDownloadModalOpen] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isMobileCategoryDrawerOpen, setIsMobileCategoryDrawerOpen] = useState(false);
   // Optimized helper to get customer stats based on phone
   const customerStatsMap = useMemo(() => {
     const stats: Record<string, { delivered: number; cancelled: number; isBlacklisted: boolean; total: number }> = {};
@@ -1767,11 +1933,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           note: `Invoice: ${order?.id}`
         };
       }).filter(o => o.id);
+      const headers = await getAdminAuthHeaders(true);
       const response = await fetch("/api/courier/steadfast/bulk", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify({
           apiKey: adminKeys?.steadfastApiKey || "",
           secretKey: adminKeys?.steadfastSecretKey || "",
@@ -1787,13 +1952,23 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           if (result.success) {
             successCount++;
             await updateDoc(doc(db, "orders", result.id), {
-              status: "processing",
+              status: "shipped",
               courierTrackingId: result.trackingId,
-              courierName: "Steadfast"
+              trackingId: result.trackingId,
+              ...(result.consignmentId ? { courierConsignmentId: result.consignmentId } : {}),
+              courierName: "Steadfast",
+              courierStatus: "in_review",
+              steadfastStatus: "in_review",
+              couriers: {
+                service: "Steadfast",
+                trackingId: result.trackingId,
+                ...(result.consignmentId ? { consignmentId: result.consignmentId } : {}),
+              },
+              updatedAt: serverTimestamp(),
             });
             const originalOrder = orderHistory.find(o => o.id === result.id);
             if (originalOrder && originalOrder.userId) {
-              sendPushToUser(originalOrder.userId, "অর্ডার আপডেট", "আপনার অর্ডারের বর্তমান স্ট্যাটাস: processing (কুরিয়ারে পাঠানো হয়েছে)", "/profile");
+              sendPushToUser(originalOrder.userId, "অর্ডার আপডেট", "আপনার অর্ডারটি কুরিয়ারে পাঠানো হয়েছে (Steadfast)", "/profile");
             }
           } else {
             failCount++;
@@ -1845,6 +2020,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         if (result.success) {
           localStorage.setItem(`admin_verified_${user.uid}`, "true");
           sessionStorage.setItem(`admin_verified_${user.uid}`, "true");
+          sessionStorage.setItem("ishopbd_admin_token", inputPass);
+          localStorage.setItem("ishopbd_admin_token", inputPass);
           setIsAdminVerified(true);
           setIs2FAPending(false);
           setAdminPasswordError(false);
@@ -2048,6 +2225,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   }>({ rating: 5, comment: "", images: [], guestName: "" });
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [activeReviews, setActiveReviews] = useState<Review[]>([]);
+  const [isReviewsLoading, setIsReviewsLoading] = useState(false);
+  const [adminReviews, setAdminReviews] = useState<Review[]>([]);
+  const [isAdminReviewsLoading, setIsAdminReviewsLoading] = useState(false);
   const [isSyncingData, setIsSyncingData] = useState(false);
   useEffect(() => {
     if (!isProductDetailsOpen) {
@@ -2303,7 +2483,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         // Expected if signed in via password verification rather than Firebase Auth moderator
         if (err?.code === "permission-denied" || err?.message?.includes("Missing or insufficient permissions")) {
           try {
-            const res = await fetch("/api/admin/keys");
+            const headers = await getAdminAuthHeaders(false);
+            const res = await fetch("/api/admin/keys", { headers });
             if (res.ok) {
               const json = await res.json();
               if (json.success && json.keys && isMounted) {
@@ -2331,7 +2512,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     input.accept = 'image/*';
     input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
-      if (file && adminKeys?.geminiApiKey) {
+      if (file && siteConfig?.isAiEnabled) {
         try {
           toast.loading("ছবি স্ক্যান করা হচ্ছে (AI)...");
           
@@ -2341,21 +2522,18 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             try {
               const base64 = (reader.result as string).split(',')[1];
               
-              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${adminKeys.geminiApiKey}`, {
+              const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  contents: [{
-                    parts: [
-                      { inlineData: { mimeType: file.type, data: base64 } },
-                      { text: "What product is this? Return 3-5 search keywords in English that best describe this item for an e-commerce search bar. Do not write full sentences." }
-                    ]
-                  }]
+                  message: "What product is this? Return 3-5 search keywords in English that best describe this item for an e-commerce search bar. Do not write full sentences.",
+                  image: base64,
+                  mimeType: file.type
                 })
               });
               
               const data = await response.json();
-              const keywords = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              const keywords = data.reply || data.text || "";
               
               toast.dismiss();
               if (keywords.trim()) {
@@ -2378,9 +2556,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     input.click();
   };
 
-  // Run AI Natural Search
+  // Run AI Natural Search via secure backend proxy
   useEffect(() => {
-    if (!siteConfig?.isAiEnabled || !adminKeys?.geminiApiKey || !searchQuery.trim() || products.length === 0) {
+    if (!siteConfig?.isAiEnabled || !searchQuery.trim() || products.length === 0) {
       setAiSearchProductIds(null);
       return;
     }
@@ -2414,33 +2592,22 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             description: p.description || ""
           }));
 
-          const prompt = `Based on these e-commerce products:
-${JSON.stringify(productList)}
-
-Filter and return the products matching this customer query: "${searchQuery}".
-Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"]. Return an empty array [] if no items match. Do not write explanations or markdown coding fence.`;
-
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${adminKeys.geminiApiKey}`, {
+          const response = await fetch("/api/ai-search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [{
-                role: "user",
-                parts: [{ text: prompt }]
-              }]
+              query: searchQuery,
+              products: productList
             })
           });
           const data = await response.json();
-          const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
-          const cleanedText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
-          const ids = JSON.parse(cleanedText);
-          if (Array.isArray(ids)) {
-            setAiSearchProductIds(ids);
+          if (data.success && Array.isArray(data.matchingIds)) {
+            setAiSearchProductIds(data.matchingIds);
           } else {
             setAiSearchProductIds(null);
           }
         } catch (err) {
-          console.error("AI Natural Search Error:", err);
+          console.warn("AI Natural Search Error:", err);
           setAiSearchProductIds(null);
         } finally {
           setIsAiSearching(false);
@@ -2455,7 +2622,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }, 800);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery, products, siteConfig?.isAiEnabled, adminKeys?.geminiApiKey]);
+  }, [searchQuery, products, siteConfig?.isAiEnabled]);
 
   // SEO: Dynamic URL, Meta Tags, Open Graph, Schema.org
   useEffect(() => {
@@ -2512,7 +2679,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const productDesc = stripHtml(selectedProduct.description || '');
       const productPrice = selectedProduct.price || 0;
       const productImage = selectedProduct.image || DEFAULT_OG_IMAGE;
-      const productUrl = `${SITE_URL}/?p=${selectedProduct.id}&slug=${encodeURIComponent((productName).toLowerCase().replace(/ /g, '-').replace(/[^\w-]/g, ''))}`;
+      const productUrl = `${SITE_URL}${getProductPath(selectedProduct)}`;
       const inStock = (selectedProduct.stock || 0) > 0;
 
       // Title with Bangladesh keywords for Google ranking
@@ -2548,39 +2715,40 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       setLink('canonical', productUrl);
 
       // Schema.org Product JSON-LD
-      setJsonLd('seo-json-ld', {
-        "@context": "https://schema.org/",
-        "@type": "Product",
-        "name": productName,
-        "image": [productImage, ...(selectedProduct.images || [])].filter(Boolean),
-        "description": productDesc || `${productName} available at best price in Bangladesh.`,
-        "sku": selectedProduct.id,
-        "brand": { "@type": "Brand", "name": selectedProduct.brand || SITE_NAME },
-        "offers": {
-          "@type": "Offer",
-          "url": productUrl,
-          "priceCurrency": "BDT",
-          "price": productPrice,
-          "priceValidUntil": new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
-          "availability": inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-          "itemCondition": "https://schema.org/NewCondition",
-          "seller": { "@type": "Organization", "name": SITE_NAME }
-        }
-      });
+      setJsonLd('seo-json-ld', buildProductStructuredData({
+        id: selectedProduct.id,
+        name: productName,
+        description: productDesc || `${productName} available at best price in Bangladesh.`,
+        image: [productImage, ...(selectedProduct.images || [])].filter(Boolean),
+        url: productUrl,
+        brand: selectedProduct.brand || SITE_NAME,
+        mpn: selectedProduct.code || selectedProduct.id,
+        price: Number(productPrice || 0),
+        inStock,
+        isFreeDelivery: Boolean(selectedProduct.isFreeDelivery),
+        weight: Number(selectedProduct.weight || 0),
+        createdAt: selectedProduct.createdAt,
+        rating: Number(selectedProduct.rating || 0),
+        reviewCount: Number(selectedProduct.reviewCount || 0),
+      }));
 
       // BreadcrumbList Schema
+      const prodCatSlug = selectedProduct.category ? getCategorySlug(selectedProduct.category) : '';
       setJsonLd('seo-breadcrumb-ld', {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         "itemListElement": [
           { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
-          ...(selectedProduct.category ? [{ "@type": "ListItem", "position": 2, "name": selectedProduct.category, "item": `${SITE_URL}/?category=${encodeURIComponent(selectedProduct.category)}` }] : []),
+          ...(selectedProduct.category ? [{ "@type": "ListItem", "position": 2, "name": selectedProduct.category, "item": `${SITE_URL}/category/${prodCatSlug}` }] : []),
           { "@type": "ListItem", "position": selectedProduct.category ? 3 : 2, "name": productName, "item": productUrl }
         ]
       });
 
     } else if (selectedCategory && selectedCategory.toLowerCase() !== 'all') {
       // === CATEGORY PAGE ===
+      const catSlug = getCategorySlug(selectedCategory);
+      const categoryUrl = `${SITE_URL}/category/${catSlug}`;
+
       document.title = `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
       setMeta('meta[name="description"]', 'content', `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`);
       setMeta('meta[name="keywords"]', 'content', `${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy ${selectedCategory} online Bangladesh, i SHOP BD`);
@@ -2588,15 +2756,15 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       setMeta('meta[property="og:title"]', 'content', `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`);
       setMeta('meta[property="og:description"]', 'content', `Shop the best ${selectedCategory} at lowest prices in Bangladesh.`);
       setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
-      setMeta('meta[property="og:url"]', 'content', `${SITE_URL}/?category=${encodeURIComponent(selectedCategory)}`);
-      setLink('canonical', `${SITE_URL}/?category=${encodeURIComponent(selectedCategory)}`);
+      setMeta('meta[property="og:url"]', 'content', categoryUrl);
+      setLink('canonical', categoryUrl);
       setJsonLd('seo-json-ld', null);
       setJsonLd('seo-breadcrumb-ld', {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         "itemListElement": [
           { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
-          { "@type": "ListItem", "position": 2, "name": selectedCategory, "item": `${SITE_URL}/?category=${encodeURIComponent(selectedCategory)}` }
+          { "@type": "ListItem", "position": 2, "name": selectedCategory, "item": categoryUrl }
         ]
       });
 
@@ -2621,7 +2789,6 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen, selectedCategory]);
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log("Auth Status Changed:", currentUser?.email);
       setUser(currentUser);
       if (currentUser) {
         const isVerified = localStorage.getItem(`admin_verified_${currentUser.uid}`) === "true" ||
@@ -2776,38 +2943,33 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       unsubTx();
     };
   }, [user, isQuotaExceeded]);
-  // Test Firestore Connection on Boot
+  // Test Firestore Connection on Boot (Deferred for guest visitors to avoid blocking initial render)
   useEffect(() => {
-    const testConnection = async () => {
+    const timer = setTimeout(async () => {
       try {
         await getDocFromServer(doc(db, "test", "connection"));
-        console.log("Log");
       } catch (error: any) {
         if (error.message?.includes("Quota exceeded") || error.message?.includes("quota") || error.message === "QUOTA_EXCEEDED") {
           setIsQuotaExceeded(true);
         }
-        if (error instanceof Error && error.message.includes("client is offline")) {
-          console.error(" Firestore client is offline. Please check your network or configuration.");
-          toast.error("মাস্টার পাসওয়ার্ডটি সঠিক নয়। দয়া করে সঠিক পাসওয়ার্ড দিন।");
-        } else {
-          console.error(" Firestore connection error:", error);
-        }
       }
-    };
-    testConnection();
+    }, 4000);
+    return () => clearTimeout(timer);
   }, []);
   // Real-time synchronization for campaigns
   useEffect(() => {
     if (isQuotaExceeded) return;
     
     if (!isAdmin && !isMasterAdmin) {
-      getDocs(collection(db, "campaigns")).then(snapshot => {
-        const data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Campaign);
-        setCampaigns(data);
-      }).catch(err => {
-        handleFirestoreError(err, OperationType.GET, "campaigns");
-      });
-      return;
+      const timer = setTimeout(() => {
+        getDocs(collection(db, "campaigns")).then(snapshot => {
+          const data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Campaign);
+          setCampaigns(data);
+        }).catch(err => {
+          handleFirestoreError(err, OperationType.GET, "campaigns");
+        });
+      }, 2500);
+      return () => clearTimeout(timer);
     }
     const unsubCampaigns = onSnapshot(collection(db, "campaigns"), (snapshot) => {
       const data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Campaign);
@@ -2855,22 +3017,87 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     const isAdminUser = (isMasterAdmin || isAdmin) && !!user;
     const targetProdId = getProductIdFromUrl();
 
-    // 1. Fetch Categories & Banners
-    getDocs(collection(db, "categories")).then(snap => {
-      const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
-      setCategories(data);
-      if (categorySlug) {
-        const matched = findCategoryBySlug(data, categorySlug);
-        if (matched) setSelectedCategory(matched.name);
-      }
-      safeSetLocalStorage(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
-    }).catch(err => console.warn("Categories fetch error:", err));
+    // 1. Initial Load Categories & Banners from LocalStorage for instant zero-latency paint
+    const cachedCats = safeGetLocalStorage(STORAGE_KEYS.CATEGORIES);
+    if (cachedCats) {
+      try {
+        const parsedCats = JSON.parse(cachedCats);
+        if (Array.isArray(parsedCats) && parsedCats.length > 0) {
+          setCategories(parsedCats);
+          if (categorySlug) {
+            const matched = findCategoryBySlug(parsedCats, categorySlug);
+            if (matched) setSelectedCategory(matched.name);
+          }
+        }
+      } catch(e) {}
+    }
 
-    getDocs(collection(db, "banners")).then(snap => {
-      const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
-      setActiveBanners(data);
-      safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(data));
-    }).catch(err => console.warn("Banners fetch error:", err));
+    const initialWindowBanners = typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_BANNERS__)
+      ? (window as any).__INITIAL_BANNERS__
+      : null;
+    const cachedBanners = safeGetLocalStorage(STORAGE_KEYS.BANNERS);
+
+    if (initialWindowBanners && initialWindowBanners.length > 0) {
+      const sortedInitial = sortBannersByOrder(initialWindowBanners);
+      setActiveBanners(sortedInitial);
+      setIsBannersResolved(true);
+      safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(sortedInitial));
+    } else if (cachedBanners) {
+      try {
+        const parsedBanners = JSON.parse(cachedBanners);
+        if (Array.isArray(parsedBanners) && parsedBanners.length > 0) {
+          setActiveBanners(sortBannersByOrder(parsedBanners));
+          setIsBannersResolved(true);
+        }
+      } catch(e) {}
+    }
+
+    const fetchFreshBanners = () => {
+      fetch("/api/banners", { cache: "no-store" })
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(apiBanners => {
+          if (Array.isArray(apiBanners)) {
+            const sorted = sortBannersByOrder(apiBanners);
+            setActiveBanners(sorted);
+            setIsBannersResolved(true);
+            safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(sorted));
+          } else {
+            throw new Error("Invalid banners response");
+          }
+        })
+        .catch(() => {
+          getDocs(collection(db, "banners")).then(snap => {
+            const data = sortBannersByOrder(snap.docs.map((d) => ({ ...d.data(), id: d.id })));
+            setActiveBanners(data);
+            setIsBannersResolved(true);
+            safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(data));
+          }).catch(err => {
+            console.warn("Banners fetch error:", err);
+            setIsBannersResolved(true);
+          });
+        });
+    };
+
+    const fetchFreshCats = () => {
+      getDocs(collection(db, "categories")).then(snap => {
+        const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
+        setCategories(data);
+        if (categorySlug) {
+          const matched = findCategoryBySlug(data, categorySlug);
+          if (matched) setSelectedCategory(matched.name);
+        }
+        safeSetLocalStorage(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
+      }).catch(err => console.warn("Categories fetch error:", err));
+    };
+
+    // Always fetch latest banners immediately so stale caches never linger
+    fetchFreshBanners();
+
+    if (isAdminUser || !cachedCats) {
+      fetchFreshCats();
+    } else {
+      setTimeout(fetchFreshCats, 2000);
+    }
 
     // 2. Public Users: Instant Cache Load + Intelligent SWR Fetch
     if (!isAdminUser) {
@@ -2896,6 +3123,20 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
             setIsLoading(false);
           }
         } catch(e) {}
+      } else if (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_PRODUCTS__) && (window as any).__INITIAL_PRODUCTS__.length > 0) {
+        const initialProds = (window as any).__INITIAL_PRODUCTS__;
+        hasValidCached = true;
+        setProducts(initialProds);
+        saveProductsToCache(initialProds);
+        if (targetProdId) {
+          const prod = findProductBySlugOrId(initialProds, targetProdId);
+          if (prod && !prod.deleted && prod.isPublished !== false) {
+            setSelectedProduct(prod);
+            setModalDisplayImage(prod.image);
+            setIsProductDetailsOpen(true);
+          }
+        }
+        setIsLoading(false);
       }
 
       // If no valid cache or older than 5 minutes, fetch fresh catalog
@@ -3568,9 +3809,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         toast.error("Quota exceeded, cannot save data at the moment.");
         return;
       }
+      let updatedBanners: any[] = [];
       if (editingBanner?.id) {
         // Update existing
-        await updateDoc(doc(db, "banners", editingBanner.id), {
+        const updatedObj = {
           title: editingBanner.title || "",
           subtitle: editingBanner.subtitle || "",
           image: editingBanner.image,
@@ -3584,20 +3826,29 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           subtitleWeight: editingBanner.subtitleWeight || "bold",
           subtitleSize: editingBanner.subtitleSize || "text-sm md:text-base",
           updatedAt: new Date().toISOString(),
-        });
+        };
+        await updateDoc(doc(db, "banners", editingBanner.id), updatedObj);
+        updatedBanners = activeBanners.map(b => b.id === editingBanner.id ? { ...b, ...updatedObj } : b);
         alert("ব্যানার আপডেট হয়েছে!");
       } else {
         // Add new
-        await addDoc(collection(db, "banners"), {
+        const newObj = {
           ...newBanner,
           title: newBanner.title || "",
           subtitle: newBanner.subtitle || "",
           type: newBanner.type || "hero",
           createdAt: new Date().toISOString(),
           order: activeBanners.length,
-        });
+        };
+        const docRef = await addDoc(collection(db, "banners"), newObj);
+        updatedBanners = [...activeBanners, { ...newObj, id: docRef.id }];
         alert("ব্যানার যুক্ত হয়েছে!");
       }
+      if (updatedBanners.length > 0) {
+        setActiveBanners(updatedBanners);
+        safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(updatedBanners));
+      }
+      fetch('/api/invalidate-banner-cache', { method: 'POST', keepalive: true }).catch(() => {});
       setEditingBanner(null);
       setNewBanner({
         title: "",
@@ -3626,7 +3877,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         toast.error("Quota exceeded, cannot save data at the moment.");
         return;
       }
-      await setDoc(doc(db, "config", "site"), {
+      const sitePayload = {
         couponCode: config.couponCode,
         isCouponPublic: config.isCouponPublic,
         whatsappNumber: config.whatsappNumber,
@@ -3646,7 +3897,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         supportPhone2: config.supportPhone2,
         facebookUrl: config.facebookUrl,
         isAiEnabled: config.isAiEnabled ?? false,
-         isCodEnabled: config.isCodEnabled ?? true,
+        isCodEnabled: config.isCodEnabled ?? true,
         isBkashEnabled: config.isBkashEnabled ?? true,
         isNagadEnabled: config.isNagadEnabled ?? true,
         isRocketEnabled: config.isRocketEnabled ?? true,
@@ -3665,9 +3916,27 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         pathaoClientSecret: "",
         pathaoUsername: "",
         pathaoPassword: ""
-      }, { merge: true });
+      };
+      try {
+        await setDoc(doc(db, "config", "site"), sitePayload, { merge: true });
+      } catch (siteErr: any) {
+        if (siteErr?.code === "permission-denied" || /permission/i.test(siteErr?.message || "")) {
+          const headers = await getAdminAuthHeaders(true);
+          const apiRes = await fetch("/api/admin/site-config", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(sitePayload),
+          });
+          const apiJson = await apiRes.json().catch(() => ({}));
+          if (!apiRes.ok || !apiJson.success) {
+            throw new Error(apiJson.error || siteErr.message);
+          }
+        } else {
+          throw siteErr;
+        }
+      }
       if (adminKeys) {
-        await setDoc(doc(db, "admin_config", "keys"), {
+        const keysPayload = {
           steadfastApiKey: adminKeys.steadfastApiKey || "",
           steadfastSecretKey: adminKeys.steadfastSecretKey || "",
           geminiApiKey: adminKeys.geminiApiKey || "",
@@ -3676,40 +3945,56 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           pathaoUsername: adminKeys.pathaoUsername || "",
           pathaoPassword: adminKeys.pathaoPassword || "",
           updatedAt: new Date().toISOString()
-        }, { merge: true });
+        };
+        try {
+          await setDoc(doc(db, "admin_config", "keys"), keysPayload, { merge: true });
+        } catch (keysErr: any) {
+          if (keysErr?.code === "permission-denied" || /permission/i.test(keysErr?.message || "")) {
+            const headers = await getAdminAuthHeaders(true);
+            const apiRes = await fetch("/api/admin/keys", {
+              method: "POST",
+              headers,
+              body: JSON.stringify(keysPayload),
+            });
+            const apiJson = await apiRes.json().catch(() => ({}));
+            if (!apiRes.ok || !apiJson.success) {
+              throw new Error(apiJson.error || keysErr.message);
+            }
+          } else {
+            throw keysErr;
+          }
+        }
       }
-      alert("সেটিংস সফলভাবে আপডেট হয়েছে!");
+      toast.success("সেটিংস সফলভাবে আপডেট হয়েছে!");
     } catch (err: any) {
       console.error("Site Config Error:", err);
       const errMsg = err.response?.data?.error || err.message || err;
-      alert("সেটিংস আপডেট করা সম্ভব হয়নি। এরর: " + errMsg);
+      toast.error("সেটিংস আপডেট করা সম্ভব হয়নি। এরর: " + errMsg);
     }
   };
   const handleDeleteBanner = async (id: any) => {
     console.log("Delete banner request for ID:", id);
     if (!id) {
-      alert("⚠️ ব্যানার আইডি পাওয়া যায়নি, স্যার!");
+      alert("⚠️ ব্যানার আইডি পাওয়া যায়নি!");
       return;
     }
     const bannerId = String(id);
-    const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই ব্যানারটি ডিলিট করতে চান, স্যার?");
+    const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই ব্যানারটি ডিলিট করতে চান?");
     if (!conf) return;
     try {
-      console.log("Log", bannerId);
       const bannerRef = doc(db, "banners", bannerId);
       await deleteDoc(bannerRef);
-      console.log("Log", bannerId);
-      alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
+      const updatedBanners = activeBanners.filter(b => String(b.id) !== bannerId);
+      setActiveBanners(updatedBanners);
+      safeSetLocalStorage(STORAGE_KEYS.BANNERS, JSON.stringify(updatedBanners));
+      fetch('/api/invalidate-banner-cache', { method: 'POST', keepalive: true }).catch(() => {});
+      alert("ব্যানার সফলভাবে মুছে ফেলা হয়েছে!");
       if (editingBanner && String(editingBanner.id) === bannerId) {
         setEditingBanner(null);
       }
     } catch (err: any) {
-      console.error(" Banner delete error details:", err);
-      if (err.code === "permission-denied") {
-        alert("সার্ভারে ডাটা সেভ/ডিলিট করতে সমস্যা হয়েছে। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা আবার লগইন করুন।");
-      } else {
-        alert("ছবি প্রসেস করতে সমস্যা হয়েছে।");
-      }
+      console.error("Banner delete error details:", err);
+      alert("ব্যানার ডিলিট করতে সমস্যা হয়েছে। দয়া করে ইন্টারনেট কানেকশন চেক করুন।");
     }
   };
   const handleAddAdmin = async () => {
@@ -4104,6 +4389,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         unit: editingProduct.unit || "piece",
         smsName: editingProduct.smsName || "",
         colors: editingProduct.colors || [],
+        bundleProductIds: Array.isArray(editingProduct.bundleProductIds)
+          ? editingProduct.bundleProductIds.filter((id: string) => id && id !== editingProduct.id)
+          : [],
+        bundleDiscount: Number(editingProduct.bundleDiscount || 0),
+        bundleDiscountType: editingProduct.bundleDiscountType || 'percentage',
         stock: editingProduct.variants && editingProduct.variants.length > 0 && editingProduct.variants.some((v: any) => v && v.stock !== undefined && v.stock !== null)
           ? Math.max(0, editingProduct.variants.reduce((sum: number, v: any) => sum + (Number(v?.stock) || 0), 0))
           : Math.max(0, Number(editingProduct.stock || 0)),
@@ -4173,6 +4463,17 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     // Always read latest value via ref to avoid stale closure bugs
     const isAlreadyLiked = likedProductsRef.current.includes(productId);
     const likeDiff = isAlreadyLiked ? -1 : 1;
+    if (!isAlreadyLiked) {
+      const likedProd = products.find((p) => p.id === productId) || (selectedProduct?.id === productId ? selectedProduct : null);
+      if (likedProd) {
+        trackAddToWishlist({
+          id: likedProd.id,
+          name: likedProd.name,
+          price: Number(likedProd.price || 0),
+          category: likedProd.category,
+        });
+      }
+    }
     // Optimistic UI update immediately
     setLikedProducts(prev => {
       const next = isAlreadyLiked
@@ -4758,9 +5059,13 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     setBulkSmsProgress(null);
     try {
       // Use fetch + ReadableStream to read SSE progress events
+      const adminToken = sessionStorage.getItem("ishopbd_admin_token") || localStorage.getItem("ishopbd_admin_token") || "";
       const response = await fetch("/api/send-bulk-sms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Admin-Token": adminToken
+        },
         body: JSON.stringify({
           phones: Array.from(bulkSmsSelectedPhones),
           message: bulkSmsMessage
@@ -5061,63 +5366,24 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       return;
     }
     try {
-      if (!siteConfig?.isAiEnabled || !adminKeys?.geminiApiKey) {
-        return; // Don't reply if AI is disabled or missing key
+      if (!siteConfig?.isAiEnabled) {
+        return; // Don't reply if AI is disabled
       }
-      // Format history for Gemini Direct API
-      const rawContents = (chatMessages || []).map((m: any) => ({
-        role: m.isAdmin ? "model" : "user",
-        parts: [{ text: m.text || "(Media)" }]
-      }));
-      rawContents.push({ role: "user", parts: [{ text: userText || "(Media)" }] });
-      const aiPrompt = `You are a helpful customer support AI for an e-commerce shop in Bangladesh called 'i SHOP BD'. Answer briefly and politely in Bengali.
-      
-Shop Info:
-- Support Phone: ${siteConfig?.supportPhone1 || "01777-600844"}
-- Delivery: Inside Dhaka 80 Tk, Outside Dhaka 120 Tk. (Usually 1-3 days).
-Available Products:
-${products.map(p => `- ${p.name}: ৳${p.price} (Stock: ${p.stock > 0 ? 'Yes' : 'No'})`).join('\n')}
-Rules:
-1. Answer price/stock questions based on the list above.
-2. Tell users to click "Order Now" on the product page to buy.
-3. If you don't know, ask them to call the support number.`;
-      const contents: { role: string; parts: { text: string }[] }[] = [];
-      contents.push({ role: "user", parts: [{ text: aiPrompt }] });
-      contents.push({ role: "model", parts: [{ text: "Understood. I will act as the customer support AI and follow these instructions in Bengali." }] });
-      for (const msg of rawContents) {
-        if (contents.length > 0 && contents[contents.length - 1].role === msg.role) {
-          contents[contents.length - 1].parts[0].text += "\\n" + msg.parts[0].text;
-        } else {
-          contents.push({ role: msg.role, parts: [{ text: msg.parts[0].text }] });
-        }
-      }
-      
-      let finalContents = contents;
-      if (finalContents.length > 12) {
-        const sys = finalContents.slice(0, 2);
-        let history = finalContents.slice(-10);
-        if (history[0].role === "model") {
-          history.shift();
-        }
-        finalContents = [...sys, ...history];
-      }
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${adminKeys?.geminiApiKey}`, {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: finalContents
+          message: userText || "",
+          chatHistory: (chatMessages || []).slice(-10).map((m: any) => ({
+            role: m.isAdmin ? "assistant" : "user",
+            content: m.text || ""
+          }))
         })
       });
       
       const data = await response.json();
-      let aiResponseText = "দুঃখিত, আমি এই প্রশ্নের উত্তর দিতে পারছি না।";
-      if (data && data.error) {
-        console.error("Gemini API Error:", data.error);
-        aiResponseText = `Error: ${data.error.message}`;
-      } else if (data && data.candidates && data.candidates.length > 0) {
-        aiResponseText = data.candidates[0].content.parts[0].text;
-      }
+      const aiResponseText = data.reply || data.text || "দুঃখিত, আমি এই মুহূর্তে উত্তর দিতে পারছি না। অনুগ্রহ করে আমাদের হেল্পলাইনে যোগাযোগ করুন।";
+      
       const aiMessage = {
         id: "ai_" + Date.now().toString(),
         text: aiResponseText,
@@ -5541,6 +5807,8 @@ Rules:
       const reviewId = `rev_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
       const newReview: Review = {
         id: reviewId,
+        productId: targetProdId,
+        productName: selectedProduct?.name || "Product",
         userId: user
           ? user.uid
           : `guest_${Math.random().toString(36).substr(2, 6)}`,
@@ -5549,12 +5817,11 @@ Rules:
         rating: Math.min(5, Math.max(1, Number(reviewForm.rating) || 5)),
         comment: reviewForm.comment?.trim() || "",
         images: reviewForm.images || [],
+        status: "pending",
         createdAt: new Date().toISOString(),
       };
 
       let submitted = false;
-      let calculatedRating = newReview.rating;
-      let calculatedCount = 1;
 
       // 1. Try Backend API via Firebase Admin SDK
       try {
@@ -5567,8 +5834,6 @@ Rules:
           const data = await res.json();
           if (data.success) {
             submitted = true;
-            if (data.rating !== undefined) calculatedRating = data.rating;
-            if (data.reviewCount !== undefined) calculatedCount = data.reviewCount;
           }
         }
       } catch (apiErr) {
@@ -5581,43 +5846,16 @@ Rules:
           const reviewRef = doc(db, "products", targetProdId, "reviews", reviewId);
           await setDoc(reviewRef, newReview);
           submitted = true;
-
-          const productRef = doc(db, "products", targetProdId);
-          const productSnap = await getDoc(productRef);
-          if (productSnap.exists()) {
-            const data = productSnap.data();
-            const currentRating = Number(data.rating) || 0;
-            const currentCount = Number(data.reviewCount) || 0;
-            calculatedCount = currentCount + 1;
-            calculatedRating = Number(((currentRating * currentCount + newReview.rating) / calculatedCount).toFixed(1));
-
-            try {
-              await updateDoc(productRef, {
-                rating: calculatedRating,
-                reviewCount: calculatedCount,
-              });
-            } catch (e) {}
-          }
         } catch (clientErr) {
           console.warn("Client firestore review save error:", clientErr);
         }
       }
 
-      // Update local state instantly so user immediately sees their review
-      setActiveReviews((prev) => [newReview, ...prev.filter(r => r.id !== reviewId)]);
-      setSelectedProduct((prev) =>
-        prev && (prev.id === targetProdId || !prev.id)
-          ? {
-              ...prev,
-              rating: calculatedRating,
-              reviewCount: Math.max(Number(prev.reviewCount || 0) + 1, calculatedCount),
-            }
-          : prev,
-      );
-      setProducts(prev => prev.map(p => p.id === targetProdId ? { ...p, rating: calculatedRating, reviewCount: Math.max(Number(p.reviewCount || 0) + 1, calculatedCount) } : p));
+      // Add to adminReviews state if admin panel is active
+      setAdminReviews((prev) => [newReview, ...prev.filter(r => r.id !== reviewId)]);
 
       setReviewForm({ rating: 5, comment: "", images: [], guestName: "" });
-      toast.success("Review submitted successfully! Thank you.");
+      toast.success("Review submitted! It will appear once approved by admin.");
     } catch (err: any) {
       console.error("Failed to submit review:", err);
       toast.error("Failed to submit review. Please try again.");
@@ -5625,37 +5863,257 @@ Rules:
       setIsSubmittingReview(false);
     }
   };
+
+  const fetchAdminReviews = useCallback(async () => {
+    setIsAdminReviewsLoading(true);
+    try {
+      const res = await fetch("/api/admin/reviews");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.reviews)) {
+          setAdminReviews(data.reviews);
+          setIsAdminReviewsLoading(false);
+          return;
+        }
+      }
+    } catch (apiErr) {
+      console.warn("API admin reviews fetch warning, trying client Firestore:", apiErr);
+    }
+
+    try {
+      const groupSnap = await getDocs(query(collectionGroup(db, "reviews"), limit(200)));
+      const reviewsList: Review[] = groupSnap.docs.map(docSnap => {
+        const d = docSnap.data();
+        const pId = d.productId || docSnap.ref.parent.parent?.id || "";
+        return {
+          id: docSnap.id,
+          productId: pId,
+          productName: d.productName || "",
+          productImage: d.productImage || "",
+          userId: d.userId || "",
+          userName: d.userName || d.name || "Customer",
+          userPhoto: d.userPhoto || null,
+          rating: Number(d.rating) || 5,
+          comment: d.comment || "",
+          images: Array.isArray(d.images) ? d.images : [],
+          status: (d.status as 'pending' | 'approved' | 'rejected') || 'approved',
+          createdAt: d.createdAt?.toDate 
+            ? d.createdAt.toDate().toISOString() 
+            : typeof d.createdAt === 'string' 
+            ? d.createdAt 
+            : new Date().toISOString()
+        };
+      });
+      reviewsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setAdminReviews(reviewsList);
+    } catch (err) {
+      console.error("Firestore admin reviews query error:", err);
+    } finally {
+      setIsAdminReviewsLoading(false);
+    }
+  }, []);
+
+  const handleApproveReview = async (productId: string, reviewId: string) => {
+    try {
+      let updated = false;
+      try {
+        const res = await fetch("/api/admin/reviews/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId, reviewId, status: "approved" })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            updated = true;
+          }
+        }
+      } catch (e) {}
+
+      if (!updated && productId && reviewId) {
+        const reviewRef = doc(db, "products", productId, "reviews", reviewId);
+        await updateDoc(reviewRef, { status: "approved", updatedAt: serverTimestamp() });
+      }
+
+      setAdminReviews((prev) => prev.map(r => r.id === reviewId ? { ...r, status: "approved" } : r));
+      setActiveReviews((prev) => prev.map(r => r.id === reviewId ? { ...r, status: "approved" } : r));
+      toast.success("Review approved successfully!");
+    } catch (err: any) {
+      console.error("Failed to approve review:", err);
+      toast.error("Failed to approve review.");
+    }
+  };
+
+  const handleRejectReview = async (productId: string, reviewId: string) => {
+    try {
+      let updated = false;
+      try {
+        const res = await fetch("/api/admin/reviews/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId, reviewId, status: "rejected" })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            updated = true;
+          }
+        }
+      } catch (e) {}
+
+      if (!updated && productId && reviewId) {
+        const reviewRef = doc(db, "products", productId, "reviews", reviewId);
+        await updateDoc(reviewRef, { status: "rejected", updatedAt: serverTimestamp() });
+      }
+
+      setAdminReviews((prev) => prev.map(r => r.id === reviewId ? { ...r, status: "rejected" } : r));
+      setActiveReviews((prev) => prev.filter(r => r.id !== reviewId));
+      toast.success("Review rejected.");
+    } catch (err: any) {
+      console.error("Failed to reject review:", err);
+      toast.error("Failed to reject review.");
+    }
+  };
+
+  const handleDeleteReviewAdmin = async (productId: string, reviewId: string) => {
+    try {
+      let deleted = false;
+      try {
+        const res = await fetch("/api/admin/reviews", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId, reviewId })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            deleted = true;
+          }
+        }
+      } catch (e) {}
+
+      if (!deleted && productId && reviewId) {
+        const reviewRef = doc(db, "products", productId, "reviews", reviewId);
+        await deleteDoc(reviewRef);
+      }
+
+      setAdminReviews((prev) => prev.filter(r => r.id !== reviewId));
+      setActiveReviews((prev) => prev.filter(r => r.id !== reviewId));
+      toast.success("Review deleted successfully.");
+    } catch (err: any) {
+      console.error("Failed to delete review:", err);
+      toast.error("Failed to delete review.");
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin && isAdminOpen) {
+      fetchAdminReviews();
+    }
+  }, [isAdmin, isAdminOpen, fetchAdminReviews]);
+
   const [reviewUnsub, setReviewUnsub] = useState<(() => void) | null>(null);
   const fetchReviews = (productId: string) => {
-    if (isQuotaExceeded) return;
-    if (reviewUnsub) reviewUnsub();
-    setActiveReviews([]); 
-    
-    const q = query(
-      collection(db, "products", productId, "reviews"),
-      orderBy("createdAt", "desc"),
-      limit(20) // Adding limit to save quota
-    );
-    
-    const unsub = onSnapshot(q, (snapshot) => {
-      const reviews = snapshot.docs.map(
-        (doc) => ({ ...doc.data(), id: doc.id }) as Review,
-      );
-      setActiveReviews(reviews);
-    }, (err: any) => {
-      console.error("Failed to sync reviews", err);
-      if (err.code === "resource-exhausted" || err.message === "QUOTA_EXCEEDED") {
-        setIsQuotaExceeded(true);
+    if (!productId) {
+      setActiveReviews([]);
+      setIsReviewsLoading(false);
+      return;
+    }
+    if (reviewUnsub) {
+      try {
+        reviewUnsub();
+      } catch (e) {}
+      setReviewUnsub(null);
+    }
+
+    // Preserve initial reviews if already attached to selectedProduct
+    if (selectedProduct && selectedProduct.id === productId && Array.isArray(selectedProduct.reviews) && selectedProduct.reviews.length > 0) {
+      setActiveReviews(selectedProduct.reviews);
+      setIsReviewsLoading(false);
+    } else {
+      setActiveReviews([]);
+      setIsReviewsLoading(true);
+    }
+
+    // Safety timeout: Ensure loading state never hangs indefinitely (e.g. Firebase offline/slow on localhost)
+    const timeoutId = setTimeout(() => {
+      setIsReviewsLoading(false);
+    }, 2500);
+
+    // 1. Fetch via REST API fallback for instant resolution
+    fetch(`/api/reviews?productId=${encodeURIComponent(productId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.reviews)) {
+          if (data.reviews.length > 0) {
+            setActiveReviews(data.reviews);
+          }
+          setIsReviewsLoading(false);
+          clearTimeout(timeoutId);
+        }
+      })
+      .catch((err) => {
+        console.warn("API reviews fetch warning:", err);
+      });
+
+    // 2. Realtime listener via client Firestore if available
+    if (!isQuotaExceeded) {
+      try {
+        const q = query(
+          collection(db, "products", productId, "reviews"),
+          orderBy("createdAt", "desc"),
+          limit(20)
+        );
+        const unsub = onSnapshot(
+          q,
+          (snapshot) => {
+            clearTimeout(timeoutId);
+            const reviews = snapshot.docs.map((docSnap) => {
+              const d = docSnap.data();
+              return {
+                id: docSnap.id,
+                userId: d.userId || "",
+                userName: d.userName || d.name || "Customer",
+                userPhoto: d.userPhoto || null,
+                rating: Number(d.rating) || 5,
+                comment: d.comment || "",
+                images: Array.isArray(d.images) ? d.images : [],
+                status: (d.status as 'pending' | 'approved' | 'rejected') || 'approved',
+                createdAt: d.createdAt?.toDate
+                  ? d.createdAt.toDate().toISOString()
+                  : typeof d.createdAt === "string"
+                  ? d.createdAt
+                  : d.createdAt?.seconds
+                  ? new Date(d.createdAt.seconds * 1000).toISOString()
+                  : new Date().toISOString(),
+              } as Review;
+            });
+            setActiveReviews(reviews);
+            setIsReviewsLoading(false);
+          },
+          (err: any) => {
+            console.error("Failed to sync reviews", err);
+            setIsReviewsLoading(false);
+            if (err.code === "resource-exhausted" || err.message === "QUOTA_EXCEEDED") {
+              setIsQuotaExceeded(true);
+            }
+          }
+        );
+        setReviewUnsub(() => unsub);
+      } catch (e) {
+        console.error("Firestore onSnapshot error:", e);
+        setIsReviewsLoading(false);
       }
-    });
-    
-    setReviewUnsub(() => unsub);
+    }
   };
   useEffect(() => {
-    if (selectedProduct?.id && !isQuotaExceeded) {
+    if (selectedProduct?.id) {
       fetchReviews(selectedProduct.id);
+    } else {
+      setActiveReviews([]);
+      setIsReviewsLoading(false);
     }
-  }, [selectedProduct?.id, isQuotaExceeded]);
+  }, [selectedProduct?.id]);
   const openProductDetails = useCallback((product: Product) => {
     setSelectedProduct(product);
     setTempSelectedQty(1);
@@ -5745,6 +6203,9 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     message += `
 : ${window.location.origin}`;
     const encodedMessage = encodeURIComponent(message);
+    try {
+      trackContact("whatsapp", total);
+    } catch {}
     window.open(`https://wa.me/${whatsappNumber}?text=${encodedMessage}`, "_blank");
   };
   const handleLandingCheckout = async (e: FormEvent) => {
@@ -5823,10 +6284,39 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
             quantity: 1
           }
         ],
-        userId: user?.uid || "guest"
+        userId: user?.uid || "guest",
+        attribution: getStoredAttribution(),
       };
       const docRef = await addDoc(collection(db, "orders"), orderData);
       notifyAdminsOnNewOrder(docRef.id, total);
+
+      try {
+        axios.post("/api/confirm-order", orderData).catch(() => {});
+      } catch {}
+
+      try {
+        const landingItems = [
+          {
+            id: landingProduct.id,
+            name: landingProduct.name + pkgName,
+            price: subtotal,
+            quantity: 1,
+            category: landingProduct.category,
+            brand: landingProduct.brand,
+          },
+        ];
+        trackInitiateCheckout(landingItems, subtotal);
+        trackPurchase({
+          orderId,
+          value: total,
+          items: landingItems,
+          customerName: name,
+          customerPhone: phone,
+          email: user?.email || undefined,
+          district: landingDistrict,
+          userId: user?.uid || "guest",
+        });
+      } catch {}
       
       // Send automated confirmation SMS to customer's phone
       try {
@@ -6361,6 +6851,76 @@ const handleSaveQuickEdit = async () => {
       toast.error("পেমেন্ট মেথড আপডেট করতে সমস্যা হয়েছে।");
     }
   };
+  const [isSyncingCourier, setIsSyncingCourier] = useState(false);
+  const [syncingOrderId, setSyncingOrderId] = useState<string | null>(null);
+
+  const syncAllCourierStatuses = async (force = false) => {
+    if (isSyncingCourier) return;
+    setIsSyncingCourier(true);
+    try {
+      const headers = await getAdminAuthHeaders(true);
+      const res = await fetch("/api/admin/courier/sync-all", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ force, limit: 60 }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const s = data.summary || { total: 0, synced: 0, updated: 0, failed: 0 };
+        if (s.total === 0) {
+          toast("সিঙ্ক করার মতো কোনো অ্যাক্টিভ কুরিয়ার অর্ডার পাওয়া যায়নি।", { icon: "📦" });
+        } else {
+          toast.success(`কুরিয়ার সিঙ্ক সম্পন্ন! চেক: ${s.total}, আপডেট: ${s.updated}${s.failed > 0 ? `, ব্যর্থ: ${s.failed}` : ""}`);
+        }
+      } else {
+        toast.error(data.message || data.error || "কুরিয়ার স্ট্যাটাস সিঙ্ক করা যায়নি");
+      }
+    } catch (err: any) {
+      toast.error("কুরিয়ার সিঙ্ক ত্রুটি: " + (err.message || String(err)));
+    } finally {
+      setIsSyncingCourier(false);
+    }
+  };
+
+  const syncSingleCourierStatus = async (orderId: string) => {
+    if (!orderId) return;
+    setSyncingOrderId(orderId);
+    try {
+      const headers = await getAdminAuthHeaders(true);
+      const res = await fetch(`/api/admin/courier/sync/${encodeURIComponent(orderId)}`, {
+        method: "POST",
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.syncResult) {
+        const sr = data.syncResult;
+        toast.success(`অর্ডার #${String(orderId).slice(-6).toUpperCase()}: ${sr.courierLabel} (${sr.newOrderStatus})`);
+        if (selectedOrderForDetails?.id === orderId) {
+          setSelectedOrderForDetails((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  courierStatus: sr.rawCourierStatus,
+                  courierStatusLabel: sr.courierLabel,
+                  courierLastSyncedAt: sr.syncedAt,
+                  status: sr.newOrderStatus,
+                  ...(sr.service?.toLowerCase().includes("pathao")
+                    ? { pathaoStatus: sr.rawCourierStatus }
+                    : { steadfastStatus: sr.rawCourierStatus }),
+                }
+              : prev
+          );
+        }
+      } else {
+        toast.error(data.error || "স্ট্যাটাস সিঙ্ক করা যায়নি");
+      }
+    } catch (err: any) {
+      toast.error("কুরিয়ার সিঙ্ক ত্রুটি: " + (err.message || String(err)));
+    } finally {
+      setSyncingOrderId(null);
+    }
+  };
+
   const sendToCourier = (order: any) => {
     setCourierSelection({
       order,
@@ -6381,9 +6941,10 @@ const handleSaveQuickEdit = async () => {
           return;
         }
         toast.loading("Steadfast এ অর্ডার এন্ট্রি করা হচ্ছে...");
+        const headers = await getAdminAuthHeaders(true);
         const response = await fetch("/api/courier/steadfast/bulk", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             apiKey: adminKeys?.steadfastApiKey || "",
             secretKey: adminKeys?.steadfastSecretKey || "",
@@ -6404,14 +6965,23 @@ const handleSaveQuickEdit = async () => {
         if (data.success && data.processedOrders && data.processedOrders[0].success) {
            const result = data.processedOrders[0];
            await updateDoc(doc(db, "orders", order.id), {
-             status: "processing",
+             status: "shipped",
              courierTrackingId: result.trackingId,
+             trackingId: result.trackingId,
+             ...(result.consignmentId ? { courierConsignmentId: result.consignmentId } : {}),
              courierName: "Steadfast",
+             courierStatus: "in_review",
+             steadfastStatus: "in_review",
+             couriers: {
+               service: "Steadfast",
+               trackingId: result.trackingId,
+               ...(result.consignmentId ? { consignmentId: result.consignmentId } : {}),
+             },
              codAmount: finalCodAmount,
              updatedAt: serverTimestamp(),
            });
            if (order.userId) {
-             sendPushToUser(order.userId, "অর্ডার আপডেট", "আপনার অর্ডারের বর্তমান স্ট্যাটাস: processing (কুরিয়ারে পাঠানো হয়েছে)", "/profile");
+             sendPushToUser(order.userId, "অর্ডার আপডেট", "আপনার অর্ডারটি কুরিয়ারে পাঠানো হয়েছে (Steadfast)", "/profile");
            }
            toast.success("Successfully sent to Steadfast!");
            setIsCourierModalOpen(false);
@@ -6433,6 +7003,11 @@ const handleSaveQuickEdit = async () => {
         status: "shipped",
         courierName: service,
         trackingId: trackingId,
+        courierTrackingId: trackingId,
+        couriers: {
+          service,
+          trackingId,
+        },
         codAmount: finalCodAmount,
         updatedAt: serverTimestamp(),
       });
@@ -6517,13 +7092,13 @@ const handleSaveQuickEdit = async () => {
     document.body.removeChild(link);
   };
   useEffect(() => {
+    if (heroBanners.length <= 1 || isBannerHovered) return;
     const timer = setInterval(() => {
-      if (activeBanners.length > 0) {
-        setCurrentBanner((prev) => (prev + 1) % activeBanners.length);
-      }
+      setBannerDirection(1);
+      setCurrentBanner((prev) => (prev + 1) % heroBanners.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [activeBanners.length]);
+  }, [heroBanners.length, isBannerHovered]);
   const campaignParam = urlParams.get("campaign");
   const isCampaignLoading = !!campaignParam && !activeCampaign && campaigns.length === 0;
   if (landingProduct) {
@@ -7146,7 +7721,7 @@ const handleSaveQuickEdit = async () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col overflow-x-hidden relative">
+    <div className="min-h-screen flex flex-col overflow-x-hidden relative pb-16 md:pb-0">
       <React.Suspense fallback={null}>
       <Helmet>
         {selectedCategory && selectedCategory !== "all" && selectedCategory !== "All" ? (
@@ -7165,9 +7740,11 @@ const handleSaveQuickEdit = async () => {
             <link rel="canonical" href="https://ishopbd.com/" />
           </>
         )}
-        <link rel="icon" type="image/png" href="/icon-48x48.png?v=2026.1" />
-        <link rel="shortcut icon" href="/favicon.ico?v=2026.1" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png?v=2026.1" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="48x48" href="/icon-48x48.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
+        <link rel="shortcut icon" href="/favicon.ico" />
       </Helmet>
       <Toaster position="top-right" reverseOrder={false} />
       {/* Bulk Action Floating Bar */}
@@ -7477,100 +8054,89 @@ const handleSaveQuickEdit = async () => {
             </div>
           </div>
         </div>
-        {/* Mobile Animated Search Bar */}
-        <div className="px-4 pb-3 md:hidden">
-          <motion.div className="flex items-center gap-2" initial={false}>
-            {!isMobileSearchExpanded ? (
-              <motion.button
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                onClick={() => setIsMobileSearchExpanded(true)}
-                className="p-1 text-primary"
-              >
-                <Search size={28} />
-              </motion.button>
-            ) : (
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "100%", opacity: 1 }}
-                className="relative flex items-center w-full"
-              >
-                <input
-                  id="mobile-search-input"
-                  type="text"
-                  autoFocus
-                  placeholder={t("আপনার পছন্দের পণ্য খুঁজুন...", "Search your favorite items...")}
-                  className="w-full bg-[#f1f4f6] border border-primary rounded-lg py-2.5 px-4 pr-24 shadow-sm outline-none text-sm font-medium text-secondary font-sans"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onBlur={() => {
-                    setTimeout(() => {
-                      if (!searchInput) setIsMobileSearchExpanded(false);
-                    }, 200);
-                  }}
-                />
+        {/* Mobile Search Bar - Prominent & Touch-friendly */}
+        <div className="px-4 pb-2.5 md:hidden">
+          <div className="relative flex items-center w-full">
+            <div className="relative flex items-center w-full bg-white border border-gray-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 rounded-full shadow-2xs transition-all overflow-hidden">
+              <div className="pl-3.5 pr-2 text-gray-400 flex items-center pointer-events-none">
+                <Search size={18} />
+              </div>
+              <input
+                id="mobile-search-input"
+                type="text"
+                placeholder={t("আপনার কাঙ্ক্ষিত পণ্য খুঁজুন...", "Search desired products...")}
+                className="w-full bg-transparent py-2.5 pr-20 outline-none text-sm font-medium text-secondary font-sans placeholder:text-gray-400"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+              <div className="absolute right-2 top-0 bottom-0 flex items-center gap-1">
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput("")}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full transition-colors touch-manipulation"
+                    title="Clear search"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
                 {siteConfig?.isAiEnabled && adminKeys?.geminiApiKey && (
                   <button
                     type="button"
                     onClick={() => triggerImageSearch()}
-                    className="absolute right-10 text-gray-400 p-1 hover:text-primary"
+                    className="p-1.5 text-gray-400 hover:text-primary transition-colors touch-manipulation"
                     title="Search with Image (AI)"
                   >
                     <Camera size={18} />
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    setSearchInput("");
-                    setIsMobileSearchExpanded(false);
-                  }}
-                  className="absolute right-3 text-gray-400 p-1"
-                >
-                  <X size={18} />
-                </button>
+              </div>
+            </div>
 
-
-                {/* Mobile Search Preview Dropdown */}
-                {liveSearchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[300px] overflow-y-auto">
-                    <div className="p-3 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Search Results ({liveSearchResults.length})</span>
-                      <button onMouseDown={() => setSearchInput("")} className="text-[10px] font-black text-primary hover:underline">Clear</button>
-                    </div>
-                    <div className="divide-y divide-gray-50">
-                      {liveSearchResults.map((prod) => (
-                        <div
-                          key={prod.id}
-                          onMouseDown={() => {
-                            setSelectedProduct(prod);
-                            setIsProductDetailsOpen(true);
-                            setSearchInput("");
-                          }}
-                          className="p-3 hover:bg-gray-50 transition-all cursor-pointer flex items-center gap-3"
-                        >
-                          <img src={prod.image || "/logo.png"} alt={prod.name} className="w-10 h-10 object-cover rounded-lg border border-gray-100" />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-xs font-black text-secondary truncate">{prod.name}</h4>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs font-extrabold text-primary">৳{getProductPrice(prod, 1)}</span>
-                              {prod.oldPrice && (
-                                <span className="text-[10px] text-gray-400 line-through">৳{prod.oldPrice}</span>
-                              )}
-                            </div>
-                          </div>
+            {/* Mobile Search Preview Dropdown */}
+            {liveSearchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100] max-h-[320px] overflow-y-auto no-scrollbar">
+                <div className="p-3 bg-gray-50/80 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Search Results ({liveSearchResults.length})</span>
+                  <button onMouseDown={() => setSearchInput("")} className="text-[10px] font-black text-primary hover:underline touch-manipulation">Clear</button>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {liveSearchResults.map((prod) => (
+                    <div
+                      key={prod.id}
+                      onMouseDown={() => {
+                        setSelectedProduct(prod);
+                        setIsProductDetailsOpen(true);
+                        setSearchInput("");
+                      }}
+                      className="p-3 hover:bg-gray-50 transition-all cursor-pointer flex items-center gap-3 active:bg-gray-100 touch-manipulation"
+                    >
+                      <img src={prod.image || "/logo.png"} alt={prod.name} className="w-11 h-11 object-cover rounded-lg border border-gray-100 shrink-0 bg-gray-50" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold text-secondary truncate">{prod.name}</h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs font-extrabold text-primary">৳{getProductPrice(prod, 1)}</span>
+                          {prod.oldPrice && (
+                            <span className="text-[10px] text-gray-400 line-through">৳{prod.oldPrice}</span>
+                          )}
+                          {prod.stock <= 0 ? (
+                            <span className="text-[8px] bg-red-100 text-red-600 font-bold px-1.5 py-0.2 rounded">Out of Stock</span>
+                          ) : prod.isComingSoon ? (
+                            <span className="text-[8px] bg-amber-100 text-amber-600 font-bold px-1.5 py-0.2 rounded">Pre-Order</span>
+                          ) : null}
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </motion.div>
+                  ))}
+                </div>
+              </div>
             )}
-          </motion.div>
+          </div>
         </div>
-        {/* Mobile Category List (Scrollable like screenshot) */}
+        {/* Mobile Category List (Scrollable pills) */}
         {!activeCampaign && !campaignParam && (
-          <div className="border-t border-gray-100 md:hidden bg-cream overflow-hidden">
-            <div className="flex overflow-x-auto no-scrollbar py-3 px-4 gap-6 scroll-smooth">
+          <div className="border-t border-gray-200/60 md:hidden bg-cream overflow-hidden">
+            <div className="flex overflow-x-auto no-scrollbar py-2.5 px-4 gap-2 scroll-smooth">
               <button
                 onClick={() => {
                   setSelectedCategory("all");
@@ -7579,10 +8145,10 @@ const handleSaveQuickEdit = async () => {
                   setIsProductDetailsOpen(false);
                   setSelectedProduct(null);
                 }}
-                className={`cursor-pointer whitespace-nowrap text-base font-medium transition-all relative ${
+                className={`cursor-pointer whitespace-nowrap text-xs font-bold transition-all px-3.5 py-1.5 rounded-full touch-manipulation active:scale-95 ${
                   selectedCategory === "all"
-                    ? "text-primary"
-                    : "text-gray-500 hover:text-secondary"
+                    ? "bg-primary text-white shadow-sm shadow-primary/20"
+                    : "text-gray-600 bg-white border border-gray-200/80 hover:bg-gray-100"
                 }`}
               >
                 {t("সবগুলো", "All")}
@@ -7599,7 +8165,11 @@ const handleSaveQuickEdit = async () => {
                     setIsProductDetailsOpen(false);
                     setSelectedProduct(null);
                   }}
-                  className={`cursor-pointer whitespace-nowrap text-sm font-medium transition-all px-3 py-1 rounded-full ${selectedCategory === cat.name ? "bg-primary text-white shadow-sm" : "text-gray-600 bg-gray-100 hover:bg-gray-200"}`}
+                  className={`cursor-pointer whitespace-nowrap text-xs font-bold transition-all px-3.5 py-1.5 rounded-full touch-manipulation active:scale-95 ${
+                    selectedCategory === cat.name
+                      ? "bg-primary text-white shadow-sm shadow-primary/20"
+                      : "text-gray-600 bg-white border border-gray-200/80 hover:bg-gray-100"
+                  }`}
                 >
                   {tc(cat.name)}
                 </a>
@@ -7751,111 +8321,228 @@ const handleSaveQuickEdit = async () => {
           </div>
         </nav>
       )}
-      {/* 3. Hero Banner Slider */}
+      {/* 3. Hero Banner Slider (Natural Aspect Ratio, No Crop, No Zoom) */}
+      {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && !isBannersResolved && heroBanners.length === 0 && (
+        <section className="container mx-auto px-4 mt-4">
+          <div className="w-full aspect-[16/7] max-h-[420px] rounded-2xl md:rounded-3xl bg-gray-100 animate-pulse border border-gray-100" />
+        </section>
+      )}
       {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && heroBanners.length > 0 && (
         <section className="container mx-auto px-4 mt-4 relative group">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-stretch">
-            {/* Left Slider Column (3/4 width) */}
-            <div className="md:col-span-3 relative overflow-hidden shadow-2xl rounded-2xl md:rounded-3xl border border-gray-100 bg-white min-h-[220px] md:min-h-[380px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentBanner}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.5 }}
-                  className={`relative w-full h-full min-h-[220px] md:min-h-[380px] ${heroBanners[currentBanner % (heroBanners.length || 1)]?.linkedProductId ? "cursor-pointer" : ""}`}
-                  onClick={() => {
-                    const banner = heroBanners[currentBanner % (heroBanners.length || 1)];
-                    if (banner?.linkedProductId) {
-                      const product = products.find((p) => p.id === banner.linkedProductId);
-                      if (product) openProductDetails(product);
+          <div 
+            className="w-full relative overflow-hidden rounded-2xl md:rounded-3xl shadow-xl border border-gray-100 bg-gray-50 select-none"
+            onMouseEnter={() => setIsBannerHovered(true)}
+            onMouseLeave={() => setIsBannerHovered(false)}
+          >
+            {/* Natural In-Flow Sizer Image: Establishes container height with width: 100% and height: auto */}
+            {(() => {
+              const activeBanner = heroBanners[currentBanner % heroBanners.length] || heroBanners[0];
+              const rawActiveImg = activeBanner?.image || '';
+              if (!rawActiveImg) return null;
+              const isDefault = rawActiveImg.includes('ishopbd_hero_banner') || rawActiveImg.includes('unsplash');
+              const webpActiveImg = (rawActiveImg.endsWith('.png') || rawActiveImg.endsWith('.jpg') || rawActiveImg.endsWith('.jpeg'))
+                ? rawActiveImg.replace(/\.(png|jpg|jpeg)($|\?)/, '.webp$2')
+                : rawActiveImg;
+              return (
+                <div className="w-full h-auto pointer-events-none select-none invisible" aria-hidden="true">
+                  <picture className="w-full h-auto block">
+                    {isDefault && (
+                      <source
+                        type="image/webp"
+                        media="(max-width: 639px)"
+                        srcSet="/ishopbd_hero_banner-mobile.webp"
+                      />
+                    )}
+                    <source
+                      type="image/webp"
+                      srcSet={isDefault ? '/ishopbd_hero_banner.webp' : webpActiveImg}
+                    />
+                    <img 
+                      src={isDefault ? '/ishopbd_hero_banner.webp' : rawActiveImg}
+                      className="w-full h-auto block"
+                      style={{ width: '100%', height: 'auto', display: 'block' }}
+                      loading="eager"
+                      fetchPriority="high"
+                      decoding="async"
+                      width={1200}
+                      height={600}
+                      alt=""
+                    />
+                  </picture>
+                </div>
+              );
+            })()}
+
+            <AnimatePresence mode="popLayout" initial={false} custom={bannerDirection}>
+              <motion.div
+                key={currentBanner}
+                custom={bannerDirection}
+                variants={{
+                  enter: (direction: number) => ({
+                    x: direction > 0 ? "100%" : "-100%",
+                    opacity: 1,
+                  }),
+                  center: {
+                    x: "0%",
+                    opacity: 1,
+                    transition: {
+                      x: { type: "spring", stiffness: 300, damping: 30 },
+                      opacity: { duration: 0.2 },
+                    },
+                  },
+                  exit: (direction: number) => ({
+                    x: direction > 0 ? "-100%" : "100%",
+                    opacity: 1,
+                    transition: {
+                      x: { type: "spring", stiffness: 300, damping: 30 },
+                      opacity: { duration: 0.2 },
+                    },
+                  }),
+                }}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                drag={heroBanners.length > 1 ? "x" : false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(_, { offset, velocity }) => {
+                  const swipe = Math.abs(offset.x) > 50 || Math.abs(velocity.x) > 500;
+                  if (swipe) {
+                    if (offset.x > 0) {
+                      setBannerDirection(-1);
+                      setCurrentBanner((prev) => (prev - 1 + heroBanners.length) % heroBanners.length);
+                    } else {
+                      setBannerDirection(1);
+                      setCurrentBanner((prev) => (prev + 1) % heroBanners.length);
                     }
-                  }}
-                >
-                  <img 
-                    src={heroBanners[currentBanner % (heroBanners.length || 1)]?.image}
-                    className="w-full h-full object-cover block absolute inset-0"
-                    loading="eager"
-                    alt={`i SHOP BD ব্যানার ${currentBanner + 1}`}
-                  />
-                  <div className="absolute inset-0 flex items-center px-8 md:px-16 text-white bg-black/15">
-                    <div className="max-w-md">
-                      {(heroBanners[currentBanner % (heroBanners.length || 1)]?.title) && (
-                        <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                          className={`${heroBanners[currentBanner % (heroBanners.length || 1)]?.titleSize || 'text-2xl md:text-4xl'} mb-2 tracking-tight text-white drop-shadow-xl ${
-                            heroBanners[currentBanner % (heroBanners.length || 1)]?.titleFont || 'font-ador'
-                          } ${
-                            heroBanners[currentBanner % (heroBanners.length || 1)]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
-                          }`}>
-                          {heroBanners[currentBanner % (heroBanners.length || 1)]?.title}
-                        </motion.h2>
+                  }
+                }}
+                className={`absolute inset-0 w-full h-full flex items-center justify-center ${heroBanners[currentBanner % heroBanners.length]?.linkedProductId ? "cursor-pointer" : ""}`}
+                onClick={() => {
+                  const banner = heroBanners[currentBanner % heroBanners.length];
+                  if (banner?.linkedProductId) {
+                    const product = products.find((p) => p.id === banner.linkedProductId);
+                    if (product) openProductDetails(product);
+                  }
+                }}
+              >
+                {(() => {
+                  const banner = heroBanners[currentBanner % heroBanners.length] || heroBanners[0];
+                  const rawBannerImg = banner?.image || '';
+                  if (!rawBannerImg) return null;
+                  const isDefaultHero = rawBannerImg.includes('ishopbd_hero_banner') || rawBannerImg.includes('unsplash');
+                  const webpBannerImg = (rawBannerImg.endsWith('.png') || rawBannerImg.endsWith('.jpg') || rawBannerImg.endsWith('.jpeg'))
+                    ? rawBannerImg.replace(/\.(png|jpg|jpeg)($|\?)/, '.webp$2')
+                    : rawBannerImg;
+                  return (
+                    <picture className="w-full h-full block">
+                      {isDefaultHero && (
+                        <source
+                          type="image/webp"
+                          media="(max-width: 639px)"
+                          srcSet="/ishopbd_hero_banner-mobile.webp"
+                        />
                       )}
-                      {(heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitle) && (
-                        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-                          className={`${heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitleSize || 'text-sm md:text-base'} opacity-90 text-white/90 drop-shadow-lg ${
-                            heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitleFont || 'font-ador'
-                          }`}>
-                          {heroBanners[currentBanner % (heroBanners.length || 1)]?.subtitle}
-                        </motion.p>
+                      <source
+                        type="image/webp"
+                        srcSet={isDefaultHero ? '/ishopbd_hero_banner.webp' : webpBannerImg}
+                      />
+                      <img 
+                        src={isDefaultHero ? '/ishopbd_hero_banner.webp' : rawBannerImg}
+                        className="w-full h-full object-contain block"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        loading="eager"
+                        fetchPriority="high"
+                        decoding="async"
+                        width={1200}
+                        height={600}
+                        alt={`i SHOP BD ব্যানার ${(currentBanner % heroBanners.length) + 1}`}
+                        draggable={false}
+                      />
+                    </picture>
+                  );
+                })()}
+
+                {/* Banner Text Overlay (only if title or subtitle exists) */}
+                {(heroBanners[currentBanner % heroBanners.length]?.title || heroBanners[currentBanner % heroBanners.length]?.subtitle) && (
+                  <div className="absolute inset-0 flex items-center px-6 sm:px-10 md:px-16 text-white bg-black/15 pointer-events-none">
+                    <div className="max-w-md">
+                      {heroBanners[currentBanner % heroBanners.length]?.title && (
+                        <h2
+                          className={`${heroBanners[currentBanner % heroBanners.length]?.titleSize || 'text-xl sm:text-2xl md:text-4xl'} mb-1 sm:mb-2 tracking-tight text-white drop-shadow-xl ${
+                            heroBanners[currentBanner % heroBanners.length]?.titleFont || 'font-ador'
+                          } ${
+                            heroBanners[currentBanner % heroBanners.length]?.titleWeight === 'black' ? 'font-black' : 'font-bold'
+                          }`}
+                        >
+                          {heroBanners[currentBanner % heroBanners.length]?.title}
+                        </h2>
+                      )}
+                      {heroBanners[currentBanner % heroBanners.length]?.subtitle && (
+                        <p
+                          className={`${heroBanners[currentBanner % heroBanners.length]?.subtitleSize || 'text-xs sm:text-sm md:text-base'} opacity-90 text-white/90 drop-shadow-lg ${
+                            heroBanners[currentBanner % heroBanners.length]?.subtitleFont || 'font-ador'
+                          }`}
+                        >
+                          {heroBanners[currentBanner % heroBanners.length]?.subtitle}
+                        </p>
                       )}
                     </div>
                   </div>
-                </motion.div>
-              </AnimatePresence>
-              {heroBanners.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setCurrentBanner(prev => (prev - 1 + heroBanners.length) % heroBanners.length)}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
-                    <ChevronLeft size={24} />
-                  </button>
-                  <button
-                    onClick={() => setCurrentBanner(prev => (prev + 1) % heroBanners.length)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/30 hover:bg-white/50 rounded-full text-white backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10">
-                    <ChevronRight size={24} />
-                  </button>
-                </>
-              )}
-            </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
 
-            {/* Right Side Static Banners Column (1/4 width) */}
-            <div className="col-span-1 md:flex hidden flex-col sm:flex-row md:flex-col gap-4">
-              {/* Top Banner */}
-              <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b1 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
-                <div 
-                  className="w-full h-full relative cursor-pointer"
-                  onClick={() => {
-                    setIsAppDownloadModalOpen(true);
+            {/* Navigation Buttons */}
+            {heroBanners.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBannerDirection(-1);
+                    setCurrentBanner((prev) => (prev - 1 + heroBanners.length) % heroBanners.length);
                   }}
+                  className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 bg-black/35 hover:bg-black/60 rounded-full text-white backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center z-10 shadow-lg cursor-pointer active:scale-95"
+                  aria-label="Previous banner"
                 >
-                  <img 
-                    src={rightTopBanner?.image || '/default_right_top.png'} 
-                    className="w-full h-full object-cover group-hover/b1:scale-105 transition-transform duration-500 absolute inset-0"
-                    alt="Promo Banner Top"
-                  />
-                </div>
-              </div>
+                  <ChevronLeft size={22} className="md:w-6 md:h-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBannerDirection(1);
+                    setCurrentBanner((prev) => (prev + 1) % heroBanners.length);
+                  }}
+                  className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 bg-black/35 hover:bg-black/60 rounded-full text-white backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 flex items-center justify-center z-10 shadow-lg cursor-pointer active:scale-95"
+                  aria-label="Next banner"
+                >
+                  <ChevronRight size={22} className="md:w-6 md:h-6" />
+                </button>
 
-              {/* Bottom Banner (Flash Sale link) */}
-              <div className="flex-1 bg-white rounded-2xl md:rounded-3xl border border-gray-150 overflow-hidden shadow-md group/b2 hover:shadow-lg transition-all relative min-h-[120px] md:min-h-0">
-                <div 
-                  className="w-full h-full relative cursor-pointer"
-                  onClick={() => {
-                    const el = document.getElementById('flash-sale-section');
-                    if (el) {
-                      el.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                >
-                  <img 
-                    src={rightBottomBanner?.image || '/default_right_bottom.png'} 
-                    className="w-full h-full object-cover group-hover/b2:scale-105 transition-transform duration-500 absolute inset-0"
-                    alt="Flash Sale Banner"
-                  />
+                {/* Smooth Indicator Dots */}
+                <div className="absolute bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 md:gap-2 z-10 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-md pointer-events-auto">
+                  {heroBanners.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBannerDirection(idx > (currentBanner % heroBanners.length) ? 1 : -1);
+                        setCurrentBanner(idx);
+                      }}
+                      className={`transition-all rounded-full cursor-pointer ${
+                        idx === (currentBanner % heroBanners.length)
+                          ? "w-6 md:w-8 h-2 bg-primary shadow-sm"
+                          : "w-2 h-2 bg-white/60 hover:bg-white"
+                      }`}
+                      aria-label={`Go to slide ${idx + 1}`}
+                    />
+                  ))}
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </section>
       )}
@@ -7927,7 +8614,7 @@ const handleSaveQuickEdit = async () => {
           ) : isCheckoutOpen ? (
             <CheckoutModal {...{ ALL_DISTRICTS, availableRewardPoints, calculateTotal, checkoutAddress, checkoutDistrict, checkoutDistrictSearch, checkoutItems, checkoutName, checkoutNote, checkoutPhone, checkoutPhoneFocused, getProductPrice, handleConfirmOrder, isApplyingRewardPoints, isCheckoutDistrictOpen, isOrderProcessing, isOrderSuccess, openProductDetails, paymentMethod, setPaymentMethod, removeItem, savedProfiles, setCheckoutAddress, setCheckoutDistrict, setCheckoutDistrictSearch, setCheckoutName, setCheckoutNote, setCheckoutPhone, setCheckoutPhoneFocused, setIsApplyingRewardPoints, setIsCheckoutDistrictOpen, setIsCheckoutOpen, t, toBengaliNumber, updateQuantity, isCheckoutOpen, checkoutFirstName, setCheckoutFirstName, checkoutLastName, setCheckoutLastName, checkoutThana, setCheckoutThana, checkoutEmail, setCheckoutEmail, districtThanaMap, couponCode, setCouponCode, couponError, handleApplyCoupon, appliedCoupon, setAppliedCoupon, getDeliveryCharge, deliveryArea, setDeliveryArea, siteConfig }} />
           ) : isProductDetailsOpen && selectedProduct ? (
-            <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
+            <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, isReviewsLoading, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
           ) : (
             <ShopList {...{ brands, categories, activeCampaign, cleanLatex, setActiveCampaign, Home, selectedCategory, searchQuery, isTrendingFilterActive, newArrivals, t, ProductCard, openProductDetails, handleBuyNow, handleLikeProduct, likedProducts, featuredProducts, featuredScrollRef, handleFeaturedScroll, featuredScrollPercent, setFeaturedScrollPercent, handleFeaturedSliderChange, isProductDetailsOpen, flashSaleProducts, selectedBrand, minPrice, maxPrice, setIsTrendingFilterActive, setSelectedCategory, setSearchInput, setSelectedBrand, setMinPrice, setMaxPrice, setIsFilterMenuOpen, isFilterMenuOpen, sortBy, setSortBy, FilterMenuModal, isLoading, productsPerPage, ProductSkeleton, filteredProducts, PackageOpen, currentPage, setCurrentPage }} />
           )}
@@ -8286,7 +8973,7 @@ const handleSaveQuickEdit = async () => {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleDeleteAdmin, handleDeleteBanner, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
+        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminReviews, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, fetchAdminReviews, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleApproveReview, handleDeleteAdmin, handleDeleteBanner, handleDeleteReviewAdmin, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleRejectReview, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isAdminReviewsLoading, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isSyncingCourier, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, syncAllCourierStatuses, syncSingleCourierStatus, syncingOrderId, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
       </AnimatePresence>
       <AnimatePresence>
         {selectedOrderForDetails && (
@@ -8305,6 +8992,8 @@ const handleSaveQuickEdit = async () => {
             sendToCourier={sendToCourier}
             handleUpdateOrderStatus={handleUpdateOrderStatus}
             getProductPrice={getProductPrice}
+            syncSingleCourierStatus={syncSingleCourierStatus}
+            syncingOrderId={syncingOrderId}
           />
         )}
       </AnimatePresence>
@@ -8554,18 +9243,73 @@ const handleSaveQuickEdit = async () => {
       {!isAdmin && (
         <button
           onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-primary text-white rounded-2xl shadow-2xl shadow-primary/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[60] group overflow-hidden"
+          className="fixed bottom-20 md:bottom-6 right-4 md:right-6 w-14 h-14 md:w-16 md:h-16 bg-primary text-white rounded-2xl shadow-2xl shadow-primary/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[60] group overflow-hidden touch-manipulation"
+          title={t("কাস্টমার সাপোর্ট", "Customer Support")}
         >
           <motion.div
             initial={false}
             animate={{ y: [0, -4, 0] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            <Headset size={32} />
+            <Headset size={28} className="md:w-8 md:h-8" />
           </motion.div>
           <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
         </button>
       )}
+
+      {/* Mobile Bottom Sticky Navigation */}
+      <MobileBottomNav
+        cartCount={cartCount}
+        onHomeClick={() => {
+          setIsProductDetailsOpen(false);
+          setSelectedProduct(null);
+          setIsAdminOpen(false);
+          setActiveCampaign(null);
+          setSelectedCategory("all");
+          setSelectedSubcategory("all");
+          setSearchInput("");
+          setSearchQuery("");
+          setIsChatOpen(false);
+          setIsProfileOpen(false);
+          setIsCheckoutOpen(false);
+          setIsNotifOpen(false);
+          setCurrentPage(1);
+          window.history.pushState({}, "", "/");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onCategoryClick={() => setIsMobileCategoryDrawerOpen(true)}
+        onTrackClick={() => setIsTrackingOpen(true)}
+        onSupportClick={() => setIsChatOpen(true)}
+        onCartClick={() => setIsCartDrawerOpen(true)}
+        isProductDetailsOpen={isProductDetailsOpen}
+        isCheckoutOpen={isCheckoutOpen}
+        t={t}
+      />
+
+      {/* Mobile Category Drawer */}
+      <AnimatePresence>
+        {isMobileCategoryDrawerOpen && (
+          <MobileCategoryDrawer
+            isOpen={isMobileCategoryDrawerOpen}
+            onClose={() => setIsMobileCategoryDrawerOpen(false)}
+            categories={categories}
+            selectedCategory={selectedCategory}
+            selectedSubcategory={selectedSubcategory}
+            onSelectCategory={(catName: string, subName?: string) => {
+              setSelectedCategory(catName);
+              setSelectedSubcategory(subName || "all");
+              setCurrentPage(1);
+              setIsProductDetailsOpen(false);
+              setSelectedProduct(null);
+              setIsAdminOpen(false);
+              setIsCheckoutOpen(false);
+              document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+            }}
+            t={t}
+            tc={tc}
+          />
+        )}
+      </AnimatePresence>
       {/* AI Chat Support Modal */}
       <AnimatePresence>
         {isChatOpen && <ChatModal {...{ setIsChatOpen, chatMessages, user, sessionId, handleToggleReaction, setChatReplyingTo, chatEndRef, chatReplyingTo, handleSendMessage, handleImageUpload, chatMessage, setChatMessage, handleVoiceToggle, isRecording, isChatOpen }} />}

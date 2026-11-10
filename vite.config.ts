@@ -26,11 +26,17 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/browser-image-compression') || id.includes('node_modules/html-to-image')) {
               return 'heavy-tools';
             }
-            if (id.includes('node_modules/firebase/storage')) {
+            if (id.includes('node_modules/firebase/storage') || id.includes('@firebase/storage')) {
               return 'firebase-storage';
             }
-            if (id.includes('node_modules/firebase/')) {
-              return 'firebase-vendor';
+            if (id.includes('node_modules/firebase/auth') || id.includes('@firebase/auth')) {
+              return 'firebase-auth';
+            }
+            if (id.includes('node_modules/firebase/firestore') || id.includes('@firebase/firestore')) {
+              return 'firebase-firestore';
+            }
+            if (id.includes('node_modules/firebase/') || id.includes('@firebase/')) {
+              return 'firebase-app';
             }
             if (id.includes('node_modules/lucide-react/')) {
               return 'lucide-icons';

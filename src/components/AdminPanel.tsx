@@ -1,17 +1,17 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, MessageCircle, MapPin, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Star, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle, Settings, Package, RotateCcw, Activity, DollarSign, ArrowUpRight, Percent, Filter, Layers, BarChart2 } from 'lucide-react';
+import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, MessageCircle, MapPin, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Star, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle, Settings, Package, RotateCcw, Activity, DollarSign, ArrowUpRight, Percent, Filter, Layers, BarChart2, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import POS from './POS';
 import ProfitAnalysis from './ProfitAnalysis';
+import { MarketingSettings } from './MarketingSettings';
 import { db } from '../lib/firebase';
 import { collection, doc, getDocs, updateDoc, deleteDoc, query, limit, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { getProductSlug, getProductPath, formatEnglishDateTime } from '../utils/helpers';
 
 export interface AdminPanelProps {
   isAdminOpen: any;
-  ProfitAnalysis?: any;
   activeBanners: any;
   activeProductDropdown: any;
   addVariant: any;
@@ -22,8 +22,14 @@ export interface AdminPanelProps {
   adminOrderAreaFilter: any;
   adminOrdersLimit: any;
   adminReplyingTo: any;
+  adminReviews?: any;
   adminStartDate: any;
   adminTab: any;
+  fetchAdminReviews?: any;
+  handleApproveReview?: any;
+  handleRejectReview?: any;
+  handleDeleteReviewAdmin?: any;
+  isAdminReviewsLoading?: any;
   adminViewMode: any;
   allOrderPhones: any;
   blacklist: any;
@@ -174,6 +180,10 @@ export interface AdminPanelProps {
   showOnlyPreOrders: any;
   siteConfig: any;
   supportChats: any;
+  isSyncingCourier?: boolean;
+  syncAllCourierStatuses?: (force?: boolean) => void;
+  syncSingleCourierStatus?: (orderId: string) => void;
+  syncingOrderId?: string | null;
   toggleBlacklist: any;
   togglePublishStatus: any;
   userList: any;
@@ -200,7 +210,6 @@ export const BULK_SMS_PAGE_SIZE = 50;
 export default function AdminPanel(props: AdminPanelProps) {
   const {
     isAdminOpen,
-    ProfitAnalysis,
     activeBanners,
     activeProductDropdown,
     addVariant,
@@ -211,6 +220,7 @@ export default function AdminPanel(props: AdminPanelProps) {
     adminOrderAreaFilter,
     adminOrdersLimit,
     adminReplyingTo,
+    adminReviews = [],
     adminStartDate,
     adminTab,
     adminViewMode,
@@ -242,6 +252,7 @@ export default function AdminPanel(props: AdminPanelProps) {
     expenses,
     exportDropdownRef,
     exportOrdersToCSV,
+    fetchAdminReviews,
     filteredOrders,
     formatOrderGroupDate,
     getCustomerStats,
@@ -253,12 +264,15 @@ export default function AdminPanel(props: AdminPanelProps) {
     handleAdminReply,
     handleAdminVoiceToggle,
     handleApproveRefund,
+    handleApproveReview,
     handleDeleteAdmin,
     handleDeleteBanner,
+    handleDeleteReviewAdmin,
     handleDuplicateProduct,
     handleEditUserBalance,
     handlePrintInvoice,
     handleQuickEditOrderItems,
+    handleRejectReview,
     handleSaveBanner,
     handleSaveQuickEdit,
     handleSaveSiteConfig,
@@ -278,6 +292,7 @@ export default function AdminPanel(props: AdminPanelProps) {
     individualSmsMessage,
     individualSmsOrder,
     isAdminRecording,
+    isAdminReviewsLoading = false,
     isExportDropdownOpen,
     isMasterAdmin,
     isSendingBulkNotif,
@@ -363,6 +378,10 @@ export default function AdminPanel(props: AdminPanelProps) {
     showOnlyPreOrders,
     siteConfig,
     supportChats,
+    isSyncingCourier = false,
+    syncAllCourierStatuses,
+    syncSingleCourierStatus,
+    syncingOrderId = null,
     toggleBlacklist,
     togglePublishStatus,
     userList,
@@ -378,6 +397,14 @@ export default function AdminPanel(props: AdminPanelProps) {
   const [reportProductSearch, setReportProductSearch] = React.useState("");
   const [selectedReportProductId, setSelectedReportProductId] = React.useState<string | null>(null);
   const [reportProductPeriod, setReportProductPeriod] = React.useState<"all" | "this_month" | "last_month" | "this_year">("all");
+
+  const [reviewStatusFilter, setReviewStatusFilter] = React.useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [reviewSearchQuery, setReviewSearchQuery] = React.useState("");
+  const [reviewRatingFilter, setReviewRatingFilter] = React.useState<number | "all">("all");
+  const [reviewHasPhotosOnly, setReviewHasPhotosOnly] = React.useState(false);
+  const [previewReviewImage, setPreviewReviewImage] = React.useState<string | null>(null);
+  const [reviewActionLoadingId, setReviewActionLoadingId] = React.useState<string | null>(null);
+  const [deleteConfirmReview, setDeleteConfirmReview] = React.useState<{ productId: string; reviewId: string; userName: string } | null>(null);
 
   const getEffectiveStock = React.useCallback((p: any): number => {
     if (!p) return 0;
@@ -542,6 +569,21 @@ export default function AdminPanel(props: AdminPanelProps) {
                         >
                           <MessageSquare size={18} /> Bulk SMS
                         </button>
+                        <button
+                          onClick={() => setAdminTab("reviews")}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "reviews" ? "bg-amber-500 text-white shadow-md shadow-amber-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                        >
+                          <Star size={18} /> Reviews {(() => {
+                            const pendingCount = (adminReviews || []).filter((r: any) => r.status === "pending").length;
+                            return pendingCount > 0 ? (
+                              <span className="ml-auto bg-amber-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                                {pendingCount} Pending
+                              </span>
+                            ) : (
+                              `(${(adminReviews || []).length})`
+                            );
+                          })()}
+                        </button>
                         {isMasterAdmin && (
                           <button
                             onClick={() => setAdminTab("profit_analysis")}
@@ -588,6 +630,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                           { id: "users", icon: Users, label: "Users" },
                           { id: "campaigns", icon: Gift, label: "Campaigns" },
                           { id: "bulk_sms", icon: MessageSquare, label: "Bulk SMS" },
+                          { id: "reviews", icon: Star, label: `Reviews (${(adminReviews || []).filter((r: any) => r.status === "pending").length > 0 ? `${(adminReviews || []).filter((r: any) => r.status === "pending").length} Pending` : (adminReviews || []).length})` },
                           ...(isMasterAdmin ? [
                             { id: "profit_analysis", icon: TrendingUp, label: "Accounts" },
                           ] : []),
@@ -809,6 +852,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                             )}
                           </div>
                         </div>
+                        {syncAllCourierStatuses && (
+                          <button
+                            type="button"
+                            disabled={isSyncingCourier}
+                            onClick={() => syncAllCourierStatuses(false)}
+                            title="Steadfast ও Pathao থেকে সব অ্যাক্টিভ অর্ডারের ডেলিভারি স্ট্যাটাস সিঙ্ক করুন"
+                            className="bg-sky-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-sky-700 transition-all shadow-lg shadow-sky-600/20 disabled:opacity-60 cursor-pointer"
+                          >
+                            <RefreshCcw size={15} className={isSyncingCourier ? "animate-spin" : ""} />
+                            {isSyncingCourier ? "Syncing..." : "Sync Courier"}
+                          </button>
+                        )}
                         <div className="relative font-sans" ref={exportDropdownRef}>
                           <button
                             onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
@@ -894,225 +949,217 @@ export default function AdminPanel(props: AdminPanelProps) {
                               )}
                               <div
                                 onClick={() => setSelectedOrderForDetails(order)}
-                                className={`rounded-xl shadow-sm border p-2 flex gap-2.5 cursor-pointer active:scale-[0.98] transition-transform ${
+                                className={`rounded-2xl shadow-xs border p-2.5 flex flex-col gap-2.5 cursor-pointer active:scale-[0.99] transition-all ${
                                   order.status === "pending"
-                                    ? "bg-purple-100/40 border-purple-200/30 hover:bg-purple-100/60"
+                                    ? "bg-[#faf5ff] border-[#ede9fe] hover:bg-purple-50/80"
                                     : order.status === "confirmed"
-                                    ? "bg-blue-100/40 border-blue-200/30 hover:bg-blue-100/60"
+                                    ? "bg-blue-50/40 border-blue-100 hover:bg-blue-50/70"
                                     : order.status === "shipped"
-                                    ? "bg-indigo-100/40 border-indigo-200/30 hover:bg-indigo-100/60"
+                                    ? "bg-indigo-50/40 border-indigo-100 hover:bg-indigo-50/70"
                                     : order.status === "delivered"
-                                    ? "bg-emerald-100/50 border-emerald-200/40 hover:bg-emerald-100/70"
+                                    ? "bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/70"
                                     : order.status === "returned"
-                                    ? "bg-amber-100/55 border-amber-200/45 hover:bg-amber-100/75"
+                                    ? "bg-amber-50/40 border-amber-100 hover:bg-amber-50/70"
                                     : order.status === "cancelled"
-                                    ? "bg-red-100/50 border-red-200/40 hover:bg-red-100/70"
+                                    ? "bg-rose-50/40 border-rose-100 hover:bg-rose-50/70"
                                     : "bg-white border-gray-200 hover:bg-gray-50/50"
                                 }`}
                               >
-                          <div className="relative w-[88px] h-[88px] rounded-lg overflow-hidden border border-gray-100 bg-gray-50 shrink-0 self-center">
-                            <img loading="lazy"
-                              src={order.items[0]?.variantImage || order.items[0]?.product?.image}
-                              className="w-full h-full object-cover"
-                              alt=""
-                            />
-                            <div 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectOrder(e, order.id);
-                              }} 
-                              className="absolute top-1.5 left-1.5 bg-white rounded flex items-center justify-center p-[2px] cursor-pointer shadow-sm"
-                            >
-                              <input 
-                                type="checkbox" 
-                                className="w-[14px] h-[14px] rounded-[2px] border-gray-300 text-primary focus:ring-primary pointer-events-none"
-                                checked={selectedOrderIds.includes(order.id)}
-                                onChange={() => {}}
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col flex-1 min-w-0 justify-between h-[88px]">
-                            <div className="flex items-center gap-2 w-full min-w-0 group cursor-pointer" onClick={(e) => { e.stopPropagation(); handleQuickEditOrderItems(order); }}>
-                                <span className="text-[12px] font-bold text-secondary truncate">
-                                  {order.items.map((i:any) => `${i.product?.name || 'Unknown'} x${i.quantity}`).join(', ')}
-                                </span>
-                                <button 
-                                  className="text-secondary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                  title="Edit Order Items"
-                                >
-                                  <Edit3 size={12} />
-                                </button>
-                              </div>
-                            <span className="text-[13px] font-bold text-red-600 truncate">
-                              {order.customerName}
-                            </span>
-                            
-                            <div className="flex flex-col gap-2 mt-1.5" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[12px] font-extrabold text-slate-700 tracking-tight">
-                                    {order.customerPhone}
-                                  </span>
+                                {/* Top Section: Thumbnail on Left, Product & Customer Details on Right */}
+                                <div className="flex gap-2.5 items-start">
+                                  {/* Thumbnail with Checkbox Overlay */}
+                                  <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200/60 bg-white shrink-0 self-start">
+                                    <img
+                                      loading="lazy"
+                                      src={order.items[0]?.variantImage || order.items[0]?.product?.image || "/logo.png"}
+                                      className="w-full h-full object-cover"
+                                      alt=""
+                                    />
+                                    <div 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSelectOrder(e, order.id);
+                                      }} 
+                                      className="absolute top-1.5 left-1.5 bg-white/95 rounded-[6px] w-[22px] h-[22px] flex items-center justify-center border border-gray-300 shadow-2xs cursor-pointer hover:border-primary transition-colors"
+                                    >
+                                      <input 
+                                        type="checkbox" 
+                                        className="w-3.5 h-3.5 rounded-[3px] border-gray-300 text-primary focus:ring-primary pointer-events-none cursor-pointer"
+                                        checked={selectedOrderIds.includes(order.id)}
+                                        onChange={() => {}}
+                                      />
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Right Column: Title on Top, Customer Name/Phone & Badges/Actions below */}
+                                  <div className="flex flex-col flex-1 min-w-0 justify-between min-h-[80px]">
+                                    {/* Product Title */}
+                                    <div
+                                      className="flex items-center gap-1.5 w-full min-w-0 group cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleQuickEditOrderItems(order);
+                                      }}
+                                    >
+                                      <span className="text-[13px] font-bold text-[#1e1b4b] truncate leading-tight group-hover:text-primary transition-colors">
+                                        {order.items.map((i: any) => `${i.product?.name || i.name || 'Unknown'} x${i.quantity}`).join(', ')}
+                                      </span>
+                                    </div>
+
+                                    {/* Customer Name & Phone + Badges & Actions */}
+                                    <div className="flex items-center justify-between gap-1.5 min-w-0 mt-1">
+                                      <div className="flex flex-col min-w-0 flex-1">
+                                        <span className="text-[13px] font-bold text-[#e11d48] truncate leading-tight" title={order.customerName}>
+                                          {order.customerName || "Customer"}
+                                        </span>
+                                        <span className="text-[12.5px] font-extrabold text-[#1e293b] leading-tight tracking-tight mt-0.5 select-all">
+                                          {order.customerPhone || "No phone"}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        {(() => {
+                                          const stats = getCustomerStats(order.customerPhone);
+                                          return (
+                                            <>
+                                              <span className="text-[10px] font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-full border border-slate-200/80 shadow-2xs whitespace-nowrap">
+                                                Total: {stats.total || (order.isPreOrder ? 1 : 1)}
+                                              </span>
+                                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shadow-2xs whitespace-nowrap">
+                                                SCS: {stats.delivered || 0}
+                                              </span>
+                                            </>
+                                          );
+                                        })()}
+
+                                        {order.customerPhone && (
+                                          <a 
+                                            href={`https://wa.me/880${order.customerPhone.startsWith('0') ? order.customerPhone.substring(1) : order.customerPhone}`} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="w-7 h-7 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all border border-emerald-200/70 shadow-2xs"
+                                            title="Chat on WhatsApp"
+                                          >
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                            </svg>
+                                          </a>
+                                        )}
+                                        {order.customerPhone && (
+                                          <a 
+                                            href={`tel:${order.customerPhone}`} 
+                                            className="w-7 h-7 flex items-center justify-center bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 hover:scale-105 active:scale-95 transition-all border border-teal-200/70 shadow-2xs"
+                                            title="Call"
+                                          >
+                                            <Phone size={13} />
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Bottom Section: Full Width Address + Status + Payment */}
+                                <div className="flex items-center gap-2 w-full pt-0.5" onClick={(e) => e.stopPropagation()}>
+                                  <div
+                                    className="bg-white flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600 font-medium truncate shadow-2xs"
+                                    title={order.address}
+                                  >
+                                    {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'No address found'}
+                                  </div>
+                                  <div className="shrink-0">
+                                    <select
+                                      value={order.status}
+                                      onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                                      className={`text-xs font-bold border rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 shadow-2xs cursor-pointer ${
+                                        order.status === 'pending'
+                                          ? 'bg-purple-50 text-purple-700 border-purple-200 focus:ring-purple-300'
+                                          : order.status === 'confirmed'
+                                          ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-300'
+                                          : order.status === 'shipped'
+                                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-indigo-300'
+                                          : order.status === 'delivered'
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-300'
+                                          : order.status === 'returned'
+                                          ? 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-300'
+                                          : order.status === 'cancelled'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-300'
+                                          : 'bg-white border-gray-200 text-secondary focus:ring-primary'
+                                      }`}
+                                    >
+                                      <option value="pending" className="bg-white text-gray-800 font-semibold">Pending</option>
+                                      <option value="confirmed" className="bg-white text-gray-800 font-semibold">Confirmed</option>
+                                      <option value="shipped" className="bg-white text-gray-800 font-semibold">Shipped</option>
+                                      <option value="delivered" className="bg-white text-gray-800 font-semibold">Delivered</option>
+                                      <option value="returned" className="bg-white text-gray-800 font-semibold">Returned</option>
+                                      <option value="cancelled" className="bg-white text-gray-800 font-semibold">Cancelled</option>
+                                    </select>
+                                  </div>
+                                    <div className="shrink-0">
+                                      <select
+                                        value={order.paymentMethod || "CASH"}
+                                        onChange={(e) => handleUpdatePaymentMethod(order.id, e.target.value)}
+                                        className={`text-xs font-bold px-2.5 py-1.5 rounded-xl uppercase border cursor-pointer outline-none shadow-2xs ${
+                                          (order.paymentMethod || "CASH").toUpperCase() === "CASH" || (order.paymentMethod || "CASH").toUpperCase() === "COD"
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-200"
+                                            : (order.paymentMethod || "CASH").toUpperCase() === "BKASH"
+                                            ? "bg-pink-50 text-pink-700 border-pink-200 focus:ring-pink-200"
+                                            : (order.paymentMethod || "CASH").toUpperCase() === "NAGAD"
+                                            ? "bg-orange-50 text-orange-700 border-orange-200 focus:ring-orange-200"
+                                            : (order.paymentMethod || "CASH").toUpperCase() === "DUE"
+                                            ? "bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-200"
+                                            : "bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-200"
+                                        }`}
+                                      >
+                                        <option value="CASH">CASH</option>
+                                        <option value="BKASH">BKASH</option>
+                                        <option value="NAGAD">NAGAD</option>
+                                        <option value="DUE">DUE</option>
+                                        <option value="BANK">BANK</option>
+                                        <option value="ONLINE">ONLINE</option>
+                                        <option value="N/A">N/A</option>
+                                      </select>
+                                    </div>
+                                  </div>
                                   {(() => {
-                                    const stats = getCustomerStats(order.customerPhone);
-                                    if(stats.total === 0) return null;
+                                    const cTrack = order.couriers?.trackingId || order.courierTrackingId || order.trackingId || order.courierConsignmentId;
+                                    const cStatus = order.courierStatus || order.steadfastStatus || order.pathaoStatus;
+                                    const cLabel = order.courierStatusLabel || cStatus;
+                                    if (!cTrack && !cStatus) return null;
+                                    const lower = String(cStatus || "").toLowerCase();
+                                    const badgeCls = lower.includes("delivered")
+                                      ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                      : lower.includes("cancel") || lower.includes("return") || lower.includes("fail")
+                                      ? "bg-rose-100 text-rose-700 border-rose-200"
+                                      : lower.includes("hold")
+                                      ? "bg-amber-100 text-amber-700 border-amber-200"
+                                      : "bg-sky-100 text-sky-700 border-sky-200";
                                     return (
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-1.5 py-[2px] rounded-full border border-slate-200">Total: {stats.total}</span>
-                                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-[2px] rounded-full border border-emerald-200">Success: {stats.delivered}</span>
+                                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100/80" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border truncate ${badgeCls}`}>
+                                            <Truck size={10} className="shrink-0" />
+                                            <span>{order.courierName || order.couriers?.service || "Courier"}{cLabel ? `: ${cLabel}` : ""}</span>
+                                          </span>
+                                          {cTrack && (
+                                            <span className="text-[10px] font-mono text-gray-500 truncate">{cTrack}</span>
+                                          )}
+                                        </div>
+                                        {syncSingleCourierStatus && cTrack && (
+                                          <button
+                                            type="button"
+                                            disabled={syncingOrderId === order.id}
+                                            onClick={() => syncSingleCourierStatus(order.id)}
+                                            className="p-1 rounded-lg bg-white border border-gray-200 text-sky-600 hover:bg-sky-50 shrink-0"
+                                            title="Sync Live Courier Status"
+                                          >
+                                            <RefreshCcw size={11} className={syncingOrderId === order.id ? "animate-spin" : ""} />
+                                          </button>
+                                        )}
                                       </div>
                                     );
                                   })()}
                                 </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {order.customerPhone && (
-                                    <a 
-                                      href={`https://wa.me/880${order.customerPhone.startsWith('0') ? order.customerPhone.substring(1) : order.customerPhone}`} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      className="w-7 h-7 flex items-center justify-center bg-green-50 text-green-600 rounded-[8px] hover:bg-green-100 hover:scale-105 active:scale-95 transition-all border border-green-200/60 shadow-sm"
-                                      title="Chat on WhatsApp"
-                                    >
-                                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                                      </svg>
-                                    </a>
-                                  )}
-                                <a 
-                                  href={`tel:${order.customerPhone}`} 
-                                  className="w-7 h-7 flex items-center justify-center bg-teal-50 text-teal-600 rounded-[8px] hover:bg-teal-100 hover:scale-105 active:scale-95 transition-all border border-teal-200/60 shadow-sm"
-                                  title="Action"
-                                >
-                                  <Phone size={13} />
-                                </a>
-                                <div className="relative">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setIndividualSmsOrder(individualSmsOrder?.id === order.id ? null : order);
-                                      setIndividualSmsMessage("");
-                                    }}
-                                    className={`w-7 h-7 flex items-center justify-center rounded-[8px] transition-all hover:scale-105 active:scale-95 border shadow-sm ${individualSmsOrder?.id === order.id ? 'bg-primary text-white border-primary shadow-primary/30' : 'bg-blue-50 text-blue-600 border-blue-200/60 hover:bg-blue-100'}`}
-                                    title="Send SMS"
-                                  >
-                                    <MessageSquare size={13} />
-                                  </button>
-                                  <AnimatePresence>
-                                    {individualSmsOrder?.id === order.id && (
-                                      <motion.div
-                                        initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                        className="absolute top-[130%] right-0 bg-white rounded-2xl w-64 shadow-[0_15px_40px_-10px_rgba(0,0,0,0.3)] border border-gray-100 z-[200] origin-top-right cursor-default"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <div className="absolute -top-2 right-3 w-4 h-4 bg-white border-t border-l border-gray-100 transform rotate-45"></div>
-                                        <div className="relative p-4 bg-white rounded-2xl z-10">
-                                          <div className="flex justify-between items-center mb-2">
-                                            <p className="text-[10px] text-gray-500">Recipient: <span className="font-bold text-gray-800">{order.customerPhone || order.phone}</span></p>
-                                            <button onClick={() => setIndividualSmsOrder(null)} className="text-gray-400 hover:text-red-500">
-                                              <X size={14} />
-                                            </button>
-                                          </div>
-                                          <textarea
-                                            value={individualSmsMessage}
-                                            onChange={(e) => setIndividualSmsMessage(e.target.value)}
-                                            placeholder="Write your comment..."
-                                            className="w-full h-24 p-2 border rounded-xl text-xs focus:ring-2 focus:ring-primary focus:border-transparent resize-none mb-3"
-                                          ></textarea>
-                                          <div className="flex justify-center">
-                                            <button
-                                              onClick={handleSendIndividualSms}
-                                              disabled={isSendingIndividualSms || !individualSmsMessage.trim()}
-                                              className="bg-green-500 text-white px-6 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-600 disabled:opacity-50 transition-all active:scale-95 w-full shadow-sm shadow-green-500/20"
-                                            >
-                                              {isSendingIndividualSms ? (
-                                                "Sending..."
-                                              ) : (
-                                                <>
-                                                  <MessageSquare size={14} /> Send SMS
-                                                </>
-                                              )}
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
-                                <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setCompletedOrderReceipt(order);
-                                    }}
-                                    className="hidden md:flex text-sky-600 bg-sky-50 hover:bg-sky-100 w-7 h-7 shrink-0 justify-center items-center rounded-[8px] transition-all hover:scale-105 shadow-sm active:scale-95 border border-sky-200/60"
-                                    title="View Receipt"
-                                  >
-                                    <Receipt size={13} />
-                                  </button>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center justify-between gap-2 w-full mt-1">
-                              <div className="bg-white flex-1 px-2.5 py-[5px] rounded-lg border border-gray-200 text-[11px] text-gray-600 font-medium truncate shadow-sm" title={order.address}>
-                                {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'No address found'}
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <select
-                                  value={order.status}
-                                  onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                                  className={`text-[10px] font-bold border rounded-lg px-2 py-[5px] outline-none focus:ring-2 shadow-sm cursor-pointer ${
-                                    order.status === 'pending'
-                                      ? 'bg-purple-50 text-purple-700 border-purple-200 focus:ring-purple-300'
-                                      : order.status === 'confirmed'
-                                      ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-300'
-                                      : order.status === 'shipped'
-                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-indigo-300'
-                                      : order.status === 'delivered'
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-300'
-                                      : order.status === 'returned'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-300'
-                                      : order.status === 'cancelled'
-                                      ? 'bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-300'
-                                      : 'bg-white border-gray-200 text-secondary focus:ring-primary'
-                                  }`}
-                                >
-                                  <option value="pending" className="bg-white text-gray-800 font-semibold">Pending</option>
-                                  <option value="confirmed" className="bg-white text-gray-800 font-semibold">Confirmed</option>
-                                  <option value="shipped" className="bg-white text-gray-800 font-semibold">Shipped</option>
-                                  <option value="delivered" className="bg-white text-gray-800 font-semibold">Delivered</option>
-                                  <option value="returned" className="bg-white text-gray-800 font-semibold">Returned</option>
-                                  <option value="cancelled" className="bg-white text-gray-800 font-semibold">Cancelled</option>
-                                </select>
-                                <select
-                                  value={order.paymentMethod || "CASH"}
-                                  onChange={(e) => handleUpdatePaymentMethod(order.id, e.target.value)}
-                                  className={`text-[10px] font-bold px-2 py-[5px] rounded-lg uppercase border cursor-pointer outline-none shadow-sm ${
-                                    (order.paymentMethod || "CASH").toUpperCase() === "CASH" || (order.paymentMethod || "CASH").toUpperCase() === "COD"
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-200"
-                                      : (order.paymentMethod || "CASH").toUpperCase() === "BKASH"
-                                      ? "bg-pink-50 text-pink-700 border-pink-200 focus:ring-pink-200"
-                                      : (order.paymentMethod || "CASH").toUpperCase() === "NAGAD"
-                                      ? "bg-orange-50 text-orange-700 border-orange-200 focus:ring-orange-200"
-                                      : (order.paymentMethod || "CASH").toUpperCase() === "DUE"
-                                      ? "bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-200"
-                                  }`}
-                                >
-                                  <option value="CASH">CASH</option>
-                                  <option value="BKASH">BKASH</option>
-                                  <option value="NAGAD">NAGAD</option>
-                                  <option value="DUE">DUE</option>
-                                  <option value="BANK">BANK</option>
-                                  <option value="ONLINE">ONLINE</option>
-                                  <option value="N/A">N/A</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                              </div>
                             </React.Fragment>
                           );
                         });
@@ -1286,8 +1333,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   )}
                                   {courierReports[order.customerPhone] && (() => {
                                     const report = courierReports[order.customerPhone];
-                                    const successRate = report.total_parcel > 0 ? Math.round((report.total_delivered / report.total_parcel) * 100) : 0;
-                                    const isRisky = report.total_cancelled > 0 && successRate < 60;
+                                    const successRate = report.delivery_rate !== undefined 
+                                      ? report.delivery_rate 
+                                      : (report.total_parcel > 0 ? Math.round((report.total_delivered / report.total_parcel) * 100) : 0);
+                                    const cancellationRate = report.cancellation_rate !== undefined
+                                      ? report.cancellation_rate
+                                      : (report.total_parcel > 0 ? Math.round((report.total_cancelled / report.total_parcel) * 100) : 0);
+                                    const isRisky = cancellationRate > 40 || (report.total_cancelled > 0 && successRate < 60);
                                     const isFraud = report.total_fraud_report > 0;
                                     return (
                                       <div 
@@ -1307,7 +1359,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                         <div className="flex items-center justify-between gap-2">
                                           <span className="opacity-80">Courier (Steadfast):</span>
                                           <div className="flex items-center gap-1">
-                                            {isFraud && <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse">FRAUD</span>}
+                                            {isFraud && <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse">FRAUD ({report.total_fraud_report})</span>}
                                             <button 
                                               onClick={(e) => {
                                                 e.stopPropagation();
@@ -1321,9 +1373,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                                           </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] font-bold">
-                                          <div>Total: <span className="text-secondary">{report.total_parcel}</span></div>
-                                          <div>Success: <span className="text-green-600">{report.total_delivered}</span></div>
-                                          <div>Cancelled: <span className="text-red-500">{report.total_cancelled}</span></div>
+                                          <div>Total: <span className="text-secondary">{report.total_parcel > 0 ? report.total_parcel : (report.volume_band ? report.volume_band.toUpperCase() : "Active")}</span></div>
+                                          <div>Success: <span className="text-green-600">{report.total_parcel > 0 ? report.total_delivered : `${successRate}%`}</span></div>
+                                          <div>Cancelled: <span className="text-red-500">{report.total_parcel > 0 ? report.total_cancelled : `${cancellationRate}%`}</span></div>
                                           <div>Rate: <span className={successRate < 60 ? "text-red-500" : "text-green-600"}>{successRate}%</span></div>
                                         </div>
                                       </div>
@@ -1334,12 +1386,48 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       {order.address && order.address.trim() !== "" && order.address !== "N/A" ? order.address.split(' - (')[0] : 'No address'}
                                     </span>
                                   </div>
-{order.steadfastStatus && (
-<span className={`text-[10px] font-bold mt-1.5 px-2 py-0.5 rounded-full w-fit ${order.steadfastStatus.toLowerCase().includes("delivered") ? "bg-green-100 text-green-700" : order.steadfastStatus.toLowerCase().includes("cancelled") || order.steadfastStatus.toLowerCase().includes("returned") ? "bg-rose-100 text-rose-700" : "bg-blue-100 text-blue-700"}`}>
-<Truck size={10} className="inline mr-1 mb-0.5" />
-{order.steadfastStatus}
-</span>
-)}
+{(() => {
+  const cTrack = order.couriers?.trackingId || order.courierTrackingId || order.trackingId || order.courierConsignmentId;
+  const cStatus = order.courierStatus || order.steadfastStatus || order.pathaoStatus;
+  const cLabel = order.courierStatusLabel || cStatus;
+  if (!cTrack && !cStatus) return null;
+  const lower = String(cStatus || "").toLowerCase();
+  const badgeCls = lower.includes("delivered")
+    ? "bg-green-100 text-green-700 border-green-200"
+    : lower.includes("cancel") || lower.includes("return") || lower.includes("fail")
+    ? "bg-rose-100 text-rose-700 border-rose-200"
+    : lower.includes("hold")
+    ? "bg-amber-100 text-amber-700 border-amber-200"
+    : "bg-sky-100 text-sky-700 border-sky-200";
+  return (
+    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+      <span
+        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border w-fit ${badgeCls}`}
+        title={order.courierLastSyncedAt ? `Last synced: ${new Date(order.courierLastSyncedAt).toLocaleString("bn-BD")}` : undefined}
+      >
+        <Truck size={10} />
+        {order.courierName || order.couriers?.service || "Steadfast"}: {cLabel || "Booked"}
+      </span>
+      {cTrack && (
+        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{cTrack}</span>
+      )}
+      {syncSingleCourierStatus && cTrack && (
+        <button
+          type="button"
+          disabled={syncingOrderId === order.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            syncSingleCourierStatus(order.id);
+          }}
+          className="text-sky-600 hover:text-sky-800 p-0.5 rounded hover:bg-sky-50 transition-colors cursor-pointer"
+          title="Live Courier Status সিঙ্ক করুন"
+        >
+          <RefreshCcw size={11} className={syncingOrderId === order.id ? "animate-spin" : ""} />
+        </button>
+      )}
+    </div>
+  );
+})()}
                                 </div>
                               </td>
                               <td className="p-4 align-middle">
@@ -1641,7 +1729,121 @@ export default function AdminPanel(props: AdminPanelProps) {
                           <p className="text-xs text-gray-400 mt-1">When someone adds items to cart or enters their contact, they will appear here instantly.</p>
                         </div>
                       ) : (
-                        <div className="overflow-x-auto">
+                        <>
+                          {/* Mobile View for Incomplete Orders */}
+                          <div className="lg:hidden space-y-3 p-3">
+                        {incompleteOrders.map((order: any) => {
+                          const rawPhone = (order.phone || order.customerPhone || "").trim();
+                          const hasRealPhone = rawPhone && !rawPhone.includes("কার্টে") && !rawPhone.includes("Cart") && rawPhone.length >= 6;
+                          const cleanDigits = rawPhone.replace(/\D/g, '');
+                          const waPhone = cleanDigits.startsWith('88') ? cleanDigits : (cleanDigits.startsWith('01') ? '88' + cleanDigits : cleanDigits);
+                          const totalAmt = order.totalAmount || order.items?.reduce((sum: number, it: any) => sum + ((it.price || 0) * (it.quantity || 1)), 0) || 0;
+                          const customerName = order.name && order.name !== "অজ্ঞাত কাস্টমার" && order.name !== "অজ্ঞাত ক্রেতা" ? order.name : (hasRealPhone ? "Customer" : "Guest Shopper");
+                          const itemImage = order.items?.[0]?.image || order.items?.[0]?.product?.image || "/logo.png";
+                          const itemsTitle = order.items?.map((i: any) => `${i.name || i.product?.name || 'Item'} x${i.quantity || 1}`).join(', ') || 'Incomplete Cart';
+                          const fullAddress = [order.address, order.thana, order.district].filter(Boolean).join(", ");
+                          const stats = hasRealPhone ? getCustomerStats(rawPhone) : { total: 0, delivered: 0 };
+
+                          return (
+                            <div
+                              key={order.id}
+                              className="rounded-2xl shadow-xs border border-red-100/90 bg-[#faf5ff] p-2.5 flex flex-col gap-2.5 transition-all"
+                            >
+                              {/* Top Row: Image on Left, Info on Right */}
+                              <div className="flex gap-2.5 items-start">
+                                <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200/60 bg-white shrink-0 self-start">
+                                  <img
+                                    loading="lazy"
+                                    src={itemImage}
+                                    className="w-full h-full object-cover"
+                                    alt=""
+                                  />
+                                  <div className="absolute top-1.5 left-1.5 bg-white/95 rounded-[6px] w-[22px] h-[22px] flex items-center justify-center border border-gray-300 shadow-2xs">
+                                    <ShoppingCart size={12} className="text-red-500" />
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col flex-1 min-w-0 justify-between min-h-[80px]">
+                                  <div className="text-[13px] font-bold text-[#1e1b4b] truncate leading-tight" title={itemsTitle}>
+                                    {itemsTitle}
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-1.5 min-w-0 mt-1">
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <span className="text-[13px] font-bold text-[#e11d48] truncate leading-tight" title={customerName}>
+                                        {customerName}
+                                      </span>
+                                      <span className="text-[12.5px] font-extrabold text-[#1e293b] leading-tight tracking-tight mt-0.5 select-all">
+                                        {hasRealPhone ? rawPhone : "No phone provided"}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className="text-[10px] font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-full border border-slate-200/80 shadow-2xs whitespace-nowrap">
+                                        Total: {stats.total || 1}
+                                      </span>
+                                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shadow-2xs whitespace-nowrap">
+                                        SCS: {stats.delivered || 0}
+                                      </span>
+                                      {hasRealPhone && (
+                                        <a
+                                          href={`https://wa.me/${waPhone}?text=${encodeURIComponent(`Hello ${order.name && order.name !== "অজ্ঞাত ক্রেতা" ? order.name : ""}! We noticed you added items to your cart at iShop BD. Can we assist you with completing your order?`)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="w-7 h-7 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all border border-emerald-200/70 shadow-2xs"
+                                          title="WhatsApp"
+                                        >
+                                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                          </svg>
+                                        </a>
+                                      )}
+                                      {hasRealPhone && (
+                                        <a
+                                          href={`tel:${cleanDigits}`}
+                                          className="w-7 h-7 flex items-center justify-center bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 hover:scale-105 active:scale-95 transition-all border border-teal-200/70 shadow-2xs"
+                                          title="Call"
+                                        >
+                                          <Phone size={13} />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Bottom Row: Full Width Address + Source Badge + Total Amount */}
+                              <div className="flex items-center gap-2 w-full pt-0.5">
+                                <div
+                                  className="bg-white flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600 font-medium truncate shadow-2xs"
+                                  title={fullAddress}
+                                >
+                                  {fullAddress || "No address entered"}
+                                </div>
+                                <div className="shrink-0">
+                                  <span className={`text-xs font-bold px-2.5 py-1.5 rounded-xl border block shadow-2xs ${
+                                    order.type === 'cart_checkout'
+                                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                      : order.type === 'inline_checkout'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}>
+                                    {order.type === 'cart_checkout' ? 'Cart Checkout' : order.type === 'inline_checkout' ? 'Product Page' : 'Landing Page'}
+                                  </span>
+                                </div>
+                                <div className="shrink-0">
+                                  <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl block shadow-2xs">
+                                    ৳{Number(totalAmt).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Desktop View Table for Incomplete Orders */}
+                      <div className="hidden lg:block overflow-x-auto">
                           <table className="w-full text-left border-collapse text-xs">
                             <thead>
                               <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider">
@@ -1844,7 +2046,8 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </tbody>
                           </table>
                         </div>
-                      )}
+                      </>
+                    )}
                     </div>
                   </div>
                 )}
@@ -2295,47 +2498,42 @@ export default function AdminPanel(props: AdminPanelProps) {
                               <div>
                                 <div className="flex justify-between items-center mb-1">
                                   <label className="block text-[11px] font-bold text-gray-500 uppercase">Description</label>
-                                  {adminKeys?.geminiApiKey && (
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        const name = editingProduct?.name;
-                                        if (!name) {
-                                          toast.error("Please enter a product name first!");
-                                          return;
-                                        }
-                                        try {
-                                          toast.loading("Generating AI description...");
-                                          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${adminKeys.geminiApiKey}`, {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({
-                                              contents: [{
-                                                role: "user",
-                                                parts: [{ text: `Write an engaging product description for a product named "${name}". Highlight its features and make it appealing. Format nicely in English.` }]
-                                              }]
-                                            })
-                                          });
-                                          const data = await response.json();
-                                          const desc = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                                          if (desc) {
-                                            setEditingProduct((prev) => prev ? { ...prev, description: desc } : null);
-                                            toast.dismiss();
-                                            toast.success("Description generated successfully!");
-                                          } else {
-                                            toast.dismiss();
-                                            toast.error("Failed to generate description with Gemini.");
-                                          }
-                                        } catch (err) {
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const name = editingProduct?.name;
+                                      if (!name) {
+                                        toast.error("Please enter a product name first!");
+                                        return;
+                                      }
+                                      try {
+                                        toast.loading("Generating AI description...");
+                                        const response = await fetch("/api/chat", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({
+                                            message: `Write an engaging product description for a product named "${name}". Highlight its features and make it appealing. Format nicely in English.`
+                                          })
+                                        });
+                                        const data = await response.json();
+                                        const desc = data.reply || data.text || "";
+                                        if (desc) {
+                                          setEditingProduct((prev) => prev ? { ...prev, description: desc } : null);
                                           toast.dismiss();
-                                          toast.error("Server is not responding.");
+                                          toast.success("Description generated successfully!");
+                                        } else {
+                                          toast.dismiss();
+                                          toast.error("Failed to generate description with Gemini.");
                                         }
-                                      }}
-                                      className="text-[9px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold px-2 py-0.5 rounded-md transition-all flex items-center gap-1 active:scale-95 border border-indigo-100 font-sans"
-                                    >
-                                      <Activity size={10} /> Generate AI Description
-                                    </button>
-                                  )}
+                                      } catch (err) {
+                                        toast.dismiss();
+                                        toast.error("Server is not responding.");
+                                      }
+                                    }}
+                                    className="text-[9px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold px-2 py-0.5 rounded-md transition-all flex items-center gap-1 active:scale-95 border border-indigo-100 font-sans cursor-pointer"
+                                  >
+                                    <Activity size={10} /> Generate AI Description
+                                  </button>
                                 </div>
                                 <textarea value={editingProduct?.description || ""} onChange={(e) => setEditingProduct((prev) => ({ ...(prev || {}), description: e.target.value }))} rows={3} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-medium no-scrollbar transition-all resize-none" placeholder="Write detailed product description here..." />
                               </div>
@@ -2424,6 +2622,155 @@ export default function AdminPanel(props: AdminPanelProps) {
                                   <input type="datetime-local" value={editingProduct.flashSaleEndDate || ""} onChange={(e) => setEditingProduct({ ...(editingProduct || {}), flashSaleEndDate: e.target.value } as any)} className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-primary/30 text-sm font-bold transition-all" />
                                 </div>
                               )}
+                            </div>
+                          </div>
+
+                          {/* ━━━ Step 8: Frequently Bought Together (Bundle / Combo) ━━━ */}
+                          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                            <div className="bg-purple-50 px-4 py-2.5 border-b border-purple-100 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-purple-600 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">8</span>
+                                <span className="text-sm font-bold text-purple-950">Frequently Bought Together (Bundle)</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-200">
+                                {(editingProduct?.bundleProductIds || []).length} Selected
+                              </span>
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <p className="text-xs text-gray-500 font-medium">
+                                Select complementary products to display as a "Frequently Bought Together" bundle on this product page.
+                              </p>
+
+                              {/* Product Search / Dropdown Selector */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">
+                                  Add Related Product to Bundle
+                                </label>
+                                <select
+                                  value=""
+                                  onChange={(e) => {
+                                    const selectedId = e.target.value;
+                                    if (!selectedId) return;
+                                    const currentList = editingProduct?.bundleProductIds || [];
+                                    if (!currentList.includes(selectedId)) {
+                                      setEditingProduct((prev: any) => ({
+                                        ...(prev || {}),
+                                        bundleProductIds: [...currentList, selectedId]
+                                      }));
+                                    }
+                                  }}
+                                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:ring-2 focus:ring-purple-400 text-xs font-bold transition-all"
+                                >
+                                  <option value="">-- Select a product to add to bundle --</option>
+                                  {(products || [])
+                                    .filter((p: any) => p.id !== editingProduct?.id && !p.deleted && !(editingProduct?.bundleProductIds || []).includes(p.id))
+                                    .map((p: any) => (
+                                      <option key={p.id} value={p.id}>
+                                        {p.name} (৳{p.price}) {p.code ? `[Code: ${p.code}]` : ''}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+
+                              {/* Selected Bundle Products List */}
+                              {(editingProduct?.bundleProductIds || []).length > 0 && (
+                                <div className="space-y-2 pt-1">
+                                  <label className="block text-[10px] font-bold text-gray-400 uppercase">
+                                    Selected Bundle Items:
+                                  </label>
+                                  <div className="grid grid-cols-1 gap-2">
+                                    {(editingProduct?.bundleProductIds || []).map((bId: string) => {
+                                      const bProduct = (products || []).find((p: any) => p.id === bId);
+                                      if (!bProduct) {
+                                        return (
+                                          <div key={bId} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                                            <span className="text-gray-400 italic">Product ID: {bId} (Not Found or Deleted)</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingProduct((prev: any) => ({
+                                                  ...(prev || {}),
+                                                  bundleProductIds: (prev?.bundleProductIds || []).filter((id: string) => id !== bId)
+                                                }));
+                                              }}
+                                              className="text-red-500 hover:text-red-700 p-1"
+                                            >
+                                              <X size={14} />
+                                            </button>
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <div key={bId} className="flex items-center gap-3 p-2.5 bg-purple-50/40 rounded-xl border border-purple-100 hover:bg-purple-50/70 transition-all">
+                                          <img
+                                            src={bProduct.image || bProduct.images?.[0] || '/logo.png'}
+                                            alt={bProduct.name}
+                                            className="w-10 h-10 object-cover rounded-lg border border-purple-200 shrink-0 bg-white"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-800 truncate">{bProduct.name}</p>
+                                            <p className="text-[11px] font-extrabold text-primary">৳{bProduct.price} {bProduct.code && <span className="text-[10px] text-gray-400 font-normal">({bProduct.code})</span>}</p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingProduct((prev: any) => ({
+                                                ...(prev || {}),
+                                                bundleProductIds: (prev?.bundleProductIds || []).filter((id: string) => id !== bId)
+                                              }));
+                                            }}
+                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                            title="Remove from bundle"
+                                          >
+                                            <X size={14} />
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Optional Bundle Discount */}
+                              <div className="pt-2 border-t border-purple-100/60 grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                                    Bundle Discount (Optional)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={editingProduct?.bundleDiscount ?? ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                                      setEditingProduct((prev: any) => ({
+                                        ...(prev || {}),
+                                        bundleDiscount: val
+                                      }));
+                                    }}
+                                    placeholder="e.g., 10 (0 for no discount)"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-purple-400 text-xs font-bold transition-all"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                                    Discount Type
+                                  </label>
+                                  <select
+                                    value={editingProduct?.bundleDiscountType || "percentage"}
+                                    onChange={(e) => {
+                                      setEditingProduct((prev: any) => ({
+                                        ...(prev || {}),
+                                        bundleDiscountType: e.target.value as 'percentage' | 'fixed'
+                                      }));
+                                    }}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-purple-400 text-xs font-bold transition-all"
+                                  >
+                                    <option value="percentage">% Percentage Off (e.g. 10%)</option>
+                                    <option value="fixed">৳ Flat Discount (e.g. ৳100)</option>
+                                  </select>
+                                </div>
+                              </div>
                             </div>
                           </div>
 
@@ -2542,6 +2889,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               setEditingProduct({
                                                 ...p,
                                                 variants: p.variants || [],
+                                                bundleProductIds: p.bundleProductIds || [],
+                                                bundleDiscount: p.bundleDiscount || 0,
+                                                bundleDiscountType: p.bundleDiscountType || 'percentage',
                                               });
                                               setActiveProductDropdown(null);
                                             }}
@@ -2597,13 +2947,25 @@ export default function AdminPanel(props: AdminPanelProps) {
                   </div>
                 )}
                 {adminTab === "categories" && (
-                  <div className="max-w-2xl mx-auto">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 mb-8">
-                      <h4 className="text-lg font-bold text-secondary mb-6 flex items-center gap-2">
-                        <LayoutGrid size={20} className="text-primary" />
-                        Recent Orders
-                      </h4>
-                      <form onSubmit={saveCategory} className="flex gap-4 mb-8">
+                  <div className="w-full space-y-6 font-sans">
+                    {/* Category Header & Add Form */}
+                    <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 bg-red-50 text-primary rounded-2xl">
+                            <LayoutGrid size={24} />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-secondary">Categories & Subcategories</h3>
+                            <p className="text-xs text-gray-500 font-medium">Create and organize product categories and subcategories</p>
+                          </div>
+                        </div>
+                        <div className="px-3.5 py-1.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold self-start sm:self-auto">
+                          Total: {categories.length} Categories
+                        </div>
+                      </div>
+
+                      <form onSubmit={saveCategory} className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="text"
                           required
@@ -2614,36 +2976,54 @@ export default function AdminPanel(props: AdminPanelProps) {
                               name: e.target.value,
                             })
                           }
-                          className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 outline-none focus:ring-2 focus:ring-primary font-bold"
-                          placeholder="e.g. Smart Watch"
+                          className="flex-1 bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-bold text-sm text-gray-900 transition-all"
+                          placeholder="e.g. Smart Watch, Winter Wear..."
                         />
-                        <button className="bg-primary text-white font-bold px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 transition-all active:scale-95">
-                          {editingCategory?.id ? "Update" : "Add"}
-                        </button>
-                      </form>
-                      <div className="space-y-4">
-                        {categories.map((cat) => {
-                          const subcats = cat.subcategories || [];
-                          return (
-                            <div
-                              key={cat.id}
-                              className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex flex-col gap-4"
+                        <div className="flex gap-2">
+                          {editingCategory && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingCategory(null)}
+                              className="px-5 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-100 transition-all cursor-pointer"
                             >
-                              <div className="flex items-center justify-between">
-                                <p className="font-bold text-secondary text-base">
-                                  {cat.name}
-                                </p>
-                                <div className="flex gap-2">
+                              Cancel
+                            </button>
+                          )}
+                          <button className="bg-primary text-white font-bold px-8 py-3 rounded-xl shadow-md shadow-primary/20 hover:bg-red-700 transition-all active:scale-95 text-sm whitespace-nowrap cursor-pointer">
+                            {editingCategory?.id ? "Update Category" : "Add Category"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    {/* Category Cards Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {categories.map((cat) => {
+                        const subcats = cat.subcategories || [];
+                        return (
+                          <div
+                            key={cat.id}
+                            className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between gap-4 hover:shadow-md transition-shadow"
+                          >
+                            <div>
+                              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0"></span>
+                                  <p className="font-bold text-secondary text-base">
+                                    {cat.name}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5">
                                   <button
                                     onClick={() => copyCategoryLink(cat.name)}
-                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-bold hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-1"
+                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-1 cursor-pointer"
                                     title="Action"
                                   >
-                                    <Share2 size={12} />  
+                                    <Share2 size={12} /> Link
                                   </button>
                                   <button
                                     onClick={() => setEditingCategory(cat)}
-                                    className="text-xs font-bold text-gray-400 hover:text-primary transition-colors px-2 py-1 hover:bg-gray-100 rounded-lg"
+                                    className="text-xs font-bold text-gray-500 hover:text-primary transition-colors px-2.5 py-1.5 hover:bg-gray-100 rounded-lg cursor-pointer"
                                   >
                                     Edit
                                   </button>
@@ -2654,7 +3034,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       await deleteCategory(cat.id, cat.name);
                                     }}
                                     disabled={deletingCatId === String(cat.id)}
-                                    className={`text-xs font-bold transition-all px-3 py-1.5 rounded-lg ${
+                                    className={`text-xs font-bold transition-all px-2.5 py-1.5 rounded-lg cursor-pointer ${
                                       deletingCatId === String(cat.id)
                                         ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                                         : "text-red-500 hover:bg-red-50 active:scale-95 border border-transparent hover:border-red-100"
@@ -2666,14 +3046,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                               </div>
                               
                               {/* Subcategories Management */}
-                              <div className="bg-white p-4 rounded-2xl border border-gray-100/80">
-                                <div className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Subcategories</div>
-                                <div className="flex flex-wrap gap-1.5 mb-3">
+                              <div className="mt-4">
+                                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
+                                  Subcategories ({subcats.length})
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
                                   {subcats.length === 0 ? (
                                     <span className="text-xs text-gray-400 italic">No subcategories defined</span>
                                   ) : (
                                     subcats.map((sub, sIdx) => (
-                                      <span key={sIdx} className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                                      <span key={sIdx} className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200/60 text-gray-700 px-3 py-1 rounded-full text-xs font-bold shadow-xs">
                                         {sub}
                                         <button
                                           type="button"
@@ -2682,7 +3064,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                                               subcategories: arrayRemove(sub)
                                             });
                                           }}
-                                          className="text-gray-400 hover:text-red-500 transition-colors"
+                                          className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                         >
                                           <X size={12} />
                                         </button>
@@ -2690,50 +3072,51 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     ))
                                   )}
                                 </div>
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text"
-                                    value={newSubcategoryInputs[cat.id] || ""}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: val }));
-                                    }}
-                                    placeholder="Add subcategory name..."
-                                    className="flex-1 bg-gray-50/50 border border-gray-200 transition-colors focus:border-primary/50 text-xs font-bold px-3 py-2 rounded-xl outline-none"
-                                    onKeyDown={async (e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const subName = (newSubcategoryInputs[cat.id] || "").trim();
-                                        if (subName) {
-                                          await updateDoc(doc(db, "categories", cat.id), {
-                                            subcategories: arrayUnion(subName)
-                                          });
-                                          setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
-                                        }
-                                      }
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      const subName = (newSubcategoryInputs[cat.id] || "").trim();
-                                      if (subName) {
-                                        await updateDoc(doc(db, "categories", cat.id), {
-                                          subcategories: arrayUnion(subName)
-                                        });
-                                        setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
-                                      }
-                                    }}
-                                    className="bg-primary hover:brightness-105 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm shadow-primary/10 active:scale-95"
-                                  >
-                                    Add
-                                  </button>
-                                </div>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                            
+                            <div className="flex gap-2 pt-2 border-t border-gray-50">
+                              <input
+                                type="text"
+                                value={newSubcategoryInputs[cat.id] || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: val }));
+                                }}
+                                placeholder="Add subcategory name..."
+                                className="flex-1 bg-gray-50/70 border border-gray-200 transition-colors focus:border-primary focus:bg-white text-xs font-bold px-3 py-2 rounded-xl outline-none"
+                                onKeyDown={async (e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    const subName = (newSubcategoryInputs[cat.id] || "").trim();
+                                    if (subName) {
+                                      await updateDoc(doc(db, "categories", cat.id), {
+                                        subcategories: arrayUnion(subName)
+                                      });
+                                      setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                    }
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const subName = (newSubcategoryInputs[cat.id] || "").trim();
+                                  if (subName) {
+                                    await updateDoc(doc(db, "categories", cat.id), {
+                                      subcategories: arrayUnion(subName)
+                                    });
+                                    setNewSubcategoryInputs(prev => ({ ...prev, [cat.id]: "" }));
+                                  }
+                                }}
+                                className="bg-primary hover:brightness-105 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm shadow-primary/10 active:scale-95 cursor-pointer whitespace-nowrap"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -2947,89 +3330,93 @@ export default function AdminPanel(props: AdminPanelProps) {
                   </div>
                 )}
                 {adminTab === "refunds" && (
-                  <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
-                    <div className="max-w-4xl mx-auto space-y-6">
-                       <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                          <div>
-                             <h4 className="text-xl font-bold text-secondary">Refund Requests</h4>
-                             <p className="text-xs text-gray-400 font-bold">Customer refund requests will be shown here</p>
+                  <div className="w-full space-y-6 font-sans">
+                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
+                        <div className="flex items-center gap-3">
+                           <div className="p-3 bg-red-50 text-primary rounded-2xl">
+                             <RotateCcw size={24} />
+                           </div>
+                           <div>
+                              <h3 className="text-xl font-bold text-secondary">Refund Requests</h3>
+                              <p className="text-xs text-gray-500 font-medium">Customer refund requests and status tracking</p>
+                           </div>
+                        </div>
+                        <div className="p-2.5 px-4 bg-amber-50 text-amber-700 rounded-xl flex items-center gap-2 font-bold text-xs self-start sm:self-auto border border-amber-200/60 shadow-xs">
+                           <Clock size={16} /> Pending: {refundRequests.filter(r => r.status === "pending").length}
+                        </div>
+                     </div>
+                     <div className="grid gap-4">
+                        {refundRequests.length === 0 ? (
+                          <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                             <RefreshCcw size={48} className="mx-auto mb-4 text-gray-200" />
+                             <p className="text-base font-bold text-gray-600">No refund requests yet</p>
+                             <p className="text-xs text-gray-400 mt-1">Customer refund requests will appear here when submitted</p>
                           </div>
-                          <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl flex items-center gap-2 font-bold text-xs">
-                             <Clock size={16} /> Pending: {refundRequests.filter(r => r.status === "pending").length}
-                          </div>
-                       </div>
-                       <div className="grid gap-4">
-                          {refundRequests.length === 0 ? (
-                            <div className="text-center py-20 bg-white rounded-3xl border border-gray-100">
-                               <RefreshCcw size={48} className="mx-auto mb-4 text-gray-100" />
-                               <p className="text-sm text-gray-400">No refund requests yet</p>
-                            </div>
-                          ) : (
-                            refundRequests.sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map((refund) => (
-                               <div key={refund.id} className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between gap-6">
-                                  <div className="flex-1 space-y-3">
-                                     <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${
-                                           refund.status === "approved" ? "bg-green-100 text-green-600" :
-                                           refund.status === "rejected" ? "bg-red-100 text-red-600" :
-                                           "bg-amber-100 text-amber-600"
-                                        }`}>
-                                           {refund.status}
-                                        </span>
-                                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest">ID: #{String(refund.id).slice(-6).toUpperCase()}</p>
-                                     </div>
-                                     <div>
-                                        <h5 className="font-bold text-secondary">{refund.userName}</h5>
-                                        <p className="text-xs text-gray-400 font-bold">{refund.userEmail}</p>
-                                     </div>
-                                     <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider tracking-widest mb-1">Refund Reason:</p>
-                                        <p className="text-sm font-bold text-secondary italic">"{refund.reason}"</p>
-                                     </div>
-                                     <div className="flex gap-4">
-                                        <div>
-                                           <p className="text-[9px] font-bold text-gray-400 uppercase">Order ID</p>
-                                           <p className="text-xs font-bold text-secondary">#{String(refund.orderId).slice(-6).toUpperCase()}</p>
-                                        </div>
-                                        <div>
-                                           <p className="text-[9px] font-bold text-gray-400 uppercase">Amount</p>
-                                           <p className="text-xs font-bold text-primary">৳{refund.amount}</p>
-                                        </div>
-                                     </div>
-                                  </div>
-                                  <div className="flex md:flex-col justify-end gap-2 shrink-0">
-                                     {refund.status === "pending" && (
-                                        <>
-                                           <button 
-                                              onClick={() => handleApproveRefund(refund)}
-                                              className="bg-green-600 text-white px-6 py-3 rounded-2xl text-xs font-bold shadow-lg shadow-green-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                                           >
-                                              <CheckCircle size={16} /> Approve
-                                           </button>
-                                           <button 
-                                              onClick={async () => {
-                                                 if(window.confirm("Reject this request?")) {
-                                                    await updateDoc(doc(db, "refund_requests", refund.id), { status: "rejected", updatedAt: new Date().toISOString() });
-                                                 }
-                                              }}
-                                              className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl text-xs font-bold hover:bg-red-100 active:scale-95 transition-all flex items-center gap-2"
-                                           >
-                                              <XCircle size={16} /> Reject
-                                           </button>
-                                        </>
-                                     )}
-                                     {refund.status !== "pending" && (
-                                        <div className="text-right">
-                                           <p className="text-[9px] font-bold text-gray-400 uppercase">Updated At</p>
-                                           <p className="text-[10px] font-bold text-gray-500">{new Date(refund.updatedAt || refund.createdAt).toLocaleString("en-US")}</p>
-                                        </div>
-                                     )}
-                                  </div>
-                               </div>
-                            ))
-                          )}
-                       </div>
-                    </div>
+                        ) : (
+                          refundRequests.sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map((refund) => (
+                             <div key={refund.id} className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between gap-6 hover:shadow-md transition-shadow">
+                                <div className="flex-1 space-y-3">
+                                   <div className="flex items-center gap-2">
+                                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                         refund.status === "approved" ? "bg-green-100 text-green-700 border border-green-200" :
+                                         refund.status === "rejected" ? "bg-red-100 text-red-700 border border-red-200" :
+                                         "bg-amber-100 text-amber-700 border border-amber-200"
+                                      }`}>
+                                         {refund.status}
+                                      </span>
+                                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">ID: #{String(refund.id).slice(-6).toUpperCase()}</p>
+                                   </div>
+                                   <div>
+                                      <h5 className="font-bold text-secondary text-base">{refund.userName}</h5>
+                                      <p className="text-xs text-gray-400 font-medium">{refund.userEmail}</p>
+                                   </div>
+                                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Refund Reason:</p>
+                                      <p className="text-sm font-bold text-secondary italic">"{refund.reason}"</p>
+                                   </div>
+                                   <div className="flex gap-6">
+                                      <div>
+                                         <p className="text-[10px] font-bold text-gray-400 uppercase">Order ID</p>
+                                         <p className="text-xs font-bold text-secondary">#{String(refund.orderId).slice(-6).toUpperCase()}</p>
+                                      </div>
+                                      <div>
+                                         <p className="text-[10px] font-bold text-gray-400 uppercase">Amount</p>
+                                         <p className="text-sm font-black text-primary">৳{refund.amount}</p>
+                                      </div>
+                                   </div>
+                                </div>
+                                <div className="flex md:flex-col justify-end gap-2 shrink-0">
+                                   {refund.status === "pending" && (
+                                      <>
+                                         <button 
+                                            onClick={() => handleApproveRefund(refund)}
+                                            className="bg-green-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-green-600/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                         >
+                                            <CheckCircle size={16} /> Approve
+                                         </button>
+                                         <button 
+                                            onClick={async () => {
+                                               if(window.confirm("Reject this request?")) {
+                                                  await updateDoc(doc(db, "refund_requests", refund.id), { status: "rejected", updatedAt: new Date().toISOString() });
+                                               }
+                                            }}
+                                            className="bg-red-50 text-red-600 px-6 py-2.5 rounded-xl text-xs font-bold hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                         >
+                                            <XCircle size={16} /> Reject
+                                         </button>
+                                      </>
+                                   )}
+                                   {refund.status !== "pending" && (
+                                      <div className="text-right">
+                                         <p className="text-[10px] font-bold text-gray-400 uppercase">Updated At</p>
+                                         <p className="text-xs font-bold text-gray-500">{new Date(refund.updatedAt || refund.createdAt).toLocaleString("en-US")}</p>
+                                      </div>
+                                   )}
+                                </div>
+                             </div>
+                          ))
+                        )}
+                     </div>
                   </div>
                 )}
                 {adminTab === "campaigns" && (
@@ -3200,6 +3587,471 @@ export default function AdminPanel(props: AdminPanelProps) {
                     </div>
                   </div>
                 )}
+                {/* Customer Photo Reviews Moderation Tab */}
+                {adminTab === "reviews" && (() => {
+                  const allReviews = Array.isArray(adminReviews) ? adminReviews : [];
+                  const pendingCount = allReviews.filter((r: any) => r.status === "pending").length;
+                  const approvedCount = allReviews.filter((r: any) => r.status === "approved" || !r.status).length;
+                  const rejectedCount = allReviews.filter((r: any) => r.status === "rejected").length;
+                  const withPhotosCount = allReviews.filter((r: any) => Array.isArray(r.images) && r.images.length > 0).length;
+
+                  // Average rating across approved reviews
+                  const approvedReviews = allReviews.filter((r: any) => r.status === "approved" || !r.status);
+                  const avgApprovedRating = approvedReviews.length > 0
+                    ? (approvedReviews.reduce((sum: number, r: any) => sum + (Number(r.rating) || 5), 0) / approvedReviews.length).toFixed(1)
+                    : "5.0";
+
+                  const filteredReviews = allReviews.filter((rev: any) => {
+                    const status = rev.status || "approved";
+                    if (reviewStatusFilter === "pending" && status !== "pending") return false;
+                    if (reviewStatusFilter === "approved" && status !== "approved") return false;
+                    if (reviewStatusFilter === "rejected" && status !== "rejected") return false;
+
+                    if (reviewSearchQuery.trim()) {
+                      const q = reviewSearchQuery.toLowerCase();
+                      const matchUser = (rev.userName || "").toLowerCase().includes(q);
+                      const matchProd = (rev.productName || "").toLowerCase().includes(q);
+                      const matchComment = (rev.comment || "").toLowerCase().includes(q);
+                      if (!matchUser && !matchProd && !matchComment) return false;
+                    }
+
+                    if (reviewRatingFilter !== "all" && Number(rev.rating) !== Number(reviewRatingFilter)) {
+                      return false;
+                    }
+
+                    if (reviewHasPhotosOnly && (!Array.isArray(rev.images) || rev.images.length === 0)) {
+                      return false;
+                    }
+
+                    return true;
+                  });
+
+                  return (
+                    <div className="w-full space-y-6 font-sans">
+                        {/* Header Banner */}
+                        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 p-6 md:p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
+                          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl">
+                                  <Star size={28} className="fill-amber-200 text-amber-200" />
+                                </div>
+                                <h3 className="text-2xl font-black tracking-tight">Customer Photo Reviews & Moderation</h3>
+                              </div>
+                              <p className="text-amber-100 text-sm font-medium">
+                                Review customer ratings, moderate uploaded photos, approve or reject submissions before live display.
+                              </p>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                if (fetchAdminReviews) fetchAdminReviews();
+                              }}
+                              disabled={isAdminReviewsLoading}
+                              className="self-start md:self-auto flex items-center gap-2 px-4 py-2.5 bg-white/20 hover:bg-white/30 active:scale-95 text-white rounded-xl text-xs font-bold transition-all backdrop-blur-sm disabled:opacity-50"
+                            >
+                              <RefreshCcw size={16} className={isAdminReviewsLoading ? "animate-spin" : ""} />
+                              {isAdminReviewsLoading ? "Refreshing..." : "Refresh Reviews"}
+                            </button>
+                          </div>
+
+                          {/* Stat summary cards inside header */}
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6 relative z-10">
+                            <div className="bg-white/15 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
+                              <span className="text-xs text-amber-100 font-bold flex items-center gap-1.5">
+                                <MessageSquare size={13} /> Total Reviews
+                              </span>
+                              <p className="text-2xl font-black mt-1">{allReviews.length}</p>
+                            </div>
+                            <div className="bg-white/15 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
+                              <span className="text-xs text-amber-100 font-bold flex items-center gap-1.5">
+                                <Clock size={13} /> Pending Moderation
+                              </span>
+                              <p className="text-2xl font-black mt-1 flex items-center gap-1.5">
+                                {pendingCount}
+                                {pendingCount > 0 && (
+                                  <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">Action Required</span>
+                                )}
+                              </p>
+                            </div>
+                            <div className="bg-white/15 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
+                              <span className="text-xs text-amber-100 font-bold flex items-center gap-1.5">
+                                <CheckCircle2 size={13} /> Approved Live
+                              </span>
+                              <p className="text-2xl font-black mt-1">{approvedCount}</p>
+                            </div>
+                            <div className="bg-white/15 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
+                              <span className="text-xs text-amber-100 font-bold flex items-center gap-1.5">
+                                <Ban size={13} /> Rejected
+                              </span>
+                              <p className="text-2xl font-black mt-1">{rejectedCount}</p>
+                            </div>
+                            <div className="col-span-2 sm:col-span-1 bg-white/15 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
+                              <span className="text-xs text-amber-100 font-bold flex items-center gap-1.5">
+                                <Star size={13} className="fill-current" /> Live Avg Rating
+                              </span>
+                              <p className="text-2xl font-black mt-1">{avgApprovedRating} ★</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Filters & Search Toolbar */}
+                        <div className="bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            {/* Status Filter Tabs */}
+                            <div className="flex flex-wrap items-center gap-2 bg-gray-100/80 p-1.5 rounded-2xl">
+                              <button
+                                onClick={() => setReviewStatusFilter("all")}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                                  reviewStatusFilter === "all"
+                                    ? "bg-white text-gray-900 shadow-sm"
+                                    : "text-gray-600 hover:text-gray-900"
+                                }`}
+                              >
+                                All ({allReviews.length})
+                              </button>
+                              <button
+                                onClick={() => setReviewStatusFilter("pending")}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                  reviewStatusFilter === "pending"
+                                    ? "bg-amber-500 text-white shadow-sm"
+                                    : "text-amber-700 hover:bg-amber-50"
+                                }`}
+                              >
+                                <Clock size={13} />
+                                Pending ({pendingCount})
+                                {pendingCount > 0 && (
+                                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setReviewStatusFilter("approved")}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                  reviewStatusFilter === "approved"
+                                    ? "bg-emerald-600 text-white shadow-sm"
+                                    : "text-emerald-700 hover:bg-emerald-50"
+                                }`}
+                              >
+                                <CheckCircle2 size={13} />
+                                Approved ({approvedCount})
+                              </button>
+                              <button
+                                onClick={() => setReviewStatusFilter("rejected")}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                  reviewStatusFilter === "rejected"
+                                    ? "bg-red-600 text-white shadow-sm"
+                                    : "text-red-700 hover:bg-red-50"
+                                }`}
+                              >
+                                <XCircle size={13} />
+                                Rejected ({rejectedCount})
+                              </button>
+                            </div>
+
+                            {/* Secondary Controls (Rating Filter, Photos Only, Search) */}
+                            <div className="flex flex-wrap items-center gap-3">
+                              {/* Rating Filter Dropdown */}
+                              <select
+                                value={reviewRatingFilter}
+                                onChange={(e) => setReviewRatingFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+                                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                              >
+                                <option value="all">All Ratings (★ 1-5)</option>
+                                <option value="5">5 Stars ★★★★★</option>
+                                <option value="4">4 Stars ★★★★☆</option>
+                                <option value="3">3 Stars ★★★☆☆</option>
+                                <option value="2">2 Stars ★★☆☆☆</option>
+                                <option value="1">1 Star ★☆☆☆☆</option>
+                              </select>
+
+                              {/* With Photos Only toggle */}
+                              <button
+                                type="button"
+                                onClick={() => setReviewHasPhotosOnly(!reviewHasPhotosOnly)}
+                                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                  reviewHasPhotosOnly
+                                    ? "bg-amber-50 border-amber-300 text-amber-800 shadow-sm"
+                                    : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                                }`}
+                              >
+                                <Camera size={14} className={reviewHasPhotosOnly ? "text-amber-600" : "text-gray-400"} />
+                                <span>With Photos Only ({withPhotosCount})</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Search Input */}
+                          <div className="relative">
+                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                              type="text"
+                              value={reviewSearchQuery}
+                              onChange={(e) => setReviewSearchQuery(e.target.value)}
+                              placeholder="Search reviews by customer name, product name, or review comment..."
+                              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
+                            />
+                            {reviewSearchQuery && (
+                              <button
+                                onClick={() => setReviewSearchQuery("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Reviews List */}
+                        {isAdminReviewsLoading ? (
+                          <div className="py-20 text-center bg-white rounded-[2rem] border border-gray-100">
+                            <Loader2 size={36} className="mx-auto text-amber-500 animate-spin mb-3" />
+                            <p className="text-gray-600 font-bold text-sm">Loading customer reviews...</p>
+                          </div>
+                        ) : filteredReviews.length === 0 ? (
+                          <div className="py-16 text-center bg-white rounded-[2rem] border border-gray-100 border-dashed">
+                            <Star size={44} className="mx-auto text-gray-300 mb-3" />
+                            <h4 className="text-gray-800 font-bold text-base mb-1">
+                              {reviewStatusFilter === "pending"
+                                ? "No Pending Reviews"
+                                : reviewStatusFilter === "rejected"
+                                ? "No Rejected Reviews"
+                                : "No Reviews Found"}
+                            </h4>
+                            <p className="text-gray-400 text-xs max-w-sm mx-auto">
+                              {reviewStatusFilter === "pending"
+                                ? "Great job! All customer reviews have been reviewed and moderated."
+                                : reviewSearchQuery
+                                ? "Try adjusting your search query or filters to find what you're looking for."
+                                : "No customer reviews match the selected filter criteria."}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {filteredReviews.map((rev: any) => {
+                              const status = rev.status || "approved";
+                              const ratingVal = Math.min(5, Math.max(1, Number(rev.rating) || 5));
+                              const revImages = Array.isArray(rev.images) ? rev.images : [];
+                              const isLoadingAction = reviewActionLoadingId === rev.id;
+
+                              const formattedDate = (() => {
+                                const dt = rev.createdAt;
+                                if (!dt) return "Just now";
+                                try {
+                                  if (typeof dt === "object" && dt.seconds) {
+                                    return new Date(dt.seconds * 1000).toLocaleString();
+                                  }
+                                  const d = new Date(dt);
+                                  return isNaN(d.getTime()) ? String(dt) : d.toLocaleString();
+                                } catch {
+                                  return String(dt);
+                                }
+                              })();
+
+                              return (
+                                <div
+                                  key={rev.id || Math.random().toString(36)}
+                                  className={`bg-white rounded-[2rem] p-6 shadow-sm border transition-all ${
+                                    status === "pending"
+                                      ? "border-amber-200 ring-2 ring-amber-500/10 hover:shadow-md"
+                                      : status === "rejected"
+                                      ? "border-red-100 opacity-80 hover:opacity-100"
+                                      : "border-gray-100 hover:shadow-md"
+                                  }`}
+                                >
+                                  {/* Top Row: User details & Status Badge */}
+                                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-white font-black text-lg flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                                        {(rev.userName || "C").trim().charAt(0).toUpperCase()}
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <h4 className="font-bold text-gray-900 text-base">
+                                            {rev.userName || "Customer"}
+                                          </h4>
+                                          {rev.userId && rev.userId.startsWith("guest_") ? (
+                                            <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold">
+                                              Guest
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                                              <UserCheck size={10} /> Verified Customer
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                                          <Calendar size={12} />
+                                          <span>{formattedDate}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Status Badge */}
+                                    <div>
+                                      {status === "pending" && (
+                                        <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-sm animate-pulse">
+                                          <Clock size={14} /> Pending Approval
+                                        </span>
+                                      )}
+                                      {status === "approved" && (
+                                        <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-sm">
+                                          <CheckCircle2 size={14} /> Approved & Live
+                                        </span>
+                                      )}
+                                      {status === "rejected" && (
+                                        <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 px-3.5 py-1.5 rounded-full text-xs font-black shadow-sm">
+                                          <XCircle size={14} /> Rejected / Hidden
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Middle Row: Product link + Rating + Comment */}
+                                  <div className="space-y-3">
+                                    {/* Product Reference Pill */}
+                                    <div className="inline-flex items-center gap-2.5 bg-gray-50 border border-gray-200/80 px-3.5 py-2 rounded-xl max-w-full">
+                                      {rev.productImage && (
+                                        <img
+                                          src={rev.productImage}
+                                          alt=""
+                                          className="w-7 h-7 rounded-lg object-cover border border-gray-200 shrink-0"
+                                        />
+                                      )}
+                                      <span className="text-xs font-bold text-gray-500 shrink-0">Product:</span>
+                                      <span className="text-xs font-bold text-gray-900 truncate">
+                                        {rev.productName || "Product (ID: " + rev.productId + ")"}
+                                      </span>
+                                      {rev.productId && (
+                                        <span className="text-[10px] text-gray-400 font-mono bg-white px-2 py-0.5 rounded border border-gray-200 shrink-0">
+                                          ID: {rev.productId}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Rating Stars */}
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex text-amber-500">
+                                        {[1, 2, 3, 4, 5].map((s) => (
+                                          <Star
+                                            key={s}
+                                            size={16}
+                                            className={s <= ratingVal ? "fill-amber-400 text-amber-400" : "text-gray-200"}
+                                          />
+                                        ))}
+                                      </div>
+                                      <span className="text-xs font-extrabold text-gray-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                                        {ratingVal}.0 / 5.0
+                                      </span>
+                                    </div>
+
+                                    {/* Review Comment Text */}
+                                    {rev.comment ? (
+                                      <p className="text-sm font-medium text-gray-800 bg-gray-50/70 p-3.5 rounded-2xl border border-gray-100 leading-relaxed whitespace-pre-wrap">
+                                        "{rev.comment}"
+                                      </p>
+                                    ) : (
+                                      <p className="text-xs italic text-gray-400">No written comment provided with this rating.</p>
+                                    )}
+
+                                    {/* Uploaded Photos Gallery */}
+                                    {revImages.length > 0 && (
+                                      <div className="pt-2">
+                                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 mb-2">
+                                          <Camera size={14} className="text-amber-500" />
+                                          <span>Customer Photos ({revImages.length}) — Click photo to zoom & inspect</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2.5">
+                                          {revImages.map((imgUrl: string, idx: number) => (
+                                            <div
+                                              key={idx}
+                                              onClick={() => setPreviewReviewImage(imgUrl)}
+                                              className="relative group w-24 h-24 rounded-2xl overflow-hidden border-2 border-gray-200 hover:border-amber-500 cursor-pointer shadow-sm transition-all hover:scale-105"
+                                            >
+                                              <img
+                                                src={imgUrl}
+                                                alt={`Review Photo ${idx + 1}`}
+                                                className="w-full h-full object-cover group-hover:brightness-90 transition-all"
+                                              />
+                                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                <Eye size={20} />
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Bottom Action Buttons */}
+                                  <div className="mt-5 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                      {/* Approve Button */}
+                                      <button
+                                        type="button"
+                                        disabled={isLoadingAction || status === "approved"}
+                                        onClick={async () => {
+                                          setReviewActionLoadingId(rev.id);
+                                          if (handleApproveReview) {
+                                            await handleApproveReview(rev.productId, rev.id);
+                                          }
+                                          setReviewActionLoadingId(null);
+                                        }}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                                          status === "approved"
+                                            ? "bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default opacity-80"
+                                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 active:scale-95"
+                                        } disabled:opacity-50`}
+                                      >
+                                        <CheckCircle2 size={15} />
+                                        {status === "approved" ? "Approved" : "Approve Review"}
+                                      </button>
+
+                                      {/* Reject Button */}
+                                      <button
+                                        type="button"
+                                        disabled={isLoadingAction || status === "rejected"}
+                                        onClick={async () => {
+                                          setReviewActionLoadingId(rev.id);
+                                          if (handleRejectReview) {
+                                            await handleRejectReview(rev.productId, rev.id);
+                                          }
+                                          setReviewActionLoadingId(null);
+                                        }}
+                                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                                          status === "rejected"
+                                            ? "bg-red-50 text-red-600 border-red-200 cursor-default opacity-80"
+                                            : "bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300 active:scale-95"
+                                        } disabled:opacity-50`}
+                                      >
+                                        <Ban size={15} />
+                                        {status === "rejected" ? "Rejected" : "Reject"}
+                                      </button>
+                                    </div>
+
+                                    {/* Delete Button */}
+                                    <button
+                                      type="button"
+                                      disabled={isLoadingAction}
+                                      onClick={() => {
+                                        setDeleteConfirmReview({
+                                          productId: rev.productId,
+                                          reviewId: rev.id,
+                                          userName: rev.userName || "Customer"
+                                        });
+                                      }}
+                                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                                    >
+                                      <Trash2 size={14} /> Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                })()}
                 {/* Bulk SMS Tab */}
                 {adminTab === "bulk_sms" && (
                   <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/30">
@@ -3630,11 +4482,10 @@ export default function AdminPanel(props: AdminPanelProps) {
                     : [];
 
                   return (
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/40 font-sans">
-                      <div className="max-w-6xl mx-auto space-y-6">
+                    <div className="w-full space-y-6 font-sans">
                         
                         {/* Header & Timeframe Switcher */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-xs">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
                           <div className="flex items-center gap-3">
                             <div className="p-3 bg-orange-500 text-white rounded-2xl shadow-md shadow-orange-500/20">
                               <Activity size={24} />
@@ -3691,7 +4542,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         {/* ───────────────────────────────────────────────────────────── */}
                         {/* 🔍 PRODUCT SEARCH & SELECTOR SECTION */}
                         {/* ───────────────────────────────────────────────────────────── */}
-                        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                        <div className="bg-white rounded-3xl border border-gray-100 p-6 md:p-8 shadow-sm space-y-4">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                               <h4 className="text-base font-black text-gray-900 flex items-center gap-2">
@@ -3902,7 +4753,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                             </div>
 
                             {/* Recent Customer Orders for this Product */}
-                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
                               <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                                 <div>
                                   <h4 className="text-sm font-bold text-gray-900">Recent Customer Orders for this Product</h4>
@@ -3976,7 +4827,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         {/* ───────────────────────────────────────────────────────────── */}
                         {/* 📊 ALL PRODUCTS PERFORMANCE SUMMARY TABLE */}
                         {/* ───────────────────────────────────────────────────────────── */}
-                        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
                           <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                               <h4 className="text-base font-black text-gray-900 flex items-center gap-2">
@@ -4083,56 +4934,72 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </div>
 
                       </div>
-                    </div>
-                  );
+                    );
                 })()}
 
                 {/* ── Low Stock Tab ── */}
                 {adminTab === "low_stock" && (
-                  <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-gray-50/30 font-sans">
-                    <div className="max-w-4xl mx-auto">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 bg-yellow-100 text-yellow-600 rounded-xl"><AlertCircle size={22} /></div>
+                  <div className="w-full space-y-6 font-sans">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-yellow-50 text-yellow-600 rounded-2xl border border-yellow-100">
+                          <AlertCircle size={24} />
+                        </div>
                         <div>
                           <h3 className="text-xl font-bold text-gray-900">Low Stock Products</h3>
-                          <p className="text-xs text-gray-400 font-bold">Products with total stock ≤ 5 units</p>
+                          <p className="text-xs text-gray-500 font-medium">Products with inventory level ≤ 5 units requiring replenishment</p>
                         </div>
                       </div>
-                      {products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length === 0 ? (
-                        <div className="text-center py-20 text-gray-400 font-bold">
-                          <CheckCircle size={48} className="mx-auto mb-4 opacity-20 text-green-500" />
-                          <p>All products have sufficient stock</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {products
-                            .filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5)
-                            .sort((a: any, b: any) => getEffectiveStock(a) - getEffectiveStock(b))
-                            .map((p: any) => {
-                              const effStock = getEffectiveStock(p);
-                              return (
-                                <div key={p.id} className="bg-white rounded-2xl border border-yellow-100 p-4 flex items-center gap-4 shadow-sm">
-                                  {p.image && <img src={p.image} alt={p.name} className="w-12 h-12 rounded-xl object-cover shrink-0" />}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-gray-900 text-sm truncate">{p.name}</p>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <p className="text-xs text-gray-400">{p.category}</p>
-                                      {p.variants && p.variants.length > 0 && (
-                                        <span className="text-[10px] text-gray-500 font-medium">
-                                          ({p.variants.map((v: any) => `${v.name || 'Variant'}: ${v.stock || 0}`).join(", ")})
-                                        </span>
-                                      )}
+                      <div className="px-3.5 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-xl text-xs font-bold self-start sm:self-auto">
+                        {products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length} Items Low Stock
+                      </div>
+                    </div>
+
+                    {products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length === 0 ? (
+                      <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm text-gray-400 font-bold">
+                        <CheckCircle size={48} className="mx-auto mb-4 opacity-20 text-green-500" />
+                        <p className="text-base text-gray-600">All products have sufficient stock</p>
+                        <p className="text-xs text-gray-400 mt-1">No products currently at or below 5 units threshold</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {products
+                          .filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5)
+                          .sort((a: any, b: any) => getEffectiveStock(a) - getEffectiveStock(b))
+                          .map((p: any) => {
+                            const effStock = getEffectiveStock(p);
+                            return (
+                              <div key={p.id} className="bg-white rounded-2xl border border-gray-100 hover:border-yellow-200 p-4 flex items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all">
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                  {p.image ? (
+                                    <img src={p.image} alt={p.name} className="w-13 h-13 rounded-xl object-cover shrink-0 border border-gray-100" />
+                                  ) : (
+                                    <div className="w-13 h-13 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 text-gray-400">
+                                      <Package size={20} />
                                     </div>
-                                  </div>
-                                  <div className={`shrink-0 px-3 py-1.5 rounded-xl text-sm font-black ${effStock === 0 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-700"}`}>
-                                    {effStock === 0 ? "Out of Stock" : `${effStock} Left`}
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-gray-900 text-sm truncate">{p.name}</p>
+                                    <p className="text-xs text-gray-400 font-medium">{p.category}</p>
+                                    {p.variants && p.variants.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {p.variants.map((v: any, vi: number) => (
+                                          <span key={vi} className="text-[10px] bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-medium">
+                                            {v.name || 'Variant'}: <b className={v.stock <= 0 ? "text-red-500" : "text-yellow-600"}>{v.stock || 0}</b>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
-                              );
-                            })}
-                        </div>
-                      )}
-                    </div>
+                                <div className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-black whitespace-nowrap ${effStock === 0 ? "bg-red-100 text-red-600 border border-red-200" : "bg-yellow-100 text-yellow-700 border border-yellow-200"}`}>
+                                  {effStock === 0 ? "Out of Stock" : `${effStock} Left`}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -4331,15 +5198,16 @@ export default function AdminPanel(props: AdminPanelProps) {
                   </div>
                 )}
                 {adminTab === "settings" && (
-                  <div className="flex-1 overflow-y-auto p-8 bg-gray-50/30">
-                    <div className="max-w-4xl mx-auto mb-8 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto no-scrollbar">
+                  <div className="w-full space-y-6">
+                    <div className="w-full mb-6 bg-white p-2.5 rounded-2xl shadow-sm border border-gray-100 flex gap-2 overflow-x-auto no-scrollbar">
                       <button onClick={() => setSettingsTab('general')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'general' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>General Settings</button>
                       <button onClick={() => setSettingsTab('banners')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'banners' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Homepage Banners</button>
+                      <button onClick={() => setSettingsTab('marketing')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap flex items-center gap-2 ${settingsTab === 'marketing' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}><Zap size={15} /> Marketing & Ads Integration</button>
                       <button onClick={() => setSettingsTab('admins')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'admins' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Admin Management</button>
                       <button onClick={() => setSettingsTab('users')} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${settingsTab === 'users' ? 'bg-primary text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Users Access</button>
                     </div>
                     {settingsTab === 'general' && (
-                    <div className="space-y-8 max-w-4xl mx-auto">
+                    <div className="space-y-8 w-full">
                       {/* Coupon Management Section */}
                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
                          <div className="flex items-center justify-between mb-8">
@@ -5220,34 +6088,6 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 >
                                   Campaign Banner (Bottom)
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (editingBanner) setEditingBanner({...editingBanner, type: "right_top"});
-                                    else setNewBanner({...newBanner, type: "right_top"});
-                                  }}
-                                  className={`py-2 px-3 rounded-xl text-[10px] font-bold uppercase transition-all border-2 ${
-                                    (editingBanner?.type || newBanner.type) === "right_top"
-                                      ? "border-primary bg-red-50 text-primary"
-                                      : "border-gray-100 bg-gray-50 text-gray-400"
-                                  }`}
-                                >
-                                  Top Right Banner
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (editingBanner) setEditingBanner({...editingBanner, type: "right_bottom"});
-                                    else setNewBanner({...newBanner, type: "right_bottom"});
-                                  }}
-                                  className={`py-2 px-3 rounded-xl text-[10px] font-bold uppercase transition-all border-2 ${
-                                    (editingBanner?.type || newBanner.type) === "right_bottom"
-                                      ? "border-primary bg-red-50 text-primary"
-                                      : "border-gray-100 bg-gray-50 text-gray-400"
-                                  }`}
-                                >
-                                  Bottom Right Banner (Flash Sale)
-                                </button>
                               </div>
                             </div>
                             <div>
@@ -5729,6 +6569,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                       </div>
                     </div>
                     )}
+                    {settingsTab === 'marketing' && (
+                    <div className="w-full">
+                      <MarketingSettings />
+                    </div>
+                    )}
                     {settingsTab === 'general' && (
                     <div className="bg-yellow-50 border border-yellow-100 p-6 rounded-3xl flex items-start gap-4">
                       <ShieldCheck
@@ -5961,6 +6806,83 @@ export default function AdminPanel(props: AdminPanelProps) {
               )}
               </div>
             </motion.div>
+          </div>
+        )}
+        {/* Full-size Customer Review Photo Zoom Modal */}
+        {previewReviewImage && (
+          <div
+            onClick={() => setPreviewReviewImage(null)}
+            className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl max-h-[90vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200"
+            >
+              <div className="flex items-center justify-between px-5 py-3.5 border-b bg-gray-50/90">
+                <span className="text-xs font-bold text-gray-700 flex items-center gap-2">
+                  <Camera size={16} className="text-amber-500" /> Customer Review Photo Preview
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewReviewImage(null)}
+                  className="p-1.5 rounded-full text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-4 flex items-center justify-center bg-gray-900/10 overflow-auto">
+                <img
+                  src={previewReviewImage}
+                  alt="Full resolution customer review preview"
+                  className="max-h-[75vh] w-auto max-w-full object-contain rounded-2xl shadow-lg"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Review Confirmation Dialog */}
+        {deleteConfirmReview && (
+          <div
+            onClick={() => setDeleteConfirmReview(null)}
+            className="fixed inset-0 z-[600] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-gray-100 space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center mx-auto">
+                <Trash2 size={24} />
+              </div>
+              <div className="text-center space-y-1">
+                <h4 className="text-lg font-bold text-gray-900">Delete Review?</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Are you sure you want to permanently delete this review by <strong className="text-gray-800">{deleteConfirmReview.userName}</strong>? This will remove it from the system and recalculate product ratings.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmReview(null)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const target = deleteConfirmReview;
+                    setDeleteConfirmReview(null);
+                    if (handleDeleteReviewAdmin && target) {
+                      await handleDeleteReviewAdmin(target.productId, target.reviewId);
+                    }
+                  }}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-md shadow-red-600/20 active:scale-95"
+                >
+                  Delete Review
+                </button>
+              </div>
+            </div>
           </div>
         )}
     </>

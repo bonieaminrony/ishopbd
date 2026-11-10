@@ -9,6 +9,9 @@ coverage/
 service-account.json
 api/service-account.json
 public/api/service-account.json
+scripts_archive/
 scratch/
 .gemini/
 *.tmp
+*.bundle
+.git_backup*

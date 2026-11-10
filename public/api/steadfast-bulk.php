@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/_marketing_lib.php';
+
 $allowedOrigins = [
     'https://ishopbd.com',
     'https://www.ishopbd.com',
@@ -13,7 +15,7 @@ if (in_array($origin, $allowedOrigins)) {
 } else {
     header("Access-Control-Allow-Origin: https://ishopbd.com");
 }
-header("Access-Control-Allow-Headers: Content-Type, X-Admin-Token");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Admin-Token");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -22,45 +24,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// Enable error reporting for debugging
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// --- ENV READER ---
-function getEnvVar($key, $default = '') {
-    $paths = [
-        __DIR__ . '/../../.env',
-        __DIR__ . '/../.env',
-        $_SERVER['DOCUMENT_ROOT'] . '/../.env',
-        $_SERVER['DOCUMENT_ROOT'] . '/.env',
-    ];
-    foreach ($paths as $path) {
-        $realPath = realpath($path);
-        if ($realPath && file_exists($realPath)) {
-            $lines = file($realPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || $line[0] === '#') continue;
-                $parts = explode('=', $line, 2);
-                if (count($parts) === 2 && trim($parts[0]) === $key) {
-                    return trim(trim($parts[1]), "\"'");
-                }
-            }
-        }
-    }
-    return $default;
-}
-
-// --- ADMIN SECURITY CHECK ---
-$adminToken = $_SERVER['HTTP_X_ADMIN_TOKEN'] ?? $_SERVER['X_ADMIN_TOKEN'] ?? '';
-$masterPassword = getEnvVar('MASTER_ADMIN_PASSWORD');
-if (empty($masterPassword) || empty($adminToken) || $adminToken !== $masterPassword) {
+if (!marketingVerifyIsAdmin()) {
     http_response_code(403);
     echo json_encode(["success" => false, "error" => "Unauthorized: Admin access required"]);
     exit;
 }
 
-// Read JSON input
 $input = file_get_contents('php://input');
 $data = json_decode($input, true);
 
@@ -70,9 +42,25 @@ if (!isset($data['orders']) || !is_array($data['orders']) || count($data['orders
     exit;
 }
 
-// Use server-side keys primarily; fallback to body keys for backward compatibility
-$apiKey = getEnvVar('STEADFAST_API_KEY') ?: ($data['apiKey'] ?? '');
-$secretKey = getEnvVar('STEADFAST_SECRET_KEY') ?: ($data['secretKey'] ?? '');
+$apiKey = marketingGetEnvVar('STEADFAST_API_KEY') ?: ($data['apiKey'] ?? '');
+$secretKey = marketingGetEnvVar('STEADFAST_SECRET_KEY') ?: ($data['secretKey'] ?? '');
+
+if (empty($apiKey) || empty($secretKey)) {
+    $sa = marketingGetServiceAccount();
+    $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
+    $dsToken = marketingGetDatastoreToken($sa);
+    if ($dsToken) {
+        $kCh = curl_init("https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/admin_config/keys");
+        curl_setopt_array($kCh, [CURLOPT_HTTPHEADER => ["Authorization: Bearer $dsToken"], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8]);
+        $kResp = json_decode(curl_exec($kCh) ?: '', true);
+        curl_close($kCh);
+        if (isset($kResp['fields'])) {
+            $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
+            $apiKey = $apiKey ?: ($kData['steadfastApiKey'] ?? '');
+            $secretKey = $secretKey ?: ($kData['steadfastSecretKey'] ?? '');
+        }
+    }
+}
 
 if (empty($apiKey) || empty($secretKey)) {
     http_response_code(400);
@@ -109,26 +97,16 @@ foreach ($orders as $order) {
     $curlError = curl_error($ch);
     curl_close($ch);
 
-    // Write log for debugging
-    $logData = date('[Y-m-d H:i:s] ') . "Raw Input: " . $input . "\n"
-             . "Request Payload: " . json_encode($payload) . "\n"
-             . "HTTP Code: " . $httpCode . "\n"
-             . "Response: " . $response . "\n"
-             . "Curl Error: " . $curlError . "\n\n";
-    file_put_contents(__DIR__ . '/debug_steadfast.log', $logData, FILE_APPEND);
-
-    $resultData = null;
-    if ($response) {
-        $resultData = json_decode($response, true);
-    }
+    $resultData = $response ? json_decode($response, true) : null;
 
     if ($httpCode === 200 && isset($resultData['status']) && $resultData['status'] == 200) {
-        $trackingCode = isset($resultData['consignment']['tracking_code']) ? $resultData['consignment']['tracking_code'] : 
-                        (isset($resultData['consignment']['consignment_id']) ? $resultData['consignment']['consignment_id'] : 'Success');
+        $consignmentId = isset($resultData['consignment']['consignment_id']) ? (string)$resultData['consignment']['consignment_id'] : null;
+        $trackingCode = isset($resultData['consignment']['tracking_code']) ? (string)$resultData['consignment']['tracking_code'] : ($consignmentId ?: 'Success');
         $processedOrders[] = [
             'id' => isset($order['id']) ? $order['id'] : '',
             'success' => true,
-            'trackingId' => $trackingCode
+            'consignmentId' => $consignmentId,
+            'trackingId' => $trackingCode,
         ];
     } else {
         $errorMessage = 'Failed to create order';
@@ -147,10 +125,7 @@ foreach ($orders as $order) {
     }
 }
 
-$output = json_encode([
+echo json_encode([
     'success' => true,
     'processedOrders' => $processedOrders
 ]);
-file_put_contents(__DIR__ . '/debug_steadfast.log', date('[Y-m-d H:i:s] ') . "Output to frontend: " . $output . "\n\n", FILE_APPEND);
-echo $output;
-?>

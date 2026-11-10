@@ -5,34 +5,47 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const PASSWORDS_TO_TRY = ['Aminbro@1122', 'n3GuM$aUuHKB9@X'];
+import dotenv from 'dotenv';
+dotenv.config();
+
+const FTP_HOST = process.env.FTP_HOST || '187.127.183.159';
+const FTP_PORT = Number(process.env.FTP_PORT) || 21;
+const FTP_USER = process.env.FTP_USER;
+const FTP_PASSWORD = process.env.FTP_PASSWORD;
+const FTP_PASSWORD_FALLBACK = process.env.FTP_PASSWORD_FALLBACK;
 
 async function createClient(preferredPassword = null) {
+  if (!FTP_USER || !FTP_PASSWORD) {
+    throw new Error('FTP credentials missing! Please configure FTP_USER and FTP_PASSWORD in your .env file.');
+  }
+
   const passwords = preferredPassword 
-    ? [preferredPassword, ...PASSWORDS_TO_TRY.filter(p => p !== preferredPassword)]
-    : PASSWORDS_TO_TRY;
+    ? [preferredPassword]
+    : [FTP_PASSWORD, FTP_PASSWORD_FALLBACK].filter(Boolean);
+
+  const maskedUser = FTP_USER.length > 4 ? `${FTP_USER.slice(0, 3)}****` : '****';
 
   for (const password of passwords) {
     const client = new ftp.Client();
     client.ftp.verbose = false;
     client.ftp.timeout = 60000;
     try {
-      console.log(`Connecting to Hostinger FTP with user u286107709...`);
+      console.log(`Connecting to Hostinger FTP (${FTP_HOST}:${FTP_PORT}) as user ${maskedUser}...`);
       await client.access({
-        host: '187.127.183.159',
-        port: 21,
-        user: 'u286107709',
+        host: FTP_HOST,
+        port: FTP_PORT,
+        user: FTP_USER,
         password: password,
         secure: false
       });
       console.log('✅ Connected successfully to Hostinger FTP!');
       return { client, password };
     } catch (err) {
-      console.log(`❌ Failed with password candidate: ${err.message}`);
+      console.log(`❌ Connection attempt failed: ${err.message}`);
       client.close();
     }
   }
-  throw new Error('All FTP password attempts failed.');
+  throw new Error('All FTP connection attempts failed.');
 }
 
 async function uploadFileSafe(clientContext, localPath, remotePath, maxRetries = 3) {
@@ -61,6 +74,20 @@ async function uploadDirectoryRecursive(clientContext, localDir, remoteDir) {
   for (const entry of entries) {
     const localEntryPath = path.join(localDir, entry.name);
     const remoteEntryPath = `${remoteDir}/${entry.name}`;
+
+    // Security: Strictly forbid uploading credentials, sourcemaps, or cache dumps into public_html
+    const isSensitive = 
+      entry.name === 'service-account.json' ||
+      entry.name.startsWith('service-account') ||
+      entry.name.startsWith('.env') ||
+      entry.name.endsWith('.map') ||
+      entry.name.endsWith('.ts') ||
+      entry.name.endsWith('.tsx');
+
+    if (isSensitive) {
+      continue;
+    }
+
     if (entry.isDirectory()) {
       await uploadDirectoryRecursive(clientContext, localEntryPath, remoteEntryPath);
     } else if (entry.isFile()) {
@@ -85,26 +112,31 @@ async function deploy() {
     await clientContext.client.ensureDir(`${REMOTE_DIR}/tmp`);
     await clientContext.client.ensureDir(`${REMOTE_DIR}/uploads`);
 
-    // Clean up Hostinger default holding/parking files if present
-    console.log('🧹 Cleaning up Hostinger placeholder files if present...');
+    // Clean up Hostinger default holding/parking files and old project assets if present
+    console.log('🧹 Cleaning up Hostinger placeholder and legacy files if present...');
     await clientContext.client.remove(`${REMOTE_DIR}/default.php`).catch(() => {});
     await clientContext.client.remove(`${REMOTE_DIR}/default.html`).catch(() => {});
     await clientContext.client.remove(`${REMOTE_DIR}/hosting-page.html`).catch(() => {});
+    await clientContext.client.remove(`${REMOTE_DIR}/logo 2.png`).catch(() => {});
 
-    // 1. Upload .env
-    console.log('📤 Uploading .env...');
+    // Clean up any legacy public service-account.json files in public_html
+    console.log('🧹 Purging any legacy exposed service-account.json from public_html...');
+    await clientContext.client.remove(`${REMOTE_DIR}/api/service-account.json`).catch(() => {});
+    await clientContext.client.remove(`${REMOTE_DIR}/service-account.json`).catch(() => {});
+
+    // 1. Upload .env to secure server root outside public_html
+    console.log('📤 Uploading .env to server-only root...');
     if (fs.existsSync(path.join(__dirname, '.env'))) {
-      await uploadFileSafe(clientContext, path.join(__dirname, '.env'), `${REMOTE_DIR}/.env`);
       await uploadFileSafe(clientContext, path.join(__dirname, '.env'), `/domains/ishopbd.com/.env`).catch(() => {});
-      console.log('✅ .env uploaded!');
+      console.log('✅ .env securely uploaded!');
     }
 
-    // 2. Upload service-account.json
-    console.log('📤 Uploading api/service-account.json...');
+    // 2. Upload service-account.json strictly outside public_html
+    console.log('📤 Uploading api/service-account.json to server-only location...');
     const serviceAccountPath = path.join(__dirname, 'api', 'service-account.json');
     if (fs.existsSync(serviceAccountPath)) {
-      await uploadFileSafe(clientContext, serviceAccountPath, `${REMOTE_DIR}/api/service-account.json`);
-      console.log('✅ service-account.json uploaded!');
+      await uploadFileSafe(clientContext, serviceAccountPath, `/domains/ishopbd.com/api/service-account.json`).catch(() => {});
+      console.log('✅ service-account.json securely uploaded outside public_html!');
     }
 
     // 3. Upload index.html
@@ -166,11 +198,20 @@ async function deploy() {
     const staticFiles = [
       'favicon.ico',
       'logo.png',
-      'logo 2.png',
+      'logo.webp',
       'og-image.png',
       'manifest.json',
-      'icon-192x192.png',
+      'ishopbd_hero_banner.webp',
+      'ishopbd_hero_banner-mobile.webp',
+      'ishopbd_hero_banner.png',
+      'default_right_top.webp',
+      'default_right_top.png',
+      'default_right_bottom.webp',
+      'default_right_bottom.png',
+      'app_promo_poster.webp',
       'icon-512x512.png',
+      'icon-192x192.png',
+      'icon-180x180.png',
       'icon-144x144.png',
       'icon-96x96.png',
       'icon-48x48.png',
@@ -179,12 +220,18 @@ async function deploy() {
       'sw.js'
     ];
 
+    console.log('📤 Uploading static files (sitemap.xml, robots.txt, icons, etc.)...');
     for (const file of staticFiles) {
-      const localFilePath = path.join(__dirname, 'dist', file);
+      let localFilePath = path.join(__dirname, 'dist', file);
+      if (!fs.existsSync(localFilePath)) {
+        localFilePath = path.join(__dirname, 'public', file);
+      }
       if (fs.existsSync(localFilePath)) {
+        process.stdout.write(`  📤 ${file} ... `);
         await uploadFileSafe(clientContext, localFilePath, `${REMOTE_DIR}/${file}`).catch((err) => {
           console.log(`⚠️ Failed to upload ${file}: ${err.message}`);
         });
+        console.log('done');
       }
     }
 

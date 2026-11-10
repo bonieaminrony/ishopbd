@@ -4,7 +4,7 @@ import fs from 'fs';
 async function run() {
   const client = new ftp.Client();
   try {
-    await client.access({host: '187.127.183.159', user: 'u286107709', password: 'Aminbro@1122', secure: false});
+    await client.access({host: '187.127.183.159', user: 'u286107709', password: 'REDACTED_PASSWORD', secure: false});
     const remotePath = '/domains/ishopbd.com/public_html/index.php';
     const localPath = 'temp_index.php';
     

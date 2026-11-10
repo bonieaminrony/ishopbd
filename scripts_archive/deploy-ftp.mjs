@@ -9,7 +9,7 @@ const FTP_CONFIG = {
   host: '187.127.183.159',
   port: 21,
   user: 'u286107709',
-  password: 'n3GuM$aUuHKB9@X',
+  password: 'REDACTED_PASSWORD',
   secure: false
 };
 
@@ -32,9 +32,9 @@ async function deploy() {
 
     // 2. Create and upload .env file
     console.log('📤 Uploading .env file...');
-    const envContent = `MASTER_ADMIN_PASSWORD=islamic786
-GEMINI_API_KEY=AIzaSyBj0M8GpGNJIEAAGrbdlnhEVKHmC9WQqB0
-SMS_API_KEY=ZmxsvZfckGDXn7Pa2Tjj
+    const envContent = `MASTER_ADMIN_PASSWORD=REDACTED_PASSWORD
+GEMINI_API_KEY=REDACTED_GEMINI_KEY
+SMS_API_KEY=REDACTED_SMS_KEY
 SMS_SENDER_ID=8809648908219
 EMAIL_USER=ishopbd.online@gmail.com
 PORT=3000
