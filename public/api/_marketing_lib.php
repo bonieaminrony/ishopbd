@@ -426,7 +426,7 @@ function marketingVerifyFirebaseJwtLocal($idToken, $projectId) {
     ];
 }
 
-function marketingVerifyIsAdmin() {
+function marketingVerifyIsAdmin($allowModerator = false) {
     $host = strtolower($_SERVER['HTTP_HOST'] ?? '');
     if (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false) {
         return true;
@@ -498,8 +498,9 @@ function marketingVerifyIsAdmin() {
                     curl_close($c);
                     if ($sc === 200 && $r) {
                         $d = json_decode($r, true);
-                        $role = $d['fields']['role']['stringValue'] ?? '';
-                        if (in_array($role, ['admin', 'owner'], true)) {
+                        $role = strtolower(trim((string)($d['fields']['role']['stringValue'] ?? '')));
+                        $allowedRoles = $allowModerator ? ['admin', 'owner', 'moderator'] : ['admin', 'owner'];
+                        if (in_array($role, $allowedRoles, true)) {
                             return true;
                         }
                     }

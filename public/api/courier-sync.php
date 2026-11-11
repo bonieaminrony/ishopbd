@@ -509,7 +509,8 @@ if ($action === 'cron') {
     $isCronAuthorized = ($cronSecret !== '' && $provided !== '' && hash_equals($cronSecret, $provided));
 }
 
-if (!$isCronAuthorized && !marketingVerifyIsAdmin()) {
+$isStaffSyncAction = in_array($action, ['sync-one', 'sync-all', 'pathao-status'], true);
+if (!$isCronAuthorized && !marketingVerifyIsAdmin($isStaffSyncAction)) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Unauthorized access']);
     exit;

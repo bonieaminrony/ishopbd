@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import axios from 'axios';
 import {
   clearSteadfastFraudMemoryCache,
@@ -169,5 +171,24 @@ describe('Steadfast Fraud Check Data Processing', () => {
     expect(batch.rateLimited).toBe(true);
     expect(batch.fetchedPhones).toEqual([]);
     expect(getSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Hostinger PHP steadfast-fraud endpoint and .htaccess rules in parity with batch + Firestore cache', () => {
+    const root = process.cwd();
+    const phpFraud = fs.readFileSync(path.join(root, 'public', 'api', 'steadfast-fraud.php'), 'utf8');
+    const pubHtaccess = fs.readFileSync(path.join(root, 'public', '.htaccess'), 'utf8');
+    const rootHtaccess = fs.readFileSync(path.join(root, 'htaccess.txt'), 'utf8');
+
+    expect(phpFraud).toContain('courier_fraud_cache');
+    expect(phpFraud).toContain('documents:batchGet');
+    expect(phpFraud).toContain('marketingVerifyIsAdmin(true)');
+
+    for (const ht of [pubHtaccess, rootHtaccess]) {
+      const batchIdx = ht.indexOf('^api/courier/steadfast/fraud/batch$');
+      const singleIdx = ht.indexOf('^api/courier/steadfast/fraud/([^/]+)$');
+      expect(batchIdx).toBeGreaterThan(-1);
+      expect(singleIdx).toBeGreaterThan(-1);
+      expect(batchIdx).toBeLessThan(singleIdx);
+    }
   });
 });

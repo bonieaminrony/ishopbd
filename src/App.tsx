@@ -3439,8 +3439,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
                   const singleRes = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(p)}`, { headers });
                   const parsed = parseClientCourierFraudReport(singleRes.data);
                   if (parsed) updates[p] = parsed;
-                } catch {
-                  // Silent fallback failure; manual Verify remains available
+                } catch (singleErr: any) {
+                  if (singleErr?.response?.status === 429) {
+                    autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
+                  }
                 }
               })
             );
