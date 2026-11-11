@@ -1139,13 +1139,16 @@ export interface SteadfastFraudReportData extends CourierFraudReport {
   raw?: any;
 }
 
-const FRAUD_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const FRAUD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const FRAUD_RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
 const fraudMemoryCache = new Map<string, { fetchedAtMs: number; data: SteadfastFraudReportData }>();
 const fraudInFlight = new Map<string, Promise<SteadfastFraudReportData>>();
+let fraudRateLimitedUntilMs = 0;
 
 export function clearSteadfastFraudMemoryCache(): void {
   fraudMemoryCache.clear();
   fraudInFlight.clear();
+  fraudRateLimitedUntilMs = 0;
 }
 
 export function parseSteadfastFraudPayload(phone: string, responseData: any): SteadfastFraudReportData {
@@ -1255,6 +1258,43 @@ async function fetchLiveSteadfastFraudFromApi(
   return parseSteadfastFraudPayload(phone, responseData);
 }
 
+async function readCachedFraudReport(
+  phone: string,
+  getDb?: () => FirebaseFirestore.Firestore | null,
+  ttlMs = FRAUD_CACHE_TTL_MS
+): Promise<SteadfastFraudReportData | null> {
+  const now = Date.now();
+  const mem = fraudMemoryCache.get(phone);
+  if (mem && now - mem.fetchedAtMs < ttlMs) {
+    return { ...mem.data, cached: true };
+  }
+
+  try {
+    const db = getDb?.();
+    if (db) {
+      const snap = await db.collection("courier_fraud_cache").doc(phone).get();
+      if (snap.exists) {
+        const docData = snap.data() as any;
+        const fetchedAtMs = Number(docData?.fetchedAtMs || 0);
+        if (fetchedAtMs > 0 && now - fetchedAtMs < ttlMs) {
+          const parsed = parseSteadfastFraudPayload(phone, docData?.raw ?? docData);
+          const cachedResult: SteadfastFraudReportData = {
+            ...parsed,
+            cached: true,
+            fetched_at: docData?.updatedAt || new Date(fetchedAtMs).toISOString(),
+          };
+          fraudMemoryCache.set(phone, { fetchedAtMs, data: parsed });
+          return cachedResult;
+        }
+      }
+    }
+  } catch (cacheReadErr: any) {
+    console.warn("[COURIER_FRAUD_CACHE] Read warning:", cacheReadErr?.message || cacheReadErr);
+  }
+
+  return null;
+}
+
 export async function getSteadfastFraudReportCached(
   rawPhone: string,
   options: {
@@ -1271,82 +1311,70 @@ export async function getSteadfastFraudReportCached(
   }
 
   const ttlMs = options.ttlMs ?? FRAUD_CACHE_TTL_MS;
-  const now = Date.now();
 
   if (!options.forceRefresh) {
-    const mem = fraudMemoryCache.get(phone);
-    if (mem && now - mem.fetchedAtMs < ttlMs) {
-      return { data: { ...mem.data, cached: true }, fromCache: true };
+    const cached = await readCachedFraudReport(phone, options.getDb, ttlMs);
+    if (cached) {
+      return { data: cached, fromCache: true };
     }
 
-    try {
-      const db = options.getDb?.();
-      if (db) {
-        const snap = await db.collection("courier_fraud_cache").doc(phone).get();
-        if (snap.exists) {
-          const docData = snap.data() as any;
-          const fetchedAtMs = Number(docData?.fetchedAtMs || 0);
-          if (fetchedAtMs > 0 && now - fetchedAtMs < ttlMs) {
-            const parsed = parseSteadfastFraudPayload(phone, docData?.raw ?? docData);
-            const cachedResult: SteadfastFraudReportData = {
-              ...parsed,
-              cached: true,
-              fetched_at: docData?.updatedAt || new Date(fetchedAtMs).toISOString(),
-            };
-            fraudMemoryCache.set(phone, { fetchedAtMs, data: parsed });
-            return { data: cachedResult, fromCache: true };
-          }
-        }
-      }
-    } catch (cacheReadErr: any) {
-      console.warn("[COURIER_FRAUD_CACHE] Read warning:", cacheReadErr?.message || cacheReadErr);
+    if (Date.now() < fraudRateLimitedUntilMs) {
+      const rateErr: any = new Error("Steadfast courier search rate limit reached. Please retry shortly.");
+      rateErr.statusCode = 429;
+      throw rateErr;
     }
   }
 
   let pending = fraudInFlight.get(phone);
   if (!pending) {
     pending = (async () => {
-      const { apiKey, secretKey } = await resolveSteadfastFraudKeys(options.getDb);
-      if (!apiKey || !secretKey) {
-        const err: any = new Error(
-          "Steadfast API Key settings missing. Please configure them in Dashboard Settings or server .env."
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const fresh = await fetchLiveSteadfastFraudFromApi(phone, apiKey, secretKey);
-      const updatedAt = new Date().toISOString();
-      const storedData: SteadfastFraudReportData = {
-        ...fresh,
-        cached: false,
-        fetched_at: updatedAt,
-      };
-      fraudMemoryCache.set(phone, { fetchedAtMs: Date.now(), data: storedData });
-
       try {
-        const db = options.getDb?.();
-        if (db) {
-          await db.collection("courier_fraud_cache").doc(phone).set(
-            {
-              ...fresh,
-              fetchedAtMs: Date.now(),
-              updatedAt,
-            },
-            { merge: true }
+        const { apiKey, secretKey } = await resolveSteadfastFraudKeys(options.getDb);
+        if (!apiKey || !secretKey) {
+          const err: any = new Error(
+            "Steadfast API Key settings missing. Please configure them in Dashboard Settings or server .env."
           );
+          err.statusCode = 400;
+          throw err;
         }
-      } catch (cacheWriteErr: any) {
-        console.warn("[COURIER_FRAUD_CACHE] Write warning:", cacheWriteErr?.message || cacheWriteErr);
-      }
 
-      return storedData;
+        const fresh = await fetchLiveSteadfastFraudFromApi(phone, apiKey, secretKey);
+        const updatedAt = new Date().toISOString();
+        const storedData: SteadfastFraudReportData = {
+          ...fresh,
+          cached: false,
+          fetched_at: updatedAt,
+        };
+        fraudMemoryCache.set(phone, { fetchedAtMs: Date.now(), data: storedData });
+
+        try {
+          const db = options.getDb?.();
+          if (db) {
+            await db.collection("courier_fraud_cache").doc(phone).set(
+              {
+                ...fresh,
+                fetchedAtMs: Date.now(),
+                updatedAt,
+              },
+              { merge: true }
+            );
+          }
+        } catch (cacheWriteErr: any) {
+          console.warn("[COURIER_FRAUD_CACHE] Write warning:", cacheWriteErr?.message || cacheWriteErr);
+        }
+
+        return storedData;
+      } catch (apiErr: any) {
+        if (apiErr?.response?.status === 429 || apiErr?.statusCode === 429) {
+          fraudRateLimitedUntilMs = Date.now() + FRAUD_RATE_LIMIT_COOLDOWN_MS;
+        }
+        throw apiErr;
+      } finally {
+        fraudInFlight.delete(phone);
+      }
     })();
 
     fraudInFlight.set(phone, pending);
-    pending.finally(() => {
-      fraudInFlight.delete(phone);
-    });
   }
 
   const data = await pending;
@@ -1359,6 +1387,7 @@ export async function fetchSteadfastFraudBatch(
     getDb?: () => FirebaseFirestore.Firestore | null;
     forceRefresh?: boolean;
     maxPhones?: number;
+    maxLiveFetch?: number;
     concurrency?: number;
     ttlMs?: number;
   } = {}
@@ -1367,9 +1396,12 @@ export async function fetchSteadfastFraudBatch(
   errors: Record<string, string>;
   cachedPhones: string[];
   fetchedPhones: string[];
+  rateLimited: boolean;
 }> {
-  const maxPhones = Math.max(1, Math.min(25, options.maxPhones ?? 15));
-  const concurrency = Math.max(1, Math.min(5, options.concurrency ?? 3));
+  const maxPhones = Math.max(1, Math.min(30, options.maxPhones ?? 25));
+  const maxLiveFetch = Math.max(0, Math.min(10, options.maxLiveFetch ?? 4));
+  const concurrency = Math.max(1, Math.min(3, options.concurrency ?? 2));
+  const ttlMs = options.ttlMs ?? FRAUD_CACHE_TTL_MS;
 
   const uniquePhones: string[] = [];
   for (const raw of rawPhones) {
@@ -1384,22 +1416,46 @@ export async function fetchSteadfastFraudBatch(
   const errors: Record<string, string> = {};
   const cachedPhones: string[] = [];
   const fetchedPhones: string[] = [];
+  const uncachedPhones: string[] = [];
+
+  if (!options.forceRefresh) {
+    await Promise.all(
+      uniquePhones.map(async (phone) => {
+        const cached = await readCachedFraudReport(phone, options.getDb, ttlMs);
+        if (cached) {
+          results[phone] = cached;
+          cachedPhones.push(phone);
+        } else {
+          uncachedPhones.push(phone);
+        }
+      })
+    );
+  } else {
+    uncachedPhones.push(...uniquePhones);
+  }
+
+  let rateLimited = Date.now() < fraudRateLimitedUntilMs;
+  const liveTargets = rateLimited ? [] : uncachedPhones.slice(0, maxLiveFetch);
 
   let cursor = 0;
   const worker = async () => {
-    while (cursor < uniquePhones.length) {
+    while (!rateLimited && cursor < liveTargets.length) {
       const idx = cursor++;
-      const phone = uniquePhones[idx];
+      const phone = liveTargets[idx];
       try {
         const { data, fromCache } = await getSteadfastFraudReportCached(phone, {
           getDb: options.getDb,
           forceRefresh: options.forceRefresh,
-          ttlMs: options.ttlMs,
+          ttlMs,
         });
         results[phone] = data;
         if (fromCache) cachedPhones.push(phone);
         else fetchedPhones.push(phone);
       } catch (err: any) {
+        const status = err?.statusCode || err?.response?.status;
+        if (status === 429) {
+          rateLimited = true;
+        }
         errors[phone] =
           err?.response?.data?.error ||
           err?.response?.data?.message ||
@@ -1409,9 +1465,11 @@ export async function fetchSteadfastFraudBatch(
     }
   };
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, uniquePhones.length || 1) }, () => worker())
-  );
+  if (liveTargets.length > 0) {
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, liveTargets.length) }, () => worker())
+    );
+  }
 
-  return { results, errors, cachedPhones, fetchedPhones };
+  return { results, errors, cachedPhones, fetchedPhones, rateLimited };
 }

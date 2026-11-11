@@ -137,7 +137,7 @@ describe('Steadfast Fraud Check Data Processing', () => {
     expect(refreshed.fromCache).toBe(false);
     expect(getSpy).toHaveBeenCalledTimes(2);
 
-    // Batch deduplicates + caps at 15 and serves cached phones without extra API calls
+    // Batch deduplicates + serves cached phones and limits uncached live queries
     const batch = await fetchSteadfastFraudBatch([
       '01711000001',
       '+8801711000001',
@@ -146,6 +146,28 @@ describe('Steadfast Fraud Check Data Processing', () => {
     expect(batch.cachedPhones).toEqual(['01711000001']);
     expect(batch.fetchedPhones).toEqual(['01711000002']);
     expect(batch.results['01711000002'].delivery_rate).toBe(91);
+    expect(batch.rateLimited).toBe(false);
     expect(getSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('handles HTTP 429 rate limits cleanly without unhandled rejections and stops batch live calls', async () => {
+    process.env.STEADFAST_API_KEY = 'test-key';
+    process.env.STEADFAST_SECRET_KEY = 'test-secret';
+
+    const err429: any = new Error('Request failed with status code 429');
+    err429.response = {
+      status: 429,
+      data: { error: 'Rate limit exceeded. You have reached your maximum allowed searches.', limit: 10 },
+    };
+
+    const getSpy = vi.spyOn(axios, 'get').mockRejectedValue(err429);
+
+    await expect(getSteadfastFraudReportCached('01799000001')).rejects.toThrow();
+
+    // During cooldown, subsequent batch call returns empty live fetches without calling axios again
+    const batch = await fetchSteadfastFraudBatch(['01799000002', '01799000003']);
+    expect(batch.rateLimited).toBe(true);
+    expect(batch.fetchedPhones).toEqual([]);
+    expect(getSpy).toHaveBeenCalledTimes(1);
   });
 });

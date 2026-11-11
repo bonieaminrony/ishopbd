@@ -1144,7 +1144,16 @@ export default function AdminOrdersTab({
                           )}
                           {(() => {
                             const report = getCourierReportForPhone(courierReports, order.customerPhone);
-                            if (!report) return null;
+                            const isChecking = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
+                            if (!report) {
+                              if (!isChecking) return null;
+                              return (
+                                <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-1.5">
+                                  <Loader2 size={10} className="animate-spin" />
+                                  <span>Steadfast রেশিও লোড হচ্ছে...</span>
+                                </div>
+                              );
+                            }
                             const successRate =
                               report.delivery_rate !== undefined && report.delivery_rate !== null
                                 ? Number(report.delivery_rate)

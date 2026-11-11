@@ -1367,6 +1367,14 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   });
 
+  const getFirestoreSafe = () => {
+    try {
+      return getFirestore();
+    } catch {
+      return null;
+    }
+  };
+
   app.post("/api/confirm-order", async (req, res) => {
     // Rate limit: 10 order confirmations per IP per minute
     const rawIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || "unknown";
@@ -1525,6 +1533,8 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         console.warn("EMAIL_USER or EMAIL_PASS not set. Email not sent.");
       }
       res.json({ success: true, message: "Order processed successfully" });
+      // Pre-warm Steadfast customer delivery ratio into Firestore cache as soon as order is placed
+      void getSteadfastFraudReportCached(customerPhone, { getDb: getFirestoreSafe }).catch(() => {});
     } catch (error) {
       console.error("Error sending email:", error);
       res.status(500).json({ success: false, error: "Failed to send email" });
@@ -1694,14 +1704,6 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   });
 
-  const getFirestoreSafe = () => {
-    try {
-      return getFirestore();
-    } catch {
-      return null;
-    }
-  };
-
   app.post("/api/courier/steadfast/fraud/batch", async (req, res) => {
     const isAuthorized = await verifyIsAdmin(req);
     if (!isAuthorized) {
@@ -1719,8 +1721,9 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const batchResult = await fetchSteadfastFraudBatch(phones, {
         getDb: getFirestoreSafe,
         forceRefresh,
-        maxPhones: 15,
-        concurrency: 3,
+        maxPhones: 25,
+        maxLiveFetch: 4,
+        concurrency: 2,
       });
 
       return res.json({

@@ -1,11 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw, Copy, ExternalLink, MapPin } from 'lucide-react';
+import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw, Copy, ExternalLink, MapPin, Loader2 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
+  CourierFraudReport,
   formatSafeDateTime,
+  getCourierReportForPhone,
+  getOrderCourierRateDisplay,
   getOrderItemsSafe,
+  isPhoneLoadingInRecord,
   resolveCourierBadgeDisplay,
 } from '../utils/courierDisplay';
 
@@ -26,6 +30,9 @@ export interface OrderDetailsModalProps {
   getProductPrice: (product: any, quantity?: number) => number;
   syncSingleCourierStatus?: (orderId: string) => void;
   syncingOrderId?: string | null;
+  courierReports?: Record<string, CourierFraudReport>;
+  loadingCourierReports?: Record<string, boolean>;
+  checkCourierReport?: (phone: string, forceRefresh?: boolean) => void;
 }
 
 export default function OrderDetailsModal({
@@ -45,7 +52,22 @@ export default function OrderDetailsModal({
   getProductPrice,
   syncSingleCourierStatus,
   syncingOrderId = null,
+  courierReports,
+  loadingCourierReports,
+  checkCourierReport,
 }: OrderDetailsModalProps) {
+  const autoRequestedPhonesRef = useRef<Set<string>>(new Set());
+  const modalPhone = selectedOrderForDetails?.customerPhone || '';
+  const modalCourierReport = getCourierReportForPhone(courierReports, modalPhone);
+  const isModalCourierLoading = isPhoneLoadingInRecord(loadingCourierReports, modalPhone);
+
+  useEffect(() => {
+    if (!modalPhone || !checkCourierReport || modalCourierReport || isModalCourierLoading) return;
+    if (autoRequestedPhonesRef.current.has(modalPhone)) return;
+    autoRequestedPhonesRef.current.add(modalPhone);
+    checkCourierReport(modalPhone);
+  }, [modalPhone, modalCourierReport, isModalCourierLoading, checkCourierReport]);
+
   useEffect(() => {
     return () => {
       setIsEditingOrder(false);
@@ -181,35 +203,92 @@ export default function OrderDetailsModal({
             
             const successRate = totalOrders > 0 ? Math.round((delivered / totalOrders) * 100) : 0;
             const isRisky = returned > 0 || successRate < 50;
+            const courierDisplay = getOrderCourierRateDisplay(
+              modalCourierReport,
+              { total: totalOrders, delivered, cancelled: returned },
+              isModalCourierLoading
+            );
+            const hasCourierStats = courierDisplay.source === 'courier' && Boolean(modalCourierReport);
             return (
-              <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <AlertCircle size={14} className={isRisky ? "text-red-500" : "text-green-500"} /> কাস্টমার অর্ডার হিস্ট্রি (ইন্টারনাল)
-                  </h4>
-                  <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isRisky ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
-                    {totalOrders <= 1 && returned === 0 ? "নতুন কাস্টমার" : isRisky ? "রিস্কি কাস্টমার" : "সেইফ কাস্টমার"}
-                  </span>
+              <div className="space-y-4">
+                <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                      <AlertCircle size={14} className={isRisky ? "text-red-500" : "text-green-500"} /> কাস্টমার অর্ডার হিস্ট্রি (ইন্টারনাল)
+                    </h4>
+                    <span className={`text-[10px] font-bold px-3 py-1 rounded-full ${isRisky ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+                      {totalOrders <= 1 && returned === 0 ? "নতুন কাস্টমার" : isRisky ? "রিস্কি কাস্টমার" : "সেইফ কাস্টমার"}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="bg-gray-50 p-3 rounded-2xl text-center">
+                      <span className="text-[10px] font-bold text-gray-400 block mb-1">মোট অর্ডার</span>
+                      <span className="text-lg font-black text-gray-800">{totalOrders}</span>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-2xl text-center border border-green-100">
+                      <span className="text-[10px] font-bold text-green-500 block mb-1">ডেলিভারি</span>
+                      <span className="text-lg font-black text-green-700">{delivered}</span>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-2xl text-center border border-red-100">
+                      <span className="text-[10px] font-bold text-red-500 block mb-1">রিটার্ন/ক্যানসেল</span>
+                      <span className="text-lg font-black text-red-700">{returned}</span>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-2xl text-center border border-blue-100">
+                      <span className="text-[10px] font-bold text-blue-500 block mb-1">সাকসেস রেট</span>
+                      <span className="text-lg font-black text-blue-700">{successRate}%</span>
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="bg-gray-50 p-3 rounded-2xl text-center">
-                    <span className="text-[10px] font-bold text-gray-400 block mb-1">মোট অর্ডার</span>
-                    <span className="text-lg font-black text-gray-800">{totalOrders}</span>
+
+                {(hasCourierStats || isModalCourierLoading || checkCourierReport) && modalPhone && (
+                  <div className="bg-white border border-emerald-200/70 rounded-3xl p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest flex items-center gap-2">
+                        <Truck size={14} className="text-emerald-600" /> Steadfast কুরিয়ার ডেলিভারি রেশিও (সারা বাংলাদেশ)
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        {courierDisplay.fraudCount > 0 && (
+                          <span className="bg-red-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full animate-pulse">
+                            FRAUD ({courierDisplay.fraudCount})
+                          </span>
+                        )}
+                        {checkCourierReport && (
+                          <button
+                            type="button"
+                            onClick={() => checkCourierReport(modalPhone, true)}
+                            disabled={isModalCourierLoading}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
+                          >
+                            {isModalCourierLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCcw size={10} />}
+                            {isModalCourierLoading ? "চেক হচ্ছে..." : "রিফ্রেশ"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {hasCourierStats ? (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-slate-50 p-3 rounded-2xl text-center border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 block mb-1">ভলিউম / মোট</span>
+                          <span className="text-lg font-black text-slate-800">{courierDisplay.mobileTotalText}</span>
+                        </div>
+                        <div className="bg-emerald-50 p-3 rounded-2xl text-center border border-emerald-100">
+                          <span className="text-[10px] font-bold text-emerald-600 block mb-1">সফল (Success)</span>
+                          <span className="text-lg font-black text-emerald-700">{courierDisplay.successText}</span>
+                        </div>
+                        <div className="bg-rose-50 p-3 rounded-2xl text-center border border-rose-100">
+                          <span className="text-[10px] font-bold text-rose-500 block mb-1">বাতিল (Cancel)</span>
+                          <span className="text-lg font-black text-rose-700">{courierDisplay.cancelText}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs font-bold text-slate-500 text-center py-2">
+                        {isModalCourierLoading ? "Steadfast থেকে কাস্টমার হিস্ট্রি লোড হচ্ছে..." : "এখনো কুরিয়ার রেশিও পাওয়া যায়নি (রিফ্রেশ চাপুন)"}
+                      </p>
+                    )}
                   </div>
-                  <div className="bg-green-50 p-3 rounded-2xl text-center border border-green-100">
-                    <span className="text-[10px] font-bold text-green-500 block mb-1">ডেলিভারি</span>
-                    <span className="text-lg font-black text-green-700">{delivered}</span>
-                  </div>
-                  <div className="bg-red-50 p-3 rounded-2xl text-center border border-red-100">
-                    <span className="text-[10px] font-bold text-red-500 block mb-1">রিটার্ন/ক্যানসেল</span>
-                    <span className="text-lg font-black text-red-700">{returned}</span>
-                  </div>
-                  <div className="bg-blue-50 p-3 rounded-2xl text-center border border-blue-100">
-                    <span className="text-[10px] font-bold text-blue-500 block mb-1">সাকসেস রেট</span>
-                    <span className="text-lg font-black text-blue-700">{successRate}%</span>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })()}

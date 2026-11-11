@@ -318,5 +318,39 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
     expect(setCourierModalPhone).toHaveBeenCalledWith('+8801738364268');
     expect(setIsCourierHistoryModalOpen).toHaveBeenCalledWith(true);
     expect(setSelectedOrderForDetails).not.toHaveBeenCalled();
+
+    // OrderDetailsModal automatically shows Steadfast Courier Delivery Ratio when cached
+    const orderWithPhone = orders[0];
+    render(
+      <OrderDetailsModal
+        selectedOrderForDetails={orderWithPhone}
+        setSelectedOrderForDetails={vi.fn()}
+        isAdminVerified={true}
+        isEditingOrder={false}
+        setIsEditingOrder={vi.fn()}
+        editingOrderData={{ customerName: 'Score Customer', customerPhone: '+8801738364268', address: 'Dhaka', items: orderWithPhone.items }}
+        setEditingOrderData={vi.fn()}
+        handleUpdateOrderDetails={vi.fn()}
+        orderHistory={orders}
+        setOrderHistory={vi.fn()}
+        handleUpdatePaymentMethod={vi.fn()}
+        sendToCourier={vi.fn()}
+        handleUpdateOrderStatus={vi.fn()}
+        getProductPrice={() => 1500}
+        courierReports={{
+          '01738364268': {
+            total_parcel: 0,
+            total_delivered: 0,
+            total_cancelled: 0,
+            total_fraud_report: 0,
+            delivery_rate: 97,
+            cancellation_rate: 2,
+            volume_range: '25+',
+          },
+        }}
+        checkCourierReport={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/Steadfast কুরিয়ার ডেলিভারি রেশিও/i)).toBeInTheDocument();
   });
 });

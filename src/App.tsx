@@ -1731,6 +1731,7 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     courierReportsRef.current = courierReports;
   }, [courierReports]);
   const autoCheckedCourierPhonesRef = useRef<Set<string>>(new Set());
+  const autoCheckPausedUntilRef = useRef<number>(0);
   const [loadingCourierReports, setLoadingCourierReports] = useState<Record<string, boolean>>({});
   const [isCourierHistoryModalOpen, setIsCourierHistoryModalOpen] = useState(false);
   const [courierModalPhone, setCourierModalPhone] = useState("");
@@ -1764,7 +1765,10 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
       }
     } catch (err: any) {
       console.error("Error checking courier report:", err);
-      const errMsg = err.response?.data?.error || err.response?.data?.message || "কুরিয়ার ডাটা ফেচ করতে সমস্যা হয়েছে";
+      const errMsg =
+        err.response?.status === 429
+          ? "Steadfast-এর সার্চ লিমিট (সর্বোচ্চ ১০টি) সাময়িকভাবে পূর্ণ হয়েছে; কিছুক্ষণ পর আবার চেষ্টা করুন"
+          : err.response?.data?.error || err.response?.data?.message || "কুরিয়ার ডাটা ফেচ করতে সমস্যা হয়েছে";
       toast.error(errMsg);
     } finally {
       setLoadingCourierReports(prev => ({
@@ -3393,6 +3397,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
 
   useEffect(() => {
     if (!isAdminOpen || !isAdminVerified || adminTab !== "orders") return;
+    if (Date.now() < autoCheckPausedUntilRef.current) return;
     const visibleOrders = filteredOrders.slice(0, adminOrdersLimit);
     const pendingPhones: string[] = [];
     for (const ord of visibleOrders) {
@@ -3402,7 +3407,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       if (autoCheckedCourierPhonesRef.current.has(normalized)) continue;
       if (!pendingPhones.includes(normalized)) {
         pendingPhones.push(normalized);
-        if (pendingPhones.length >= 12) break;
+        if (pendingPhones.length >= 25) break;
       }
     }
     if (pendingPhones.length === 0) return;
@@ -3420,6 +3425,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         let updates: Record<string, CourierFraudReport> = {};
         try {
           const batchRes = await axios.post("/api/courier/steadfast/fraud/batch", { phones: pendingPhones }, { headers });
+          if (batchRes.data?.rateLimited) {
+            autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
+          }
           const rawResults = batchRes.data?.results;
           if (rawResults && typeof rawResults === "object") {
             for (const [phoneKey, val] of Object.entries(rawResults)) {
@@ -3430,21 +3438,19 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         } catch (batchErr: any) {
           const status = batchErr?.response?.status;
           if (status === 404 || status === 405) {
-            for (let i = 0; i < pendingPhones.length; i += 3) {
-              if (isCancelled) break;
-              const chunk = pendingPhones.slice(i, i + 3);
-              await Promise.all(
-                chunk.map(async (p) => {
-                  try {
-                    const singleRes = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(p)}`, { headers });
-                    const parsed = parseClientCourierFraudReport(singleRes.data);
-                    if (parsed) updates[p] = parsed;
-                  } catch {
-                    // Silent fallback failure; manual Verify remains available
-                  }
-                })
-              );
-            }
+            const fallbackTargets = pendingPhones.slice(0, 3);
+            await Promise.all(
+              fallbackTargets.map(async (p) => {
+                if (isCancelled) return;
+                try {
+                  const singleRes = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(p)}`, { headers });
+                  const parsed = parseClientCourierFraudReport(singleRes.data);
+                  if (parsed) updates[p] = parsed;
+                } catch {
+                  // Silent fallback failure; manual Verify remains available
+                }
+              })
+            );
           }
         }
 
@@ -8390,6 +8396,9 @@ const handleSaveQuickEdit = async () => {
             getProductPrice={getProductPrice}
             syncSingleCourierStatus={syncSingleCourierStatus}
             syncingOrderId={syncingOrderId}
+            courierReports={courierReports}
+            loadingCourierReports={loadingCourierReports}
+            checkCourierReport={checkCourierReport}
           />
         )}
       </AnimatePresence>
