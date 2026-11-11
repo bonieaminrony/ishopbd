@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
 import {
+  appendCourierHistoryEntry,
   evaluateCourierOrderTransition,
   extractOrderCourierInfo,
   fetchSteadfastLiveStatus,
   formatCourierStatusLabel,
+  normalizeSteadfastPhone,
+  processSteadfastWebhook,
   syncAllActiveCourierOrders,
   syncSingleOrderCourierStatus,
   verifyWebhookToken,
@@ -22,6 +25,7 @@ function createMockFirestore(initialOrders: Record<string, any>, initialKeys: an
     get: async () => ({
       exists: Boolean(ordersStore[id]),
       id,
+      ref: makeOrderDocRef(id),
       data: () => (ordersStore[id] ? { ...ordersStore[id] } : undefined),
     }),
     set: async (payload: any, opts?: any) => {
@@ -247,5 +251,102 @@ describe("Automated Courier Sync Engine (Rivo Fashion Parity)", () => {
     expect(verifyWebhookToken("sec123", { authorization: "Bearer sec123" })).toBe(true);
     expect(verifyWebhookToken("sec123", { "x-steadfast-webhook-token": "wrong" })).toBe(false);
     expect(verifyWebhookToken("", { "x-steadfast-webhook-token": "anything" })).toBe(false);
+  });
+
+  it("maintains deduplicated courier movement timeline and captures webhook tracking messages", async () => {
+    const first = appendCourierHistoryEntry([], {
+      status: "in_review",
+      label: "In Review (Booked)",
+      category: "booked",
+      message: "Booked at Steadfast",
+      source: "ADMIN_BOOKING",
+      timestamp: "2026-11-10T10:00:00Z",
+    });
+    // Duplicate polling ping with identical status & message should not create duplicate rows
+    const dup = appendCourierHistoryEntry(first, {
+      status: "in_review",
+      label: "In Review (Booked)",
+      category: "booked",
+      message: "Booked at Steadfast",
+      source: "COURIER_BACKGROUND_SYNC",
+      timestamp: "2026-11-10T10:10:00Z",
+    });
+    expect(dup).toHaveLength(1);
+    expect(dup[0].timestamp).toBe("2026-11-10T10:00:00Z");
+
+    const db = createMockFirestore(
+      {
+        ORD_WH: {
+          status: "confirmed",
+          courierName: "Steadfast",
+          courierTrackingId: "SF_WH_1",
+          courierHistory: dup,
+        },
+      },
+      { steadfastWebhookSecret: "wh_secret_123" }
+    );
+
+    const whRes = await processSteadfastWebhook(
+      db,
+      { "x-steadfast-webhook-token": "wh_secret_123" },
+      {
+        invoice: "ORD_WH",
+        status: "in_transit",
+        tracking_message: "Parcel reached Chattogram Hub",
+      }
+    );
+
+    expect(whRes.success).toBe(true);
+    expect(whRes.statusCode).toBe(200);
+    expect(whRes.result?.trackingMessage).toBe("Parcel reached Chattogram Hub");
+    expect(whRes.result?.courierHistory).toHaveLength(2);
+    expect(db._ordersStore.ORD_WH.status).toBe("shipped");
+    expect(db._ordersStore.ORD_WH.courierTrackingMessage).toBe("Parcel reached Chattogram Hub");
+  });
+
+  it("normalizes Bangladesh phone formats and falls back to Steadfast invoice lookup for shipped orders", async () => {
+    expect(normalizeSteadfastPhone("+8801712-345678")).toBe("01712345678");
+    expect(normalizeSteadfastPhone("8801712345678")).toBe("01712345678");
+    expect(normalizeSteadfastPhone("০১৭১২-৩৪৫৬৭৮")).toBe("01712345678");
+    expect(normalizeSteadfastPhone("1712345678")).toBe("01712345678");
+
+    const db = createMockFirestore(
+      {
+        ORD_INV_ONLY: {
+          status: "shipped",
+          courierName: "Steadfast",
+        },
+      },
+      { steadfastApiKey: "k", steadfastSecretKey: "s" }
+    );
+
+    const getSpy = vi.spyOn(axios, "get").mockResolvedValue({
+      status: 200,
+      data: {
+        delivery_status: "in_review",
+        tracking_code: "SFR_INV_99",
+        consignment_id: 319143440,
+      },
+    } as any);
+
+    const synced = await syncSingleOrderCourierStatus(db, "ORD_INV_ONLY");
+    expect(getSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/status_by_invoice/ORD_INV_ONLY"),
+      expect.any(Object)
+    );
+    expect(synced.updated).toBe(true);
+    expect(synced.rawCourierStatus).toBe("in_review");
+    expect(db._ordersStore.ORD_INV_ONLY.courierTrackingId).toBe("SFR_INV_99");
+    expect(db._ordersStore.ORD_INV_ONLY.courierConsignmentId).toBe("319143440");
+
+    // Offline POS receipt IDs like "#911388" should not be treated as live courier parcels
+    expect(
+      extractOrderCourierInfo({
+        orderId: "OFFLINE-911388",
+        status: "delivered",
+        courierName: "Steadfast",
+        trackingId: "#911388",
+      })
+    ).toBeNull();
   });
 });

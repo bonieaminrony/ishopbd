@@ -5,6 +5,7 @@
  *   POST /api/admin/courier/sync-all           (?action=sync-all)
  *   POST /api/admin/courier/sync/:orderId      (?action=sync-one&orderId=...)
  *   POST /api/courier/webhook/steadfast        (?action=webhook)
+ *   GET  /api/pathao-status?id=...             (?action=pathao-status)
  *   POST /api/admin/keys                       (?action=save-keys)
  *   GET  /api/admin/keys                       (?action=get-keys)
  *   POST /api/admin/site-config                (?action=save-site-config)
@@ -53,19 +54,19 @@ function courierFirestoreRequest($method, $path, $body = null) {
 
 function courierLoadKeys() {
     $keys = [
-        'steadfastApiKey' => marketingGetEnvVar('STEADFAST_API_KEY'),
-        'steadfastSecretKey' => marketingGetEnvVar('STEADFAST_SECRET_KEY'),
-        'steadfastWebhookSecret' => marketingGetEnvVar('STEADFAST_WEBHOOK_SECRET'),
-        'pathaoClientId' => marketingGetEnvVar('PATHAO_CLIENT_ID'),
-        'pathaoClientSecret' => marketingGetEnvVar('PATHAO_CLIENT_SECRET'),
-        'pathaoUsername' => marketingGetEnvVar('PATHAO_USERNAME'),
-        'pathaoPassword' => marketingGetEnvVar('PATHAO_PASSWORD'),
+        'steadfastApiKey' => trim((string)marketingGetEnvVar('STEADFAST_API_KEY')),
+        'steadfastSecretKey' => trim((string)marketingGetEnvVar('STEADFAST_SECRET_KEY')),
+        'steadfastWebhookSecret' => trim((string)marketingGetEnvVar('STEADFAST_WEBHOOK_SECRET')),
+        'pathaoClientId' => trim((string)marketingGetEnvVar('PATHAO_CLIENT_ID')),
+        'pathaoClientSecret' => trim((string)marketingGetEnvVar('PATHAO_CLIENT_SECRET')),
+        'pathaoUsername' => trim((string)marketingGetEnvVar('PATHAO_USERNAME')),
+        'pathaoPassword' => trim((string)marketingGetEnvVar('PATHAO_PASSWORD')),
     ];
     $res = courierFirestoreRequest('GET', 'admin_config/keys');
     if ($res['code'] === 200 && isset($res['data']['fields'])) {
         $doc = firestoreDecodeValue(['mapValue' => ['fields' => $res['data']['fields']]]);
         foreach ($keys as $k => $v) {
-            if (!empty($doc[$k])) $keys[$k] = $doc[$k];
+            if (!empty($doc[$k])) $keys[$k] = trim((string)$doc[$k]);
         }
     }
     return $keys;
@@ -127,6 +128,7 @@ function courierFetchSteadfast($keys, $cid, $tid, $inv) {
         if (!in_array($p, $paths, true)) $paths[] = $p;
     }
     if ($inv) $paths[] = 'status_by_invoice/' . rawurlencode($inv);
+    $lastHttpCode = 0;
     foreach ($paths as $path) {
         $ch = curl_init("https://portal.packzy.com/api/v1/{$path}");
         curl_setopt_array($ch, [
@@ -141,19 +143,139 @@ function courierFetchSteadfast($keys, $cid, $tid, $inv) {
         ]);
         $r = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $lastHttpCode = (int)$code;
         curl_close($ch);
         $dec = json_decode($r ?: '', true);
         $st = $dec['delivery_status'] ?? ($dec['status'] ?? null);
         if ($code === 200 && is_string($st) && $st !== '') {
-            return $st;
+            $msg = '';
+            if (!empty($dec['tracking_message']) && is_string($dec['tracking_message'])) {
+                $msg = trim($dec['tracking_message']);
+            } elseif (!empty($dec['note']) && is_string($dec['note'])) {
+                $msg = trim($dec['note']);
+            }
+            return ['rawStatus' => trim($st), 'trackingMessage' => $msg, 'rawResponse' => $dec];
         }
+    }
+    if ($lastHttpCode === 401) {
+        throw new Exception('Steadfast 401 Unauthorized — এই Tracking/Invoice Steadfast প্যানেলে পাওয়া যায়নি অথবা API Key সঠিক নয়');
     }
     throw new Exception('Could not fetch Steadfast delivery status');
 }
 
-function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $source) {
+function courierGetPathaoToken($keys) {
+    if (
+        empty($keys['pathaoClientId']) ||
+        empty($keys['pathaoClientSecret']) ||
+        empty($keys['pathaoUsername']) ||
+        empty($keys['pathaoPassword'])
+    ) {
+        throw new Exception('Pathao credentials are not configured.');
+    }
+
+    $cacheFile = sys_get_temp_dir() . '/ishopbd_pathao_tok_' . md5((string)$keys['pathaoClientId']) . '.json';
+    if (file_exists($cacheFile)) {
+        $cached = json_decode(@file_get_contents($cacheFile), true);
+        if (is_array($cached) && !empty($cached['token']) && intval($cached['expiresAt'] ?? 0) > time()) {
+            return $cached['token'];
+        }
+    }
+
+    $ch = curl_init('https://api-hermes.pathao.com/aladdin/api/v1/issue-token');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_POSTFIELDS => json_encode([
+            'client_id' => $keys['pathaoClientId'],
+            'client_secret' => $keys['pathaoClientSecret'],
+            'username' => $keys['pathaoUsername'],
+            'password' => $keys['pathaoPassword'],
+            'grant_type' => 'password',
+        ]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 12,
+        CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $r = curl_exec($ch);
+    curl_close($ch);
+    $dec = json_decode($r ?: '', true);
+    $token = $dec['access_token'] ?? '';
+    if ($token === '') {
+        throw new Exception('Failed to authenticate with Pathao');
+    }
+    @file_put_contents($cacheFile, json_encode(['token' => $token, 'expiresAt' => time() + 45 * 60]));
+    return $token;
+}
+
+function courierFetchPathao($keys, $tid) {
+    $token = courierGetPathaoToken($keys);
+    $ch = curl_init('https://api-hermes.pathao.com/aladdin/api/v1/orders/' . rawurlencode($tid) . '/track');
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $token,
+            'Accept: application/json',
+            'Content-Type: application/json',
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 12,
+        CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $r = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $dec = json_decode($r ?: '', true);
+    $orderObj = $dec['data']['order'] ?? ($dec['data'] ?? []);
+    $st = $orderObj['order_status'] ?? ($orderObj['transfer_status'] ?? ($dec['data']['order_status'] ?? ''));
+    if ($code < 200 || $code >= 300 || !is_string($st) || trim($st) === '') {
+        throw new Exception($dec['message'] ?? 'Pathao returned no order status');
+    }
+    $logs = is_array($dec['data']['logs'] ?? null) ? $dec['data']['logs'] : [];
+    $lastLog = !empty($logs) ? end($logs) : null;
+    $msg = trim((string)(
+        $orderObj['tracking_message']
+        ?? $orderObj['order_status_desc']
+        ?? $orderObj['reason']
+        ?? ($lastLog['message'] ?? ($lastLog['status'] ?? ''))
+    ));
+    return ['rawStatus' => trim($st), 'trackingMessage' => $msg, 'rawResponse' => $dec];
+}
+
+function courierAppendHistoryEntry($existingHistory, $nextEntry, $maxEntries = 15) {
+    $list = [];
+    if (is_array($existingHistory)) {
+        foreach ($existingHistory as $item) {
+            if (is_array($item) && isset($item['status'])) {
+                $list[] = $item;
+            }
+        }
+    }
+    $count = count($list);
+    if ($count > 0) {
+        $last = $list[$count - 1];
+        $lastNorm = preg_replace('/[\s\-]+/', '_', strtolower(trim((string)($last['status'] ?? ''))));
+        $nextNorm = preg_replace('/[\s\-]+/', '_', strtolower(trim((string)($nextEntry['status'] ?? ''))));
+        $lastMsg = strtolower(trim((string)($last['message'] ?? '')));
+        $nextMsg = strtolower(trim((string)($nextEntry['message'] ?? '')));
+        if ($lastNorm === $nextNorm && $lastMsg === $nextMsg) {
+            return array_slice($list, -$maxEntries);
+        }
+    }
+    $list[] = $nextEntry;
+    return array_slice($list, -$maxEntries);
+}
+
+function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $source, $trackingMessage = '') {
     $eval = courierEvaluateTransition($orderData['status'] ?? 'pending', $rawStatus);
     $now = gmdate('c');
+    $detailMsg = trim((string)$trackingMessage) !== '' ? trim((string)$trackingMessage) : $eval['reason'];
+    $history = courierAppendHistoryEntry($orderData['courierHistory'] ?? [], [
+        'status' => $rawStatus,
+        'label' => $eval['label'],
+        'category' => $eval['cat'],
+        'message' => $detailMsg,
+        'source' => $source,
+        'timestamp' => $now,
+    ]);
     $fields = [
         'courierStatus' => firestoreEncodeValue($rawStatus),
         'courierStatusNormalized' => firestoreEncodeValue($eval['cat']),
@@ -161,6 +283,8 @@ function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $
         'courierLastSyncedAt' => firestoreEncodeValue($now),
         'courierSyncSource' => firestoreEncodeValue($source),
         'courierStatusDetail' => firestoreEncodeValue($eval['reason']),
+        'courierTrackingMessage' => firestoreEncodeValue($detailMsg),
+        'courierHistory' => firestoreEncodeValue($history),
     ];
     if (stripos($service, 'pathao') !== false) {
         $fields['pathaoStatus'] = firestoreEncodeValue($rawStatus);
@@ -176,7 +300,10 @@ function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $
         }
     }
     $maskParams = implode('&', array_map(fn($k) => 'updateMask.fieldPaths=' . rawurlencode($k), array_keys($fields)));
-    courierFirestoreRequest('PATCH', 'orders/' . rawurlencode($docId) . '?' . $maskParams, ['fields' => $fields]);
+    $patchRes = courierFirestoreRequest('PATCH', 'orders/' . rawurlencode($docId) . '?' . $maskParams, ['fields' => $fields]);
+    if ($patchRes['code'] < 200 || $patchRes['code'] >= 300) {
+        throw new Exception('Failed to save courier status to Firestore (HTTP ' . $patchRes['code'] . ')');
+    }
     $oldStatus = strtolower($orderData['status'] ?? 'pending');
     $prevCourier = strtolower((string)($orderData['courierStatus'] ?? $orderData['steadfastStatus'] ?? $orderData['pathaoStatus'] ?? ''));
     return [
@@ -184,11 +311,57 @@ function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $
         'service' => $service,
         'rawCourierStatus' => $rawStatus,
         'courierLabel' => $eval['label'],
+        'trackingMessage' => $detailMsg,
+        'courierHistory' => $history,
         'oldOrderStatus' => $oldStatus,
         'newOrderStatus' => $newStatus,
         'updated' => ($newStatus !== $oldStatus) || ($prevCourier !== strtolower($rawStatus)),
         'syncedAt' => $now,
     ];
+}
+
+// Public Pathao live tracking proxy (/api/pathao-status?id=...)
+if ($action === 'pathao-status' && $method === 'GET') {
+    $tid = trim((string)($_GET['id'] ?? ''));
+    if ($tid === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Tracking ID is required']);
+        exit;
+    }
+    try {
+        $keys = courierLoadKeys();
+        $res = courierFetchPathao($keys, $tid);
+        echo json_encode(['success' => true, 'data' => $res['rawResponse']], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
+function courierFindOrderByField($fieldPath, $value) {
+    $res = courierFirestoreRequest('POST', ':runQuery', [
+        'structuredQuery' => [
+            'from' => [['collectionId' => 'orders']],
+            'where' => [
+                'fieldFilter' => [
+                    'field' => ['fieldPath' => $fieldPath],
+                    'op' => 'EQUAL',
+                    'value' => firestoreEncodeValue((string)$value),
+                ],
+            ],
+            'limit' => 1,
+        ],
+    ]);
+    if ($res['code'] === 200 && is_array($res['data']) && !empty($res['data'][0]['document']['name'])) {
+        $doc = $res['data'][0]['document'];
+        $parts = explode('/', $doc['name']);
+        return [
+            'id' => end($parts),
+            'data' => firestoreDecodeValue(['mapValue' => ['fields' => $doc['fields'] ?? []]]),
+        ];
+    }
+    return null;
 }
 
 // Inbound Steadfast webhook
@@ -203,22 +376,45 @@ if ($action === 'webhook' && $method === 'POST') {
         exit;
     }
     $body = json_decode(file_get_contents('php://input'), true) ?: [];
+    $cid = $body['consignment_id'] ?? ($body['consignment']['consignment_id'] ?? '');
+    $trackingCode = $body['tracking_code'] ?? ($body['consignment']['tracking_code'] ?? '');
     $invoice = $body['invoice'] ?? ($body['consignment']['invoice'] ?? '');
     $status = $body['status'] ?? ($body['delivery_status'] ?? ($body['consignment']['status'] ?? ''));
-    if (!$invoice || !$status) {
+    $trackingMsg = trim((string)($body['tracking_message'] ?? ($body['message'] ?? ($body['consignment']['tracking_message'] ?? ''))));
+    if ((!$invoice && !$trackingCode && !$cid) || !$status) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Missing invoice or status']);
+        echo json_encode(['success' => false, 'message' => 'Missing identifier or status']);
         exit;
     }
-    $docRes = courierFirestoreRequest('GET', 'orders/' . rawurlencode((string)$invoice));
-    if ($docRes['code'] !== 200 || empty($docRes['data']['fields'])) {
+
+    $matchedId = null;
+    $orderData = null;
+    if ($invoice !== '') {
+        $docRes = courierFirestoreRequest('GET', 'orders/' . rawurlencode((string)$invoice));
+        if ($docRes['code'] === 200 && !empty($docRes['data']['fields'])) {
+            $matchedId = (string)$invoice;
+            $orderData = firestoreDecodeValue(['mapValue' => ['fields' => $docRes['data']['fields']]]);
+        }
+    }
+    if (!$matchedId && $trackingCode !== '') {
+        foreach (['courierTrackingId', 'couriers.trackingId', 'trackingId'] as $f) {
+            $found = courierFindOrderByField($f, $trackingCode);
+            if ($found) { $matchedId = $found['id']; $orderData = $found['data']; break; }
+        }
+    }
+    if (!$matchedId && $cid !== '') {
+        foreach (['courierConsignmentId', 'courierTrackingId', 'couriers.consignmentId'] as $f) {
+            $found = courierFindOrderByField($f, $cid);
+            if ($found) { $matchedId = $found['id']; $orderData = $found['data']; break; }
+        }
+    }
+    if (!$matchedId || !$orderData) {
         http_response_code(404);
         echo json_encode(['success' => false, 'message' => 'Order not found']);
         exit;
     }
-    $orderData = firestoreDecodeValue(['mapValue' => ['fields' => $docRes['data']['fields']]]);
-    $result = courierUpdateOrderFirestore((string)$invoice, $orderData, 'Steadfast', (string)$status, 'COURIER_WEBHOOK');
-    echo json_encode(['success' => true, 'result' => $result]);
+    $result = courierUpdateOrderFirestore($matchedId, $orderData, 'Steadfast', (string)$status, 'COURIER_WEBHOOK', $trackingMsg);
+    echo json_encode(['success' => true, 'result' => $result], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -248,7 +444,7 @@ if (($action === 'get-keys' || $action === 'keys') && $method === 'GET') {
 if (($action === 'save-keys' || $action === 'keys') && $method === 'POST') {
     $incoming = json_decode(file_get_contents('php://input'), true) ?: [];
     $fields = [];
-    foreach (['steadfastApiKey', 'steadfastSecretKey', 'geminiApiKey', 'pathaoClientId', 'pathaoClientSecret', 'pathaoUsername', 'pathaoPassword'] as $k) {
+    foreach (['steadfastApiKey', 'steadfastSecretKey', 'steadfastWebhookSecret', 'geminiApiKey', 'pathaoClientId', 'pathaoClientSecret', 'pathaoUsername', 'pathaoPassword'] as $k) {
         $fields[$k] = firestoreEncodeValue((string)($incoming[$k] ?? ''));
     }
     $fields['updatedAt'] = firestoreEncodeValue(gmdate('c'));
@@ -302,16 +498,24 @@ if ($action === 'sync-one' && $method === 'POST') {
     $orderData = firestoreDecodeValue(['mapValue' => ['fields' => $docRes['data']['fields']]]);
     $tid = trim((string)($orderData['couriers']['trackingId'] ?? $orderData['courierTrackingId'] ?? $orderData['trackingId'] ?? ''));
     $cid = trim((string)($orderData['couriers']['consignmentId'] ?? $orderData['courierConsignmentId'] ?? ''));
-    if ($tid === '' && $cid === '') {
+    $svc = trim((string)($orderData['couriers']['service'] ?? $orderData['courierName'] ?? (!empty($orderData['pathaoStatus']) ? 'Pathao' : '')));
+    if ($tid === '' && $cid === '' && stripos($svc, 'steadfast') === false && strtolower((string)($orderData['status'] ?? '')) !== 'shipped') {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Order has no courier tracking ID']);
         exit;
     }
+    $svc = $svc ?: 'Steadfast';
+    $isPathao = stripos($svc, 'pathao') !== false;
     $keys = courierLoadKeys();
     try {
-        $raw = courierFetchSteadfast($keys, $cid, $tid, $orderData['orderId'] ?? $orderId);
-        $syncResult = courierUpdateOrderFirestore($orderId, $orderData, 'Steadfast', $raw, 'ADMIN_SINGLE_SYNC');
-        echo json_encode(['success' => true, 'syncResult' => $syncResult]);
+        if ($isPathao) {
+            $fetched = courierFetchPathao($keys, $tid ?: $cid);
+            $syncResult = courierUpdateOrderFirestore($orderId, $orderData, $svc, $fetched['rawStatus'], 'ADMIN_SINGLE_SYNC', $fetched['trackingMessage'] ?? '');
+        } else {
+            $fetched = courierFetchSteadfast($keys, $cid, $tid, $orderData['orderId'] ?? $orderId);
+            $syncResult = courierUpdateOrderFirestore($orderId, $orderData, $svc ?: 'Steadfast', $fetched['rawStatus'], 'ADMIN_SINGLE_SYNC', $fetched['trackingMessage'] ?? '');
+        }
+        echo json_encode(['success' => true, 'syncResult' => $syncResult], JSON_UNESCAPED_UNICODE);
     } catch (Exception $e) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -321,7 +525,30 @@ if ($action === 'sync-one' && $method === 'POST') {
 
 if (($action === 'sync-all' || $action === 'cron')) {
     $keys = courierLoadKeys();
+    $hasSteadfast = !empty($keys['steadfastApiKey']) && !empty($keys['steadfastSecretKey']);
+    $hasPathao = !empty($keys['pathaoClientId']) && !empty($keys['pathaoClientSecret']) && !empty($keys['pathaoUsername']) && !empty($keys['pathaoPassword']);
+    if (!$hasSteadfast && !$hasPathao) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Steadfast বা Pathao API Key কনফিগার করা নেই।',
+            'summary' => ['total' => 0, 'synced' => 0, 'updated' => 0, 'failed' => 0, 'skipped' => 0],
+            'results' => [],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $body = json_decode(file_get_contents('php://input'), true) ?: [];
+    $force = !empty($body['force']);
     $listRes = courierFirestoreRequest('GET', 'orders?pageSize=120&orderBy=' . rawurlencode('createdAt desc'));
+    if ($listRes['code'] < 200 || $listRes['code'] >= 300 || !isset($listRes['data']['documents'])) {
+        $listRes = courierFirestoreRequest('GET', 'orders?pageSize=120');
+    }
+    if ($listRes['code'] < 200 || $listRes['code'] >= 300) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Failed to read orders from Firestore']);
+        exit;
+    }
     $docs = $listRes['data']['documents'] ?? [];
     $summary = ['total' => 0, 'synced' => 0, 'updated' => 0, 'failed' => 0, 'skipped' => 0];
     $results = [];
@@ -331,16 +558,33 @@ if (($action === 'sync-all' || $action === 'cron')) {
         $docId = end($parts);
         $data = firestoreDecodeValue(['mapValue' => ['fields' => $doc['fields'] ?? []]]);
         if (!empty($data['deleted'])) continue;
-        $tid = trim((string)($data['couriers']['trackingId'] ?? $data['courierTrackingId'] ?? $data['trackingId'] ?? ''));
+        $explicitTid = trim((string)($data['couriers']['trackingId'] ?? $data['courierTrackingId'] ?? ''));
+        $legacyTid = trim((string)($data['trackingId'] ?? ''));
         $cid = trim((string)($data['couriers']['consignmentId'] ?? $data['courierConsignmentId'] ?? ''));
-        if ($tid === '' && $cid === '') continue;
+        $isOffline = stripos(trim((string)($data['orderId'] ?? '')), 'OFFLINE-') === 0;
+        $tid = $explicitTid !== ''
+            ? $explicitTid
+            : (($cid === '' && ($isOffline || strpos($legacyTid, '#') === 0)) ? '' : $legacyTid);
         $st = strtolower((string)($data['status'] ?? ''));
-        if ($st === 'cancelled' || $st === 'returned' || $st === 'delivered') continue;
+        if ($tid === '' && $cid === '' && $st !== 'shipped') continue;
+        if (!$force && ($st === 'cancelled' || $st === 'returned' || $st === 'delivered')) continue;
+
+        $svc = trim((string)($data['couriers']['service'] ?? $data['courierName'] ?? (!empty($data['pathaoStatus']) ? 'Pathao' : 'Steadfast')));
+        $isPathao = stripos($svc, 'pathao') !== false;
+        $isSteadfast = stripos($svc, 'steadfast') !== false;
+        if (($isPathao && !$hasPathao) || ($isSteadfast && !$hasSteadfast) || (!$isPathao && !$isSteadfast)) {
+            continue;
+        }
 
         $summary['total']++;
         try {
-            $raw = courierFetchSteadfast($keys, $cid, $tid, $data['orderId'] ?? $docId);
-            $r = courierUpdateOrderFirestore($docId, $data, 'Steadfast', $raw, $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC');
+            if ($isPathao) {
+                $fetched = courierFetchPathao($keys, $tid ?: $cid);
+                $r = courierUpdateOrderFirestore($docId, $data, $svc, $fetched['rawStatus'], $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC', $fetched['trackingMessage'] ?? '');
+            } else {
+                $fetched = courierFetchSteadfast($keys, $cid, $tid, $data['orderId'] ?? $docId);
+                $r = courierUpdateOrderFirestore($docId, $data, $svc ?: 'Steadfast', $fetched['rawStatus'], $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC', $fetched['trackingMessage'] ?? '');
+            }
             $summary['synced']++;
             if ($r['updated']) $summary['updated']++;
             $results[] = $r;
@@ -349,7 +593,7 @@ if (($action === 'sync-all' || $action === 'cron')) {
             $results[] = ['orderId' => $docId, 'status' => 'ERROR', 'error' => $e->getMessage()];
         }
     }
-    echo json_encode(['success' => true, 'summary' => $summary, 'results' => $results]);
+    echo json_encode(['success' => true, 'summary' => $summary, 'results' => $results], JSON_UNESCAPED_UNICODE);
     exit;
 }
 

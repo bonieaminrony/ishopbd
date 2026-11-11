@@ -94,12 +94,12 @@ function marketingGetServiceAccount() {
     return null;
 }
 
-function marketingGetDatastoreToken($sa) {
+function marketingGetDatastoreToken($sa, $scope = 'https://www.googleapis.com/auth/datastore') {
     if (!$sa || empty($sa['client_email']) || empty($sa['private_key'])) {
         return null;
     }
 
-    $cacheFile = sys_get_temp_dir() . '/ishopbd_ds_token_' . md5($sa['client_email']) . '.json';
+    $cacheFile = sys_get_temp_dir() . '/ishopbd_ds_token_' . md5($sa['client_email'] . '|' . $scope) . '.json';
     if (file_exists($cacheFile)) {
         $cached = json_decode(@file_get_contents($cacheFile), true);
         if (is_array($cached) && !empty($cached['access_token']) && ($cached['expires_at'] ?? 0) > time() + 60) {
@@ -115,7 +115,7 @@ function marketingGetDatastoreToken($sa) {
     $now = time();
     $claims = [
         'iss' => $sa['client_email'],
-        'scope' => 'https://www.googleapis.com/auth/datastore',
+        'scope' => $scope,
         'aud' => $tokenUri,
         'exp' => $now + 3600,
         'iat' => $now,
@@ -292,12 +292,17 @@ function marketingReadConfig($useCache = true) {
 
 function marketingWriteConfig($payload) {
     $tempCache = sys_get_temp_dir() . '/ishopbd_marketing_cfg.json';
-    @file_put_contents($tempCache, json_encode($payload));
+    $GLOBALS['marketing_last_write_error'] = '';
 
     $sa = marketingGetServiceAccount();
+    if (!$sa) {
+        $GLOBALS['marketing_last_write_error'] = 'Firebase service account credentials not found on server.';
+        return false;
+    }
     $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
     $token = marketingGetDatastoreToken($sa);
     if (!$token) {
+        $GLOBALS['marketing_last_write_error'] = 'Failed to authenticate Firestore Datastore token.';
         return false;
     }
 
@@ -320,9 +325,15 @@ function marketingWriteConfig($payload) {
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
     $resp = curl_exec($ch);
+    $curlErr = curl_error($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    return $code >= 200 && $code < 300;
+    if ($code >= 200 && $code < 300) {
+        @file_put_contents($tempCache, json_encode($payload));
+        return true;
+    }
+    $GLOBALS['marketing_last_write_error'] = trim("Firestore write failed (HTTP {$code}) {$curlErr}");
+    return false;
 }
 
 function marketingGetRequestHeader($name) {
@@ -509,6 +520,25 @@ function marketingMaskSecret($str) {
 
 function marketingIsMasked($str) {
     return is_string($str) && strpos($str, '••••') !== false;
+}
+
+function marketingCleanToken($val) {
+    if (!is_string($val)) return '';
+    $trimmed = trim($val);
+    $len = strlen($trimmed);
+    if ($len >= 2 && (($trimmed[0] === '"' && $trimmed[$len - 1] === '"') || ($trimmed[0] === "'" && $trimmed[$len - 1] === "'"))) {
+        $trimmed = trim(substr($trimmed, 1, -1));
+    }
+    return $trimmed;
+}
+
+function marketingResolveSecret($incoming, $existing, $clearRequested = false) {
+    if ($clearRequested) return '';
+    $cleaned = marketingCleanToken($incoming);
+    if ($cleaned === '' || marketingIsMasked($cleaned)) {
+        return marketingCleanToken((string)($existing ?? ''));
+    }
+    return $cleaned;
 }
 
 function marketingNormalizePhoneDigits($phone) {

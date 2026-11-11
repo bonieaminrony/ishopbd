@@ -11,6 +11,16 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      dedupe: ['react', 'react-dom'],
+    },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-helmet-async',
+      ],
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
@@ -52,7 +62,6 @@ export default defineConfig(({ mode }) => {
       }
     },
     test: {
-
       globals: true,
       environment: 'jsdom',
       setupFiles: ['./src/tests/setup.ts'],

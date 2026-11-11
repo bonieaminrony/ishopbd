@@ -42,10 +42,10 @@ if (!isset($data['orders']) || !is_array($data['orders']) || count($data['orders
     exit;
 }
 
-$apiKey = marketingGetEnvVar('STEADFAST_API_KEY') ?: ($data['apiKey'] ?? '');
-$secretKey = marketingGetEnvVar('STEADFAST_SECRET_KEY') ?: ($data['secretKey'] ?? '');
+$apiKey = trim((string)(marketingGetEnvVar('STEADFAST_API_KEY') ?: ($data['apiKey'] ?? '')));
+$secretKey = trim((string)(marketingGetEnvVar('STEADFAST_SECRET_KEY') ?: ($data['secretKey'] ?? '')));
 
-if (empty($apiKey) || empty($secretKey)) {
+if ($apiKey === '' || $secretKey === '') {
     $sa = marketingGetServiceAccount();
     $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
     $dsToken = marketingGetDatastoreToken($sa);
@@ -56,16 +56,24 @@ if (empty($apiKey) || empty($secretKey)) {
         curl_close($kCh);
         if (isset($kResp['fields'])) {
             $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
-            $apiKey = $apiKey ?: ($kData['steadfastApiKey'] ?? '');
-            $secretKey = $secretKey ?: ($kData['steadfastSecretKey'] ?? '');
+            $apiKey = $apiKey ?: trim((string)($kData['steadfastApiKey'] ?? ''));
+            $secretKey = $secretKey ?: trim((string)($kData['steadfastSecretKey'] ?? ''));
         }
     }
 }
 
-if (empty($apiKey) || empty($secretKey)) {
+if ($apiKey === '' || $secretKey === '') {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Steadfast API Key or Secret Key missing']);
     exit;
+}
+
+function steadfastNormalizePhone($rawPhone) {
+    $bn = ['০'=>'0','১'=>'1','২'=>'2','৩'=>'3','৪'=>'4','৫'=>'5','৬'=>'6','৭'=>'7','৮'=>'8','৯'=>'9'];
+    $digits = preg_replace('/\D/', '', strtr(trim((string)$rawPhone), $bn));
+    if (preg_match('/^8801\d{9}$/', $digits)) $digits = substr($digits, 2);
+    elseif (preg_match('/^1\d{9}$/', $digits)) $digits = '0' . $digits;
+    return $digits;
 }
 
 $orders = $data['orders'];
@@ -75,7 +83,7 @@ foreach ($orders as $order) {
     $payload = [
         'invoice' => isset($order['invoice']) ? $order['invoice'] : '',
         'recipient_name' => isset($order['recipient_name']) ? $order['recipient_name'] : '',
-        'recipient_phone' => isset($order['recipient_phone']) ? $order['recipient_phone'] : '',
+        'recipient_phone' => steadfastNormalizePhone($order['recipient_phone'] ?? ''),
         'recipient_address' => isset($order['recipient_address']) ? $order['recipient_address'] : '',
         'cod_amount' => isset($order['cod_amount']) ? floatval($order['cod_amount']) : 0,
         'note' => isset($order['note']) ? $order['note'] : 'Sent from i SHOP BD'

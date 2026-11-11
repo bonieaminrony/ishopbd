@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw } from 'lucide-react';
+import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw, Copy, ExternalLink } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -379,40 +379,115 @@ export default function OrderDetailsModal({
           </div>
           {/* Courier Delivery Status Card */}
           {(() => {
-            const cTrack = selectedOrderForDetails.couriers?.trackingId || selectedOrderForDetails.courierTrackingId || selectedOrderForDetails.trackingId || selectedOrderForDetails.courierConsignmentId;
+            const cConsignment = selectedOrderForDetails.courierConsignmentId || selectedOrderForDetails.couriers?.consignmentId || '';
+            const cTrack = selectedOrderForDetails.couriers?.trackingId || selectedOrderForDetails.courierTrackingId || selectedOrderForDetails.trackingId || cConsignment;
             const cStatus = selectedOrderForDetails.courierStatus || selectedOrderForDetails.steadfastStatus || selectedOrderForDetails.pathaoStatus;
             const cLabel = selectedOrderForDetails.courierStatusLabel || cStatus;
             const cService = selectedOrderForDetails.courierName || selectedOrderForDetails.couriers?.service || (selectedOrderForDetails.pathaoStatus ? 'Pathao' : 'Steadfast');
-            if (!cTrack && !cStatus) return null;
+            const cMsg = selectedOrderForDetails.courierTrackingMessage || selectedOrderForDetails.courierStatusDetail || '';
+            const cHistory: any[] = Array.isArray(selectedOrderForDetails.courierHistory) ? [...selectedOrderForDetails.courierHistory].reverse() : [];
+            const isSteadfast = String(cService).toLowerCase().includes('steadfast');
+            const isPathao = String(cService).toLowerCase().includes('pathao');
+            const canSync = Boolean(cTrack || isSteadfast || selectedOrderForDetails.status === 'shipped');
+            const portalUrl = isSteadfast && cTrack
+              ? `https://steadfast.com.bd/t/${encodeURIComponent(cTrack)}`
+              : isPathao
+              ? 'https://merchant.pathao.com/'
+              : null;
+            if (!cTrack && !cStatus && cHistory.length === 0 && selectedOrderForDetails.status !== 'shipped') return null;
             return (
-              <div className="bg-sky-50/70 border border-sky-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Truck size={15} className="text-sky-600" />
-                    <span className="text-xs font-black text-sky-900">{cService} ডেলিভারি স্ট্যাটাস</span>
-                    {cLabel && (
-                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white border border-sky-200 text-sky-700">
-                        {cLabel}
-                      </span>
+              <div className="bg-sky-50/70 border border-sky-200 rounded-2xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Truck size={15} className="text-sky-600" />
+                      <span className="text-xs font-black text-sky-900">{cService} ডেলিভারি স্ট্যাটাস</span>
+                      {cConsignment && (
+                        <span className="text-xs font-bold text-sky-600">#{cConsignment}</span>
+                      )}
+                      {cLabel && (
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white border border-sky-200 text-sky-700">
+                          {cLabel}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-sky-800/80 font-medium">
+                      {cTrack && (
+                        <span className="inline-flex items-center gap-1.5 font-mono font-bold">
+                          Tracking: {cTrack}
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard?.writeText(String(cTrack))}
+                            className="p-0.5 text-sky-600 hover:text-sky-900 rounded cursor-pointer"
+                            title="Tracking ID কপি করুন"
+                          >
+                            <Copy size={11} />
+                          </button>
+                        </span>
+                      )}
+                      {selectedOrderForDetails.courierLastSyncedAt && (
+                        <span>Last Sync: {new Date(selectedOrderForDetails.courierLastSyncedAt).toLocaleString("bn-BD")}</span>
+                      )}
+                    </div>
+                    {cMsg && (
+                      <p className="text-[11px] font-bold text-sky-900/90 leading-snug pt-0.5">
+                        {cMsg}
+                      </p>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-sky-800/80 font-medium">
-                    {cTrack && <span className="font-mono font-bold">Tracking: {cTrack}</span>}
-                    {selectedOrderForDetails.courierLastSyncedAt && (
-                      <span>Last Sync: {new Date(selectedOrderForDetails.courierLastSyncedAt).toLocaleString("bn-BD")}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {portalUrl && (
+                      <a
+                        href={portalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 rounded-xl bg-white hover:bg-sky-100/60 border border-sky-200 text-sky-700 text-xs font-bold flex items-center gap-1 shadow-xs"
+                      >
+                        <ExternalLink size={12} /> লাইভ ট্র্যাক
+                      </a>
+                    )}
+                    {syncSingleCourierStatus && canSync && (
+                      <button
+                        type="button"
+                        disabled={syncingOrderId === selectedOrderForDetails.id}
+                        onClick={() => syncSingleCourierStatus(selectedOrderForDetails.id)}
+                        className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-60 shrink-0 cursor-pointer"
+                      >
+                        <RefreshCcw size={13} className={syncingOrderId === selectedOrderForDetails.id ? "animate-spin" : ""} />
+                        {syncingOrderId === selectedOrderForDetails.id ? "সিঙ্ক হচ্ছে..." : "Sync Status Now"}
+                      </button>
                     )}
                   </div>
                 </div>
-                {syncSingleCourierStatus && cTrack && (
-                  <button
-                    type="button"
-                    disabled={syncingOrderId === selectedOrderForDetails.id}
-                    onClick={() => syncSingleCourierStatus(selectedOrderForDetails.id)}
-                    className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-60 shrink-0 cursor-pointer"
-                  >
-                    <RefreshCcw size={13} className={syncingOrderId === selectedOrderForDetails.id ? "animate-spin" : ""} />
-                    {syncingOrderId === selectedOrderForDetails.id ? "সিঙ্ক হচ্ছে..." : "Sync Status Now"}
-                  </button>
+
+                {cHistory.length > 0 && (
+                  <div className="pt-2.5 border-t border-sky-200/80 space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-sky-700">
+                      কুরিয়ার মুভমেন্ট টাইমলাইন ({cHistory.length})
+                    </p>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {cHistory.map((ev: any, idx: number) => (
+                        <div
+                          key={`${ev.timestamp || idx}-${idx}`}
+                          className="flex items-start justify-between gap-2 text-[11px] bg-white/80 border border-sky-100 rounded-xl px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <span className="font-bold text-sky-900">{ev.label || ev.status}</span>
+                            {ev.message && (
+                              <p className="text-[10px] text-gray-600 font-medium leading-snug mt-0.5">
+                                {ev.message}
+                              </p>
+                            )}
+                          </div>
+                          {ev.timestamp && (
+                            <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                              {new Date(ev.timestamp).toLocaleString("bn-BD")}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             );

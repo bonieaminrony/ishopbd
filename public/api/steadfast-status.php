@@ -67,10 +67,10 @@ if (empty($trackingId)) {
     exit;
 }
 
-$apiKey    = marketingGetEnvVar('STEADFAST_API_KEY');
-$secretKey = marketingGetEnvVar('STEADFAST_SECRET_KEY');
+$apiKey    = trim((string)marketingGetEnvVar('STEADFAST_API_KEY'));
+$secretKey = trim((string)marketingGetEnvVar('STEADFAST_SECRET_KEY'));
 
-if (empty($apiKey) || empty($secretKey)) {
+if ($apiKey === '' || $secretKey === '') {
     $sa = marketingGetServiceAccount();
     $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
     $dsToken = marketingGetDatastoreToken($sa);
@@ -81,52 +81,67 @@ if (empty($apiKey) || empty($secretKey)) {
         curl_close($kCh);
         if (isset($kResp['fields'])) {
             $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
-            $apiKey = $apiKey ?: ($kData['steadfastApiKey'] ?? '');
-            $secretKey = $secretKey ?: ($kData['steadfastSecretKey'] ?? '');
+            $apiKey = $apiKey ?: trim((string)($kData['steadfastApiKey'] ?? ''));
+            $secretKey = $secretKey ?: trim((string)($kData['steadfastSecretKey'] ?? ''));
         }
     }
 }
 
-if (empty($apiKey) || empty($secretKey)) {
+if ($apiKey === '' || $secretKey === '') {
     http_response_code(500);
     echo json_encode(["success" => false, "message" => "Courier service not configured"]);
     exit;
 }
 
-$endpoint = ctype_digit($trackingId) ? "status_by_cid/" : "status_by_trackingcode/";
-$url = "https://portal.packzy.com/api/v1/" . $endpoint . urlencode($trackingId);
-
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "Api-Key: $apiKey",
-    "Secret-Key: $secretKey",
-    "Content-Type: application/json",
-]);
-
-$response  = curl_exec($ch);
-$httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($response === false) {
-    http_response_code(502);
-    echo json_encode(["success" => false, "message" => "Courier gateway connection failed"]);
-    exit;
-}
-
-$responseData = json_decode($response, true);
-
-if ($httpCode === 200 && isset($responseData['delivery_status'])) {
-    echo json_encode([
-        "success" => true,
-        "data"    => ["delivery_status" => $responseData['delivery_status']]
-    ]);
+$candidates = [];
+if (ctype_digit($trackingId)) {
+    $candidates[] = "status_by_cid/" . rawurlencode($trackingId);
+    $candidates[] = "status_by_invoice/" . rawurlencode($trackingId);
 } else {
-    http_response_code($httpCode ?: 502);
-    echo json_encode(["success" => false, "message" => "Could not retrieve tracking status"]);
+    $candidates[] = "status_by_trackingcode/" . rawurlencode($trackingId);
+    $candidates[] = "status_by_invoice/" . rawurlencode($trackingId);
 }
+
+$lastCode = 502;
+$lastResponse = null;
+foreach ($candidates as $path) {
+    $url = "https://portal.packzy.com/api/v1/" . $path;
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Api-Key: $apiKey",
+        "Secret-Key: $secretKey",
+        "Content-Type: application/json",
+    ]);
+    $response  = curl_exec($ch);
+    $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($response === false) {
+        continue;
+    }
+    $lastCode = $httpCode ?: 502;
+    $responseData = json_decode($response, true);
+    $lastResponse = $responseData;
+    $rawStatus = $responseData['delivery_status'] ?? ($responseData['status'] ?? null);
+    if ($httpCode === 200 && is_string($rawStatus) && $rawStatus !== '') {
+        echo json_encode([
+            "success" => true,
+            "data"    => [
+                "delivery_status" => $rawStatus,
+                "tracking_message" => $responseData['tracking_message'] ?? ($responseData['note'] ?? null),
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+
+http_response_code($lastCode);
+echo json_encode([
+    "success" => false,
+    "message" => $lastResponse['message'] ?? "Could not retrieve tracking status",
+]);

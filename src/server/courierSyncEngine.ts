@@ -352,18 +352,24 @@ export function evaluateCourierOrderTransition(
  */
 export function extractOrderCourierInfo(order: any): OrderCourierInfo | null {
   if (!order || typeof order !== "object") return null;
-  const trackingId = String(
+  const explicitTracking = String(
     order.couriers?.trackingId ||
       order.courierTrackingId ||
-      order.trackingId ||
       ""
   ).trim();
+  const legacyTracking = String(order.trackingId || "").trim();
   const consignmentId = String(
     order.couriers?.consignmentId ||
       order.courierConsignmentId ||
       order.consignmentId ||
       ""
   ).trim();
+  const isOfflineOrder = String(order.orderId || "").trim().toUpperCase().startsWith("OFFLINE-");
+  const cleanLegacyTracking =
+    explicitTracking || consignmentId
+      ? legacyTracking
+      : (isOfflineOrder || legacyTracking.startsWith("#") ? "" : legacyTracking);
+  const trackingId = explicitTracking || cleanLegacyTracking;
 
   if (!trackingId && !consignmentId) return null;
 
@@ -385,28 +391,42 @@ export function extractOrderCourierInfo(order: any): OrderCourierInfo | null {
   };
 }
 
+export function normalizeSteadfastPhone(rawPhone: any): string {
+  const bn: Record<string, string> = {
+    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
+    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
+  };
+  let digits = String(rawPhone || '')
+    .trim()
+    .replace(/[০-৯]/g, (m) => bn[m] || m)
+    .replace(/\D/g, '');
+  if (digits.startsWith('8801') && digits.length === 13) digits = digits.slice(2);
+  else if (digits.startsWith('1') && digits.length === 10) digits = `0${digits}`;
+  return digits;
+}
+
 export async function loadCourierCredentials(db: FirebaseFirestore.Firestore): Promise<CourierCredentials> {
   const creds: CourierCredentials = {
-    steadfastApiKey: process.env.STEADFAST_API_KEY || "",
-    steadfastSecretKey: process.env.STEADFAST_SECRET_KEY || "",
-    steadfastWebhookSecret: process.env.STEADFAST_WEBHOOK_SECRET || "",
-    pathaoClientId: process.env.PATHAO_CLIENT_ID || "",
-    pathaoClientSecret: process.env.PATHAO_CLIENT_SECRET || "",
-    pathaoUsername: process.env.PATHAO_USERNAME || "",
-    pathaoPassword: process.env.PATHAO_PASSWORD || "",
+    steadfastApiKey: (process.env.STEADFAST_API_KEY || "").trim(),
+    steadfastSecretKey: (process.env.STEADFAST_SECRET_KEY || "").trim(),
+    steadfastWebhookSecret: (process.env.STEADFAST_WEBHOOK_SECRET || "").trim(),
+    pathaoClientId: (process.env.PATHAO_CLIENT_ID || "").trim(),
+    pathaoClientSecret: (process.env.PATHAO_CLIENT_SECRET || "").trim(),
+    pathaoUsername: (process.env.PATHAO_USERNAME || "").trim(),
+    pathaoPassword: (process.env.PATHAO_PASSWORD || "").trim(),
   };
 
   try {
     const keysDoc = await db.collection("admin_config").doc("keys").get();
     if (keysDoc.exists) {
       const data = keysDoc.data() || {};
-      creds.steadfastApiKey = data.steadfastApiKey || creds.steadfastApiKey;
-      creds.steadfastSecretKey = data.steadfastSecretKey || creds.steadfastSecretKey;
-      creds.steadfastWebhookSecret = data.steadfastWebhookSecret || creds.steadfastWebhookSecret;
-      creds.pathaoClientId = data.pathaoClientId || creds.pathaoClientId;
-      creds.pathaoClientSecret = data.pathaoClientSecret || creds.pathaoClientSecret;
-      creds.pathaoUsername = data.pathaoUsername || creds.pathaoUsername;
-      creds.pathaoPassword = data.pathaoPassword || creds.pathaoPassword;
+      creds.steadfastApiKey = String(data.steadfastApiKey || creds.steadfastApiKey || "").trim();
+      creds.steadfastSecretKey = String(data.steadfastSecretKey || creds.steadfastSecretKey || "").trim();
+      creds.steadfastWebhookSecret = String(data.steadfastWebhookSecret || creds.steadfastWebhookSecret || "").trim();
+      creds.pathaoClientId = String(data.pathaoClientId || creds.pathaoClientId || "").trim();
+      creds.pathaoClientSecret = String(data.pathaoClientSecret || creds.pathaoClientSecret || "").trim();
+      creds.pathaoUsername = String(data.pathaoUsername || creds.pathaoUsername || "").trim();
+      creds.pathaoPassword = String(data.pathaoPassword || creds.pathaoPassword || "").trim();
     }
   } catch (err: any) {
     console.warn("[COURIER] Firestore keys read warning:", err.message);
@@ -418,7 +438,14 @@ export async function loadCourierCredentials(db: FirebaseFirestore.Firestore): P
 export async function fetchSteadfastLiveStatus(
   creds: CourierCredentials,
   identifiers: { consignmentId?: string; trackingId?: string; invoiceId?: string }
-): Promise<{ rawStatus: string; endpoint: string; rawResponse: any }> {
+): Promise<{
+  rawStatus: string;
+  trackingMessage?: string;
+  consignmentId?: string;
+  trackingId?: string;
+  endpoint: string;
+  rawResponse: any;
+}> {
   const apiKey = (creds.steadfastApiKey || "").trim();
   const secretKey = (creds.steadfastSecretKey || "").trim();
   if (!apiKey || !secretKey) {
@@ -465,13 +492,36 @@ export async function fetchSteadfastLiveStatus(
       });
       const rawStatus = res.data?.delivery_status || res.data?.status;
       if (rawStatus && typeof rawStatus === "string") {
-        return { rawStatus: rawStatus.trim(), endpoint, rawResponse: res.data };
+        const trackingMessage =
+          (typeof res.data?.tracking_message === "string" && res.data.tracking_message.trim()) ||
+          (typeof res.data?.note === "string" && res.data.note.trim()) ||
+          undefined;
+        const resolvedCid = String(
+          res.data?.consignment_id || res.data?.consignment?.consignment_id || ""
+        ).trim() || undefined;
+        const resolvedTrack = String(
+          res.data?.tracking_code || res.data?.consignment?.tracking_code || ""
+        ).trim() || undefined;
+        return {
+          rawStatus: rawStatus.trim(),
+          trackingMessage,
+          consignmentId: resolvedCid,
+          trackingId: resolvedTrack,
+          endpoint,
+          rawResponse: res.data,
+        };
       }
       lastErr = new Error(res.data?.message || "Steadfast returned no delivery_status");
     } catch (err: any) {
-      lastErr = err;
-      // Only fall through to next identifier if 404 or not found
       const status = err.response?.status;
+      if (status === 401) {
+        lastErr = new Error(
+          "Steadfast 401 Unauthorized — এই Tracking/Invoice Steadfast প্যানেলে পাওয়া যায়নি অথবা API Key সঠিক নয়"
+        );
+      } else {
+        lastErr = err;
+      }
+      // Only fall through to next identifier if 404 or not found
       if (status && status >= 500) throw err;
     }
   }
@@ -484,7 +534,7 @@ let cachedPathaoToken: { token: string; expiresAt: number } | null = null;
 export async function fetchPathaoLiveStatus(
   creds: CourierCredentials,
   trackingId: string
-): Promise<{ rawStatus: string; rawResponse: any }> {
+): Promise<{ rawStatus: string; trackingMessage?: string; consignmentId?: string; rawResponse: any }> {
   const { pathaoClientId, pathaoClientSecret, pathaoUsername, pathaoPassword } = creds;
   if (!pathaoClientId || !pathaoClientSecret || !pathaoUsername || !pathaoPassword) {
     throw new Error("Pathao credentials are not configured.");
@@ -523,15 +573,42 @@ export async function fetchPathaoLiveStatus(
     }
   );
 
+  const orderObj = trackRes.data?.data?.order || trackRes.data?.data || {};
   const rawStatus =
-    trackRes.data?.data?.order?.order_status ||
-    trackRes.data?.data?.order?.transfer_status ||
+    orderObj?.order_status ||
+    orderObj?.transfer_status ||
     trackRes.data?.data?.order_status ||
     "";
   if (!rawStatus) {
     throw new Error("Pathao returned no order status");
   }
-  return { rawStatus: String(rawStatus).trim(), rawResponse: trackRes.data };
+  const logs = Array.isArray(trackRes.data?.data?.logs) ? trackRes.data.data.logs : [];
+  const latestLog = logs.length > 0 ? logs[logs.length - 1] : null;
+  const trackingMessage =
+    (typeof orderObj?.tracking_message === "string" && orderObj.tracking_message.trim()) ||
+    (typeof orderObj?.order_status_desc === "string" && orderObj.order_status_desc.trim()) ||
+    (typeof orderObj?.reason === "string" && orderObj.reason.trim()) ||
+    (typeof latestLog?.message === "string" && latestLog.message.trim()) ||
+    (typeof latestLog?.status === "string" && latestLog.status.trim()) ||
+    undefined;
+  const consignmentId =
+    (typeof orderObj?.consignment_id === "string" && orderObj.consignment_id.trim()) ||
+    undefined;
+  return {
+    rawStatus: String(rawStatus).trim(),
+    trackingMessage,
+    consignmentId,
+    rawResponse: trackRes.data,
+  };
+}
+
+export interface CourierHistoryEntry {
+  status: string;
+  label: string;
+  category: NormalizedCourierCategory;
+  message: string;
+  source: string;
+  timestamp: string;
 }
 
 export interface SyncOrderResult {
@@ -540,12 +617,41 @@ export interface SyncOrderResult {
   trackingId: string;
   rawCourierStatus: string;
   courierLabel: string;
+  trackingMessage: string;
+  courierHistory: CourierHistoryEntry[];
   oldOrderStatus: string;
   newOrderStatus: string;
   updated: boolean;
   statusProtected: boolean;
   reason: string;
   syncedAt: string;
+}
+
+/**
+ * Appends a courier movement event without duplicating identical consecutive stages.
+ */
+export function appendCourierHistoryEntry(
+  existingHistory: any,
+  nextEntry: CourierHistoryEntry,
+  maxEntries = 15
+): CourierHistoryEntry[] {
+  const list: CourierHistoryEntry[] = Array.isArray(existingHistory)
+    ? existingHistory.filter(
+        (item) => item && typeof item === "object" && typeof item.status === "string"
+      )
+    : [];
+
+  const last = list[list.length - 1];
+  const nextStatusNorm = normalizeCourierStatusKey(nextEntry.status);
+  const lastStatusNorm = last ? normalizeCourierStatusKey(last.status) : "";
+  const nextMsgNorm = String(nextEntry.message || "").trim().toLowerCase();
+  const lastMsgNorm = last ? String(last.message || "").trim().toLowerCase() : "";
+
+  if (last && lastStatusNorm === nextStatusNorm && lastMsgNorm === nextMsgNorm) {
+    return list.slice(-maxEntries);
+  }
+
+  return [...list, nextEntry].slice(-maxEntries);
 }
 
 export async function applyCourierUpdateToOrderDoc(
@@ -555,7 +661,7 @@ export async function applyCourierUpdateToOrderDoc(
   service: string,
   rawCourierStatus: string,
   source: string,
-  extraInfo?: { consignmentId?: string; trackingId?: string }
+  extraInfo?: { consignmentId?: string; trackingId?: string; trackingMessage?: string }
 ): Promise<SyncOrderResult> {
   const oldOrderStatus = String(orderData.status || "pending").toLowerCase();
   const evalRes = evaluateCourierOrderTransition(oldOrderStatus, rawCourierStatus);
@@ -569,6 +675,16 @@ export async function applyCourierUpdateToOrderDoc(
 
   const syncedAt = new Date().toISOString();
   const isPathao = service.toLowerCase().includes("pathao");
+  const detailMsg = (extraInfo?.trackingMessage || "").trim() || evalRes.reason;
+  const courierHistory = appendCourierHistoryEntry(orderData.courierHistory, {
+    status: rawCourierStatus,
+    label: evalRes.label,
+    category: evalRes.normalizedCategory,
+    message: detailMsg,
+    source,
+    timestamp: syncedAt,
+  });
+
   const updatePayload: Record<string, any> = {
     courierStatus: rawCourierStatus,
     courierStatusNormalized: evalRes.normalizedCategory,
@@ -576,6 +692,8 @@ export async function applyCourierUpdateToOrderDoc(
     courierLastSyncedAt: syncedAt,
     courierSyncSource: source,
     courierStatusDetail: evalRes.reason,
+    courierTrackingMessage: detailMsg,
+    courierHistory,
   };
 
   if (isPathao) {
@@ -585,6 +703,9 @@ export async function applyCourierUpdateToOrderDoc(
   }
   if (extraInfo?.consignmentId && !orderData.courierConsignmentId) {
     updatePayload.courierConsignmentId = extraInfo.consignmentId;
+  }
+  if (extraInfo?.trackingId && !orderData.courierTrackingId) {
+    updatePayload.courierTrackingId = extraInfo.trackingId;
   }
   if (evalRes.shouldTransition && evalRes.targetOrderStatus) {
     updatePayload.status = evalRes.targetOrderStatus;
@@ -635,6 +756,8 @@ export async function applyCourierUpdateToOrderDoc(
     trackingId: extraInfo?.trackingId || "",
     rawCourierStatus,
     courierLabel: evalRes.label,
+    trackingMessage: detailMsg,
+    courierHistory,
     oldOrderStatus,
     newOrderStatus,
     updated: orderUpdated || courierChanged,
@@ -655,9 +778,15 @@ export async function syncSingleOrderCourierStatus(
     throw new Error(`Order ${orderId} not found`);
   }
   const orderData = snap.data() || {};
-  const courierInfo = extractOrderCourierInfo(orderData);
+  let courierInfo = extractOrderCourierInfo(orderData);
   if (!courierInfo) {
-    throw new Error(`Order ${orderId} has no courier tracking ID or consignment ID`);
+    const fallbackSvc = String(orderData.courierName || orderData.couriers?.service || '').trim();
+    const isManualSteadfast =
+      fallbackSvc.toLowerCase().includes('steadfast') || String(orderData.status || '').toLowerCase() === 'shipped';
+    if (!isManualSteadfast) {
+      throw new Error(`Order ${orderId} has no courier tracking ID or consignment ID`);
+    }
+    courierInfo = { service: fallbackSvc || 'Steadfast', trackingId: '', consignmentId: '' };
   }
 
   const creds = options.credentials || (await loadCourierCredentials(db));
@@ -669,9 +798,14 @@ export async function syncSingleOrderCourierStatus(
   }
 
   let rawStatus = "";
+  let trackingMessage: string | undefined;
+  let resolvedConsignmentId = courierInfo.consignmentId;
+  let resolvedTrackingId = courierInfo.trackingId;
   if (isPathao) {
     const res = await fetchPathaoLiveStatus(creds, courierInfo.trackingId);
     rawStatus = res.rawStatus;
+    trackingMessage = res.trackingMessage;
+    if (res.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = res.consignmentId;
   } else {
     const res = await fetchSteadfastLiveStatus(creds, {
       consignmentId: courierInfo.consignmentId,
@@ -679,6 +813,9 @@ export async function syncSingleOrderCourierStatus(
       invoiceId: orderData.orderId || orderId,
     });
     rawStatus = res.rawStatus;
+    trackingMessage = res.trackingMessage;
+    if (res.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = res.consignmentId;
+    if (res.trackingId && !resolvedTrackingId) resolvedTrackingId = res.trackingId;
   }
 
   return await applyCourierUpdateToOrderDoc(
@@ -689,8 +826,9 @@ export async function syncSingleOrderCourierStatus(
     rawStatus,
     options.source || "ADMIN_MANUAL_SYNC",
     {
-      consignmentId: courierInfo.consignmentId,
-      trackingId: courierInfo.trackingId,
+      consignmentId: resolvedConsignmentId,
+      trackingId: resolvedTrackingId,
+      trackingMessage,
     }
   );
 }
@@ -755,7 +893,9 @@ export async function syncAllActiveCourierOrders(
       const orderStatus = String(data.status || "").toLowerCase();
       if (orderStatus === "cancelled" || orderStatus === "returned") continue;
       const existingCourierSt = data.courierStatus || data.steadfastStatus || data.pathaoStatus;
-      if (orderStatus === "delivered" && isTerminalCourierStatus(existingCourierSt)) continue;
+      if (orderStatus === "delivered" && (!existingCourierSt || isTerminalCourierStatus(existingCourierSt))) {
+        continue;
+      }
     }
 
     targets.push({ ref: docSnap.ref, data, courier });
@@ -780,21 +920,30 @@ export async function syncAllActiveCourierOrders(
         try {
           const isPathao = courier.service.toLowerCase().includes("pathao");
           let rawStatus = "";
+          let trackingMessage: string | undefined;
+          let resolvedConsignmentId = courier.consignmentId;
+          let resolvedTrackingId = courier.trackingId;
           if (isPathao) {
-            rawStatus = (await fetchPathaoLiveStatus(creds, courier.trackingId)).rawStatus;
+            const pRes = await fetchPathaoLiveStatus(creds, courier.trackingId);
+            rawStatus = pRes.rawStatus;
+            trackingMessage = pRes.trackingMessage;
+            if (pRes.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = pRes.consignmentId;
           } else {
-            rawStatus = (
-              await fetchSteadfastLiveStatus(creds, {
-                consignmentId: courier.consignmentId,
-                trackingId: courier.trackingId,
-                invoiceId: data.orderId || ref.id,
-              })
-            ).rawStatus;
+            const sRes = await fetchSteadfastLiveStatus(creds, {
+              consignmentId: courier.consignmentId,
+              trackingId: courier.trackingId,
+              invoiceId: data.orderId || ref.id,
+            });
+            rawStatus = sRes.rawStatus;
+            trackingMessage = sRes.trackingMessage;
+            if (sRes.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = sRes.consignmentId;
+            if (sRes.trackingId && !resolvedTrackingId) resolvedTrackingId = sRes.trackingId;
           }
 
           const res = await applyCourierUpdateToOrderDoc(db, ref, data, courier.service, rawStatus, source, {
-            consignmentId: courier.consignmentId,
-            trackingId: courier.trackingId,
+            consignmentId: resolvedConsignmentId,
+            trackingId: resolvedTrackingId,
+            trackingMessage,
           });
           summary.synced++;
           if (res.updated) summary.updated++;
@@ -888,6 +1037,12 @@ export async function processSteadfastWebhook(
     return { success: false, statusCode: 404, message: "Matching order not found" };
   }
 
+  const trackingMessage =
+    body?.tracking_message ||
+    body?.message ||
+    body?.consignment?.tracking_message ||
+    undefined;
+
   const result = await applyCourierUpdateToOrderDoc(
     db,
     matchedDoc.ref,
@@ -898,6 +1053,7 @@ export async function processSteadfastWebhook(
     {
       consignmentId: cid ? String(cid) : undefined,
       trackingId: trackingCode ? String(trackingCode) : undefined,
+      trackingMessage: typeof trackingMessage === "string" ? trackingMessage : undefined,
     }
   );
 
@@ -924,6 +1080,14 @@ export function startCourierBackgroundSync(
         console.log(
           `[COURIER_SYNC] Checked ${res.summary.total} orders -> synced=${res.summary.synced}, updated=${res.summary.updated}, failed=${res.summary.failed}`
         );
+        if (res.summary.failed > 0) {
+          const errs = (res.results || [])
+            .filter((r: any) => r?.status === "ERROR")
+            .map((r: any) => `${r.orderId}: ${r.error}`);
+          if (errs.length > 0) {
+            console.warn(`[COURIER_SYNC] Failures -> ${errs.join(" | ")}`);
+          }
+        }
       }
     } catch (err: any) {
       console.warn("[COURIER_SYNC] Background sync warning:", err.message);

@@ -374,6 +374,33 @@ export default function TrackingModal(props: TrackingModalProps) {
                       </div>
                     )}
                     {/* STEPS TIMELINE */}
+                    {Array.isArray(trackingResult.courierHistory) && trackingResult.courierHistory.length > 0 && (
+                      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-2.5">
+                        <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-wider">
+                          Live Courier Movement Timeline
+                        </h4>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                          {[...trackingResult.courierHistory].reverse().map((ev: any, i: number) => (
+                            <div
+                              key={`${ev.timestamp || i}-${i}`}
+                              className="flex items-start justify-between gap-2 text-xs bg-gray-50 border border-gray-100 rounded-xl px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-bold text-secondary">{ev.label || ev.status}</p>
+                                {ev.message && (
+                                  <p className="text-[11px] text-gray-500 font-medium mt-0.5">{ev.message}</p>
+                                )}
+                              </div>
+                              {ev.timestamp && (
+                                <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                                  {new Date(ev.timestamp).toLocaleString('bn-BD')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="border-t pt-5">
                       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Order Processing Timeline</h4>
                       <div className="relative pl-8 border-l-2 border-gray-200 space-y-6 ml-3">

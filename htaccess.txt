@@ -29,6 +29,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteRule ^api/ai-search$ api/ai-search.php [L]
   RewriteRule ^api/courier/steadfast/bulk$ api/steadfast-bulk.php [L]
   RewriteRule ^api/steadfast-status$ api/steadfast-status.php [L]
+  RewriteRule ^api/pathao-status$ api/courier-sync.php?action=pathao-status [L,QSA]
   RewriteRule ^api/courier/steadfast/fraud/([^/]+)$ api/steadfast-fraud.php?phone=$1 [L,QSA]
   RewriteRule ^api/products$ api/products.php [L]
   RewriteRule ^api/invalidate-product-cache$ api/invalidate-product-cache.php [L]

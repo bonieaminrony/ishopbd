@@ -14,12 +14,14 @@ import {
 } from "../server/trackingEngine";
 import {
   captureAttribution,
+  getOrderTrackingSignals,
   getStoredAttribution,
   initTracking,
   normalizeBdPhoneToE164,
   resetTrackingForTests,
   trackAddToCart,
   trackAddToWishlist,
+  trackConfirmedOrderPurchase,
   trackContact,
   trackInitiateCheckout,
   trackPurchase,
@@ -400,5 +402,45 @@ describe("Frontend Hybrid Tracking Engine (Browser + /api/track-event)", () => {
       expect.objectContaining({ value: 950, currency: "BDT" }),
       expect.objectContaining({ event_id: expect.stringMatching(/^vc_/) })
     );
+  });
+
+  it("captures customer tracking signals at checkout and fires server-side Purchase only on confirm with omitRequestCookies", async () => {
+    window.history.replaceState({}, "", "/?fbclid=IwAR_test_fb&ttclid=tt_test_99");
+    captureAttribution();
+    document.cookie = "_fbp=fb.1.12345.67890";
+    document.cookie = "_ttp=ttp_user_cookie";
+
+    const signals = getOrderTrackingSignals();
+    expect(signals.fbclid).toBe("IwAR_test_fb");
+    expect(signals.ttclid).toBe("tt_test_99");
+    expect(signals.fbp).toBe("fb.1.12345.67890");
+    expect(signals.ttp).toBe("ttp_user_cookie");
+
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ success: true }) } as any));
+    vi.stubGlobal("fetch", fetchMock);
+
+    trackConfirmedOrderPurchase({
+      orderId: "ORD-CONF-777",
+      total: 1850,
+      items: [{ product: { id: "p5", name: "Koti Jacket", price: 1850 }, quantity: 1 }],
+      customerName: "Tariq",
+      customerPhone: "01711112222",
+      district: "Dhaka",
+      userId: "guest",
+      trackingSignals: signals,
+    });
+
+    await flushMicrotasks();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchMock.mock.calls[0] as any;
+    expect(url).toBe("/api/track-event");
+    const body = JSON.parse(opts.body);
+    expect(body.eventName).toBe("Purchase");
+    expect(body.eventId).toBe("purchase_ORD-CONF-777");
+    expect(body.omitRequestCookies).toBe(true);
+    expect(body.userData.fbp).toBe("fb.1.12345.67890");
+    expect(body.userData.ttclid).toBe("tt_test_99");
+    expect(body.customData.value).toBe(1850);
+    expect(body.customData.orderId).toBe("ORD-CONF-777");
   });
 });

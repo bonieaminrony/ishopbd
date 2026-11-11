@@ -5,8 +5,6 @@ import {
   AlertCircle,
   XCircle,
   Loader2,
-  Eye,
-  EyeOff,
   Save,
   RefreshCw,
   ExternalLink,
@@ -25,6 +23,7 @@ import {
   Info
 } from "lucide-react";
 import toast from "react-hot-toast";
+import SecretTokenField from "./admin/SecretTokenField";
 import { refreshTrackingConfig } from "../utils/tracking";
 import { getAdminAuthHeaders } from "../utils/adminAuth";
 
@@ -33,6 +32,8 @@ export interface MarketingConfig {
     enabled: boolean;
     pixelId: string;
     accessToken: string;
+    maskedAccessToken?: string;
+    clearAccessToken?: boolean;
     testEventCode?: string;
     capiEnabled: boolean;
     hasAccessToken?: boolean;
@@ -41,6 +42,8 @@ export interface MarketingConfig {
     enabled: boolean;
     pixelId: string;
     accessToken: string;
+    maskedAccessToken?: string;
+    clearAccessToken?: boolean;
     testEventCode?: string;
     eventsApiEnabled: boolean;
     hasAccessToken?: boolean;
@@ -66,6 +69,8 @@ export interface MarketingConfig {
   openAi: {
     enabled: boolean;
     apiKey: string;
+    maskedApiKey?: string;
+    clearApiKey?: boolean;
     model: string;
     hasApiKey?: boolean;
   };
@@ -114,6 +119,9 @@ const DEFAULT_CONFIG: MarketingConfig = {
   }
 };
 
+const UNSAVED_TOKEN_TEST_REMINDER =
+  ' — (নতুন টোকেনটি সংরক্ষণ করতে "সেটিংস সংরক্ষণ করুন" বাটনে ক্লিক করুন)';
+
 interface TestResult {
   loading: boolean;
   success?: boolean;
@@ -129,11 +137,6 @@ export const MarketingSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"meta" | "tiktok" | "google" | "whatsapp" | "imo" | "openai">("meta");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-
-  // Show/Hide token toggles
-  const [showMetaToken, setShowMetaToken] = useState<boolean>(false);
-  const [showTikTokToken, setShowTikTokToken] = useState<boolean>(false);
-  const [showOpenAiKey, setShowOpenAiKey] = useState<boolean>(false);
 
   // Connection Test states
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
@@ -181,6 +184,16 @@ export const MarketingSettings: React.FC = () => {
       const data = await res.json();
       if (res.ok && data.success) {
         toast.success("মার্কেটিং ও ট্র্যাকিং সেটিংস সফলভাবে সংরক্ষিত হয়েছে!");
+        setTestResults(prev => {
+          const cleaned: Record<string, TestResult> = {};
+          for (const k of Object.keys(prev)) {
+            const v = prev[k];
+            cleaned[k] = v?.message?.includes(UNSAVED_TOKEN_TEST_REMINDER)
+              ? { ...v, message: v.message.replace(UNSAVED_TOKEN_TEST_REMINDER, "") }
+              : v;
+          }
+          return cleaned;
+        });
         // Refresh to get updated masked state and re-init frontend pixels immediately
         await Promise.all([fetchConfig(), refreshTrackingConfig()]);
       } else {
@@ -211,22 +224,28 @@ export const MarketingSettings: React.FC = () => {
       const data = await res.json();
 
       if (res.ok && data.success) {
+        const hasUnsavedSecret =
+          (typeof payload?.accessToken === "string" && payload.accessToken.trim().length > 0) ||
+          (typeof payload?.apiKey === "string" && payload.apiKey.trim().length > 0);
+        const displayMessage = hasUnsavedSecret && !data.warning
+          ? `${data.message}${UNSAVED_TOKEN_TEST_REMINDER}`
+          : data.message;
         setTestResults(prev => ({
           ...prev,
           [platform]: {
             loading: false,
             success: true,
             warning: !!data.warning,
-            message: data.message,
+            message: displayMessage,
             previewUrl: data.previewUrl,
             sampleUrl: data.sampleUrl,
             timestamp: new Date().toLocaleTimeString("bn-BD")
           }
         }));
         if (data.warning) {
-          toast(data.message, { icon: "⚠️" });
+          toast(displayMessage, { icon: "⚠️" });
         } else {
-          toast.success(data.message);
+          toast.success(displayMessage);
         }
       } else {
         setTestResults(prev => ({
@@ -454,38 +473,28 @@ export const MarketingSettings: React.FC = () => {
             </div>
 
             {/* CAPI Access Token */}
-            <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  Meta Conversions API (CAPI) Access Token <span className="text-red-500">*</span>
-                </label>
-                {config.meta.hasAccessToken && (
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 size={12} /> টোকেন সার্ভারে সুরক্ষিত আছে
-                  </span>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type={showMetaToken ? "text" : "password"}
-                  value={config.meta.accessToken}
-                  onChange={(e) => setConfig({ ...config, meta: { ...config.meta, accessToken: e.target.value } })}
-                  placeholder={config.meta.hasAccessToken ? "•••••••• (সংরক্ষিত আছে, পরিবর্তন করতে নতুন টোকেন পেস্ট করুন)" : "EAAG... দীর্ঘ অ্যাক্সেস টোকেন পেস্ট করুন"}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-12 text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowMetaToken(!showMetaToken)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
-                  {showMetaToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
-                Business Manager &gt; Events Manager &gt; Settings &gt; Conversions API &gt; "Generate Access Token"-এ ক্লিক করে সংগ্রহ করুন।
-              </p>
-            </div>
+            <SecretTokenField
+              label="Meta Conversions API (CAPI) Access Token"
+              required
+              value={config.meta.accessToken}
+              hasSavedToken={!!config.meta.hasAccessToken}
+              maskedPreview={config.meta.maskedAccessToken}
+              isMarkedForClear={!!config.meta.clearAccessToken}
+              placeholderNew="EAAG... দীর্ঘ অ্যাক্সেস টোকেন পেস্ট করুন"
+              helperText='Business Manager > Events Manager > Settings > Conversions API > "Generate Access Token"-এ ক্লিক করে সর্বশেষ টোকেনটি পেস্ট করুন (নতুন টোকেন জেনারেট করলে আগেরটি বাতিল হয়ে যায়)।'
+              onChangeValue={(next) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  meta: { ...prev.meta, accessToken: next },
+                }))
+              }
+              onToggleClear={(clear) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  meta: { ...prev.meta, clearAccessToken: clear },
+                }))
+              }
+            />
 
             {/* Server-Side CAPI Switch */}
             <div className="md:col-span-2 bg-blue-50/50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
@@ -616,35 +625,27 @@ export const MarketingSettings: React.FC = () => {
               </p>
             </div>
 
-            <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  TikTok Events API Access Token <span className="text-red-500">*</span>
-                </label>
-                {config.tiktok.hasAccessToken && (
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 size={12} /> টোকেন সার্ভারে সুরক্ষিত আছে
-                  </span>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type={showTikTokToken ? "text" : "password"}
-                  value={config.tiktok.accessToken}
-                  onChange={(e) => setConfig({ ...config, tiktok: { ...config.tiktok, accessToken: e.target.value } })}
-                  placeholder={config.tiktok.hasAccessToken ? "•••••••• (সংরক্ষিত আছে, পরিবর্তন করতে নতুন টোকেন পেস্ট করুন)" : "TikTok Events API Access Token পেস্ট করুন"}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-12 text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowTikTokToken(!showTikTokToken)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
-                  {showTikTokToken ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
+            <SecretTokenField
+              label="TikTok Events API Access Token"
+              required
+              value={config.tiktok.accessToken}
+              hasSavedToken={!!config.tiktok.hasAccessToken}
+              maskedPreview={config.tiktok.maskedAccessToken}
+              isMarkedForClear={!!config.tiktok.clearAccessToken}
+              placeholderNew="TikTok Events API Access Token পেস্ট করুন"
+              onChangeValue={(next) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  tiktok: { ...prev.tiktok, accessToken: next },
+                }))
+              }
+              onToggleClear={(clear) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  tiktok: { ...prev.tiktok, clearAccessToken: clear },
+                }))
+              }
+            />
 
             <div className="md:col-span-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 flex items-center justify-between">
               <div>
@@ -1199,38 +1200,28 @@ export const MarketingSettings: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  OpenAI API Key <span className="text-red-500">*</span>
-                </label>
-                {config.openAi.hasApiKey && (
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 size={12} /> Key সুরক্ষিতভাবে সংরক্ষিত আছে
-                  </span>
-                )}
-              </div>
-
-              <div className="relative">
-                <input
-                  type={showOpenAiKey ? "text" : "password"}
-                  value={config.openAi.apiKey}
-                  onChange={(e) => setConfig({ ...config, openAi: { ...config.openAi, apiKey: e.target.value } })}
-                  placeholder={config.openAi.hasApiKey ? "•••••••• (সংরক্ষিত আছে, পরিবর্তন করতে নতুন Key পেস্ট করুন)" : "sk-... পেস্ট করুন"}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-12 text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowOpenAiKey(!showOpenAiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                >
-                  {showOpenAiKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
-                https://platform.openai.com/api-keys থেকে আপনার সিক্রেট Key সংগ্রহ করুন।
-              </p>
-            </div>
+            <SecretTokenField
+              label="OpenAI API Key"
+              required
+              value={config.openAi.apiKey}
+              hasSavedToken={!!config.openAi.hasApiKey}
+              maskedPreview={config.openAi.maskedApiKey}
+              isMarkedForClear={!!config.openAi.clearApiKey}
+              placeholderNew="sk-... পেস্ট করুন"
+              helperText="https://platform.openai.com/api-keys থেকে আপনার সিক্রেট Key সংগ্রহ করুন।"
+              onChangeValue={(next) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  openAi: { ...prev.openAi, apiKey: next },
+                }))
+              }
+              onToggleClear={(clear) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  openAi: { ...prev.openAi, clearApiKey: clear },
+                }))
+              }
+            />
 
             <div>
               <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">

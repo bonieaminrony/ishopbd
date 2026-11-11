@@ -53,16 +53,19 @@ $eventTime = isset($input['eventTime']) && is_numeric($input['eventTime']) ? int
 $eventSourceUrl = is_string($input['eventSourceUrl'] ?? null) ? $input['eventSourceUrl'] : ($_SERVER['HTTP_REFERER'] ?? '');
 $referrer = is_string($input['referrer'] ?? null) ? $input['referrer'] : ($_SERVER['HTTP_REFERER'] ?? '');
 
+$omitRequestCookies = !empty($input['omitRequestCookies']);
 $rawIp = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
-$clientIp = trim(explode(',', $rawIp)[0]);
-$userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+$clientIp = $omitRequestCookies ? '' : trim(explode(',', $rawIp)[0]);
+$userAgent = is_string($input['userAgent'] ?? null) && trim($input['userAgent']) !== ''
+    ? trim($input['userAgent'])
+    : ($omitRequestCookies ? '' : ($_SERVER['HTTP_USER_AGENT'] ?? ''));
 
-$fbp = $ud['fbp'] ?? ($_COOKIE['_fbp'] ?? '');
-$fbc = $ud['fbc'] ?? ($_COOKIE['_fbc'] ?? '');
+$fbp = $ud['fbp'] ?? ($omitRequestCookies ? '' : ($_COOKIE['_fbp'] ?? ''));
+$fbc = $ud['fbc'] ?? ($omitRequestCookies ? '' : ($_COOKIE['_fbc'] ?? ''));
 if (!$fbc && !empty($ud['fbclid'])) {
     $fbc = 'fb.1.' . $eventTime . '.' . trim((string)$ud['fbclid']);
 }
-$ttp = $ud['ttp'] ?? ($_COOKIE['_ttp'] ?? '');
+$ttp = $ud['ttp'] ?? ($omitRequestCookies ? '' : ($_COOKIE['_ttp'] ?? ''));
 $ttclid = $ud['ttclid'] ?? '';
 
 $phoneDigits = marketingNormalizePhoneDigits($ud['phone'] ?? '');

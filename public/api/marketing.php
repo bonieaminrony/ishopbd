@@ -72,16 +72,22 @@ if ($action === 'admin-config' && $method === 'GET') {
         'openAi' => array_merge($defaults['openAi'], $data['openAi'] ?? []),
     ] : $defaults;
 
-    $metaTok = trim((string)($final['meta']['accessToken'] ?? ''));
-    $ttTok = trim((string)($final['tiktok']['accessToken'] ?? ''));
-    $oaiKey = trim((string)($final['openAi']['apiKey'] ?? ''));
+    $metaTok = marketingCleanToken((string)($final['meta']['accessToken'] ?? ''));
+    $ttTok = marketingCleanToken((string)($final['tiktok']['accessToken'] ?? ''));
+    $oaiKey = marketingCleanToken((string)($final['openAi']['apiKey'] ?? ''));
 
-    $final['meta']['accessToken'] = marketingMaskSecret($metaTok);
+    $final['meta']['accessToken'] = '';
+    $final['meta']['maskedAccessToken'] = marketingMaskSecret($metaTok);
     $final['meta']['hasAccessToken'] = $metaTok !== '';
-    $final['tiktok']['accessToken'] = marketingMaskSecret($ttTok);
+    $final['meta']['clearAccessToken'] = false;
+    $final['tiktok']['accessToken'] = '';
+    $final['tiktok']['maskedAccessToken'] = marketingMaskSecret($ttTok);
     $final['tiktok']['hasAccessToken'] = $ttTok !== '';
-    $final['openAi']['apiKey'] = marketingMaskSecret($oaiKey);
+    $final['tiktok']['clearAccessToken'] = false;
+    $final['openAi']['apiKey'] = '';
+    $final['openAi']['maskedApiKey'] = marketingMaskSecret($oaiKey);
     $final['openAi']['hasApiKey'] = $oaiKey !== '';
+    $final['openAi']['clearApiKey'] = false;
 
     echo json_encode(['success' => true, 'config' => $final], JSON_UNESCAPED_UNICODE);
     exit;
@@ -95,26 +101,19 @@ if ($action === 'admin-config' && $method === 'POST') {
         exit;
     }
     $existing = marketingReadConfig(false) ?: [];
-    $resolveSecret = function ($inc, $cur) {
-        if (!is_string($inc)) return (string)($cur ?? '');
-        $trimmed = trim($inc);
-        if ($trimmed === '') return '';
-        if (marketingIsMasked($trimmed)) return (string)($cur ?? '');
-        return $trimmed;
-    };
 
     $merged = [
         'meta' => [
             'enabled' => !empty($incoming['meta']['enabled']),
             'pixelId' => trim((string)($incoming['meta']['pixelId'] ?? '')),
-            'accessToken' => $resolveSecret($incoming['meta']['accessToken'] ?? null, $existing['meta']['accessToken'] ?? ''),
+            'accessToken' => marketingResolveSecret($incoming['meta']['accessToken'] ?? null, $existing['meta']['accessToken'] ?? '', !empty($incoming['meta']['clearAccessToken'])),
             'testEventCode' => trim((string)($incoming['meta']['testEventCode'] ?? '')),
             'capiEnabled' => isset($incoming['meta']['capiEnabled']) ? (bool)$incoming['meta']['capiEnabled'] : true,
         ],
         'tiktok' => [
             'enabled' => !empty($incoming['tiktok']['enabled']),
             'pixelId' => trim((string)($incoming['tiktok']['pixelId'] ?? '')),
-            'accessToken' => $resolveSecret($incoming['tiktok']['accessToken'] ?? null, $existing['tiktok']['accessToken'] ?? ''),
+            'accessToken' => marketingResolveSecret($incoming['tiktok']['accessToken'] ?? null, $existing['tiktok']['accessToken'] ?? '', !empty($incoming['tiktok']['clearAccessToken'])),
             'testEventCode' => trim((string)($incoming['tiktok']['testEventCode'] ?? '')),
             'eventsApiEnabled' => isset($incoming['tiktok']['eventsApiEnabled']) ? (bool)$incoming['tiktok']['eventsApiEnabled'] : true,
         ],
@@ -138,13 +137,20 @@ if ($action === 'admin-config' && $method === 'POST') {
         ],
         'openAi' => [
             'enabled' => !empty($incoming['openAi']['enabled']),
-            'apiKey' => $resolveSecret($incoming['openAi']['apiKey'] ?? null, $existing['openAi']['apiKey'] ?? ''),
+            'apiKey' => marketingResolveSecret($incoming['openAi']['apiKey'] ?? null, $existing['openAi']['apiKey'] ?? '', !empty($incoming['openAi']['clearApiKey'])),
             'model' => trim((string)($incoming['openAi']['model'] ?? 'gpt-4o-mini')),
         ],
         'updatedAt' => gmdate('c'),
     ];
 
-    marketingWriteConfig($merged);
+    if (!marketingWriteConfig($merged)) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => $GLOBALS['marketing_last_write_error'] ?? 'Failed to save marketing config to Firestore.',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     echo json_encode(['success' => true, 'message' => 'Marketing & Ads configuration saved successfully.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -155,10 +161,7 @@ if ($action === 'test' && $method === 'POST') {
     $existing = marketingReadConfig(false) ?: [];
 
     if ($platform === 'meta') {
-        $token = $body['accessToken'] ?? '';
-        if (!$token || marketingIsMasked($token)) {
-            $token = $existing['meta']['accessToken'] ?? '';
-        }
+        $token = marketingResolveSecret($body['accessToken'] ?? null, $existing['meta']['accessToken'] ?? '');
         $pixelId = trim((string)($body['pixelId'] ?? $existing['meta']['pixelId'] ?? ''));
         if ($pixelId === '') {
             http_response_code(400);
@@ -173,55 +176,83 @@ if ($action === 'test' && $method === 'POST') {
             ]);
             exit;
         }
+
+        // Optional Graph metadata read (non-fatal if CAPI-only token omits ads_read)
+        $pName = $pixelId;
+        $fbData = null;
         $ch = curl_init("https://graph.facebook.com/v19.0/" . rawurlencode($pixelId) . "?fields=id,name&access_token=" . urlencode($token));
-        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10, CURLOPT_SSL_VERIFYPEER => true]);
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_SSL_VERIFYPEER => true]);
         $resp = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        $fbData = json_decode($resp ?: '', true);
-        if ($code >= 200 && $code < 300 && !empty($fbData['id'])) {
-            $testCode = trim((string)($body['testEventCode'] ?? $existing['meta']['testEventCode'] ?? ''));
-            $capiSummary = '';
-            if ($testCode !== '') {
-                $evPayload = [
-                    'data' => [[
-                        'event_name' => 'PageView',
-                        'event_time' => time(),
-                        'event_id' => 'test_meta_' . time(),
-                        'action_source' => 'website',
-                        'event_source_url' => 'https://ishopbd.com/',
-                        'user_data' => [
-                            'client_user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'iShopBD-MarketingTest/1.0',
-                        ],
-                    ]],
-                    'test_event_code' => $testCode,
-                ];
-                $c2 = curl_init("https://graph.facebook.com/v19.0/" . rawurlencode($pixelId) . "/events?access_token=" . urlencode($token));
-                curl_setopt_array($c2, [
-                    CURLOPT_POST => true,
-                    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                    CURLOPT_POSTFIELDS => json_encode($evPayload),
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT => 10,
-                ]);
-                $r2 = json_decode(curl_exec($c2) ?: '', true);
-                curl_close($c2);
-                $capiSummary = " | Test CAPI event sent (code: {$testCode}, events_received: " . intval($r2['events_received'] ?? 1) . ")";
-            }
-            $pName = $fbData['name'] ?? $pixelId;
-            echo json_encode(['success' => true, 'message' => "Meta CAPI & Pixel Connected Successfully! Pixel Name: \"{$pName}\" (ID: {$fbData['id']}){$capiSummary}", 'data' => $fbData]);
+        $decodedMeta = json_decode($resp ?: '', true);
+        if ($code >= 200 && $code < 300 && !empty($decodedMeta['id'])) {
+            $pName = $decodedMeta['name'] ?? $pixelId;
+            $fbData = $decodedMeta;
+        }
+
+        $testCode = trim((string)($body['testEventCode'] ?? $existing['meta']['testEventCode'] ?? ''));
+        $effectiveTestCode = $testCode !== '' ? $testCode : 'TEST_CONNECTION_CHECK';
+        $rawIp = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+        $clientIp = trim(explode(',', $rawIp)[0]);
+        $userData = [
+            'client_user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'iShopBD-MarketingTest/1.0',
+        ];
+        if ($clientIp && $clientIp !== '127.0.0.1' && $clientIp !== '::1') {
+            $userData['client_ip_address'] = $clientIp;
+        }
+
+        $evPayload = [
+            'data' => [[
+                'event_name' => 'PageView',
+                'event_time' => time(),
+                'event_id' => 'test_meta_' . time(),
+                'action_source' => 'website',
+                'event_source_url' => 'https://ishopbd.com/',
+                'user_data' => $userData,
+            ]],
+            'test_event_code' => $effectiveTestCode,
+        ];
+        $c2 = curl_init("https://graph.facebook.com/v19.0/" . rawurlencode($pixelId) . "/events?access_token=" . urlencode($token));
+        curl_setopt_array($c2, [
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode($evPayload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $r2Raw = curl_exec($c2);
+        $c2Err = curl_error($c2);
+        $c2Code = curl_getinfo($c2, CURLINFO_HTTP_CODE);
+        curl_close($c2);
+        $r2 = json_decode($r2Raw ?: '', true);
+
+        if ($c2Code >= 200 && $c2Code < 300 && intval($r2['events_received'] ?? 0) >= 1) {
+            $received = intval($r2['events_received']);
+            $testNote = $testCode !== ''
+                ? "Test Event ({$testCode}) sent live — events_received: {$received}"
+                : "Token & Pixel verified via {$effectiveTestCode} (events_received: {$received}). Events Manager Test Events ট্যাবে লাইভ দেখতে Test Event Code দিয়ে টেস্ট করুন।";
+            echo json_encode([
+                'success' => true,
+                'message' => "Meta CAPI & Pixel Connected Successfully! Pixel: \"{$pName}\" (ID: {$pixelId}) | {$testNote}",
+                'data' => $fbData ?: $r2,
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
+
+        $errCode = intval($r2['error']['code'] ?? 0);
+        $rawErr = $r2['error']['message'] ?? ($c2Err ?: 'Invalid token or Pixel ID');
+        $hint = $errCode === 190
+            ? ' (নতুন Access Token জেনারেট করলে আগের টোকেন বাতিল হয়ে যায় — Events Manager থেকে সর্বশেষ টোকেনটি পেস্ট করুন।)'
+            : '';
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Meta Connection Failed: ' . ($fbData['error']['message'] ?? 'Invalid token or Pixel ID')]);
+        echo json_encode(['success' => false, 'error' => "Meta Connection Failed: {$rawErr}{$hint}"], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     if ($platform === 'tiktok') {
-        $token = $body['accessToken'] ?? '';
-        if (!$token || marketingIsMasked($token)) {
-            $token = $existing['tiktok']['accessToken'] ?? '';
-        }
+        $token = marketingResolveSecret($body['accessToken'] ?? null, $existing['tiktok']['accessToken'] ?? '');
         $pixelId = trim((string)($body['pixelId'] ?? $existing['tiktok']['pixelId'] ?? ''));
         if ($pixelId === '') {
             http_response_code(400);
@@ -318,8 +349,7 @@ if ($action === 'test' && $method === 'POST') {
     }
 
     if ($platform === 'openai') {
-        $key = $body['apiKey'] ?? '';
-        if (!$key || marketingIsMasked($key)) $key = $existing['openAi']['apiKey'] ?? '';
+        $key = marketingResolveSecret($body['apiKey'] ?? null, $existing['openAi']['apiKey'] ?? '');
         if ($key === '') { http_response_code(400); echo json_encode(['success' => false, 'error' => 'OpenAI API Key is required for testing.']); exit; }
         $ch = curl_init('https://api.openai.com/v1/models');
         curl_setopt_array($ch, [CURLOPT_HTTPHEADER => ["Authorization: Bearer $key"], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);

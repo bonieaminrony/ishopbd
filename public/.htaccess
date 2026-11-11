@@ -28,6 +28,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteRule ^api/ai-search$ api/ai-search.php [L]
   RewriteRule ^api/courier/steadfast/bulk$ api/steadfast-bulk.php [L]
   RewriteRule ^api/steadfast-status$ api/steadfast-status.php [L]
+  RewriteRule ^api/pathao-status$ api/courier-sync.php?action=pathao-status [L,QSA]
   RewriteRule ^api/courier/steadfast/fraud/([^/]+)$ api/steadfast-fraud.php?phone=$1 [L,QSA]
   RewriteRule ^api/products$ api/products.php [L]
   RewriteRule ^api/invalidate-product-cache$ api/invalidate-product-cache.php [L]
@@ -135,7 +136,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
 </FilesMatch>
 
 # Allow only the specific API and entry PHP files
-<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|marketing|track-event|courier-sync)\.php$">
+<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|ping|marketing|track-event|courier-sync)\.php$">
   <IfModule mod_authz_core.c>
     Require all granted
   </IfModule>

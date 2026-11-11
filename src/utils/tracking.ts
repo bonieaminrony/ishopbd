@@ -64,6 +64,22 @@ export interface PurchaseTrackingPayload {
   userId?: string;
 }
 
+export interface OrderTrackingSignals {
+  fbp?: string;
+  fbc?: string;
+  fbclid?: string;
+  ttp?: string;
+  ttclid?: string;
+  gclid?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  inAppBrowser?: string;
+  eventSourceUrl?: string;
+  referrer?: string;
+  userAgent?: string;
+}
+
 const FALLBACK_PUBLIC_CONFIG: PublicMarketingConfig = {
   meta: {
     enabled: true,
@@ -422,6 +438,29 @@ export async function refreshTrackingConfig(): Promise<PublicMarketingConfig> {
   const cfg = await fetchPublicConfig();
   applyPublicConfig(cfg);
   return cfg;
+}
+
+export function getOrderTrackingSignals(): OrderTrackingSignals {
+  if (!isBrowser()) return {};
+  const attr = getStoredAttribution();
+  const fbp = getCookieValue("_fbp");
+  const fbc = getCookieValue("_fbc") || attr.fbc;
+  const ttp = getCookieValue("_ttp");
+  return {
+    ...(fbp ? { fbp } : {}),
+    ...(fbc ? { fbc } : {}),
+    ...(attr.fbclid ? { fbclid: attr.fbclid } : {}),
+    ...(ttp ? { ttp } : {}),
+    ...(attr.ttclid ? { ttclid: attr.ttclid } : {}),
+    ...(attr.gclid ? { gclid: attr.gclid } : {}),
+    ...(attr.utm_source ? { utm_source: attr.utm_source } : {}),
+    ...(attr.utm_medium ? { utm_medium: attr.utm_medium } : {}),
+    ...(attr.utm_campaign ? { utm_campaign: attr.utm_campaign } : {}),
+    ...(attr.inAppBrowser ? { inAppBrowser: attr.inAppBrowser } : {}),
+    eventSourceUrl: window.location.href,
+    ...(document.referrer || attr.referrer ? { referrer: document.referrer || attr.referrer } : {}),
+    ...(navigator.userAgent ? { userAgent: navigator.userAgent } : {}),
+  };
 }
 
 function getUserBrowserSignals(extra?: {
@@ -885,6 +924,76 @@ export function trackPurchase(payload: PurchaseTrackingPayload): void {
         })),
       },
     });
+  });
+}
+
+/**
+ * Dispatches a server-side Purchase conversion event only after an admin confirms an order,
+ * preserving the customer's original checkout attribution & browser signals while omitting admin cookies/IP.
+ */
+export function trackConfirmedOrderPurchase(order: {
+  orderId: string;
+  total?: number;
+  items?: any[];
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  district?: string;
+  deliveryArea?: string;
+  userId?: string;
+  attribution?: AttributionData;
+  trackingSignals?: OrderTrackingSignals;
+}): void {
+  if (!isBrowser() || !order?.orderId) return;
+  const eventId = generateEventId("purchase", order.orderId);
+  const value = Number(order.total || 0);
+  const rawItems = Array.isArray(order.items) ? order.items : [];
+  const items: TrackingItem[] = rawItems.map((i: any) => ({
+    id: String(i?.product?.id || i?.id || "item"),
+    name: String(i?.product?.name || i?.name || "Product"),
+    price: Number(i?.price ?? i?.product?.price ?? 0),
+    quantity: Math.max(1, Number(i?.quantity || 1)),
+    category: i?.product?.category || i?.category,
+    brand: i?.product?.brand || i?.brand,
+  }));
+  const contentIds = items.map((i) => i.id);
+  const numItems = items.reduce((sum, i) => sum + i.quantity, 0);
+  const sig = order.trackingSignals || {};
+  const attr = order.attribution || {};
+
+  sendServerTrackEvent({
+    eventName: "Purchase",
+    eventId,
+    omitRequestCookies: true,
+    eventSourceUrl: sig.eventSourceUrl || attr.landingUrl || window.location.origin,
+    referrer: sig.referrer || attr.referrer || undefined,
+    userAgent: sig.userAgent,
+    userData: {
+      name: order.customerName,
+      phone: order.customerPhone,
+      email: order.customerEmail,
+      city: order.district || order.deliveryArea,
+      userId: order.userId,
+      fbp: sig.fbp,
+      fbc: sig.fbc || attr.fbc,
+      fbclid: sig.fbclid || attr.fbclid,
+      ttp: sig.ttp,
+      ttclid: sig.ttclid || attr.ttclid,
+      gclid: sig.gclid || attr.gclid,
+    },
+    customData: {
+      value,
+      currency: "BDT",
+      orderId: order.orderId,
+      contentIds,
+      numItems,
+      contents: items.map((i) => ({
+        id: i.id,
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price,
+      })),
+    },
   });
 }
 
