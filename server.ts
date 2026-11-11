@@ -20,7 +20,9 @@ import {
   parseCookies,
 } from "./src/server/trackingEngine";
 import {
+  fetchSteadfastFraudBatch,
   fetchSteadfastLiveStatus,
+  getSteadfastFraudReportCached,
   loadCourierCredentials,
   normalizeSteadfastPhone,
   processSteadfastWebhook,
@@ -1692,107 +1694,71 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   });
 
+  const getFirestoreSafe = () => {
+    try {
+      return getFirestore();
+    } catch {
+      return null;
+    }
+  };
+
+  app.post("/api/courier/steadfast/fraud/batch", async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: "Unauthorized: Admin access required" });
+    }
+
+    const phones = Array.isArray(req.body?.phones) ? req.body.phones : [];
+    const forceRefresh = req.body?.refresh === true || req.query?.refresh === "1" || req.query?.refresh === "true";
+
+    if (phones.length === 0) {
+      return res.status(400).json({ success: false, error: "phones array is required" });
+    }
+
+    try {
+      const batchResult = await fetchSteadfastFraudBatch(phones, {
+        getDb: getFirestoreSafe,
+        forceRefresh,
+        maxPhones: 15,
+        concurrency: 3,
+      });
+
+      return res.json({
+        success: true,
+        ...batchResult,
+      });
+    } catch (error: any) {
+      console.error("Error in steadfast-fraud batch proxy:", error);
+      return res.status(error?.statusCode || error?.response?.status || 500).json({
+        success: false,
+        error: error?.response?.data?.error || error?.response?.data?.message || error?.message || "Failed to batch check customer fraud reports",
+      });
+    }
+  });
+
   app.get("/api/courier/steadfast/fraud/:phone", async (req, res) => {
     const isAuthorized = await verifyIsAdmin(req);
     if (!isAuthorized) {
       return res.status(401).json({ success: false, error: "Unauthorized: Admin access required" });
     }
     const rawPhone = req.params.phone || "";
-    const phone = rawPhone.replace(/[^0-9]/g, "");
-    if (!phone) {
-      return res.status(400).json({ success: false, error: "Phone number is required" });
-    }
+    const forceRefresh = req.query?.refresh === "1" || req.query?.refresh === "true";
 
     try {
-      let apiKey = process.env.STEADFAST_API_KEY || "";
-      let secretKey = process.env.STEADFAST_SECRET_KEY || "";
+      const { data } = await getSteadfastFraudReportCached(rawPhone, {
+        getDb: getFirestoreSafe,
+        forceRefresh,
+      });
 
-      if (!apiKey || !secretKey) {
-        try {
-          const db = getFirestore();
-          const keysDoc = await db.collection("admin_config").doc("keys").get();
-          if (keysDoc.exists) {
-            const data = keysDoc.data() || {};
-            apiKey = apiKey || data.steadfastApiKey || "";
-            secretKey = secretKey || data.steadfastSecretKey || "";
-          }
-        } catch (dbErr) {
-          console.warn("Could not fetch keys from Firestore:", dbErr);
-        }
-      }
-
-      if (!apiKey || !secretKey) {
-        return res.status(400).json({ 
-          success: false, 
-          error: "Steadfast API Key settings missing. Please configure them in Dashboard Settings or server .env." 
-        });
-      }
-
-      let responseData: any = null;
-      try {
-        const response = await axios.get(
-          `https://portal.packzy.com/api/v1/fraud_check/score/${phone}`,
-          {
-            headers: {
-              "Api-Key": apiKey,
-              "Secret-Key": secretKey,
-              "Content-Type": "application/json"
-            },
-            timeout: 10000
-          }
-        );
-        responseData = response.data;
-      } catch (scoreErr: any) {
-        // Fallback to legacy endpoint if /score/ is unavailable
-        if (scoreErr.response?.status === 404) {
-          const fallbackRes = await axios.get(
-            `https://portal.packzy.com/api/v1/fraud_check/${phone}`,
-            {
-              headers: {
-                "Api-Key": apiKey,
-                "Secret-Key": secretKey,
-                "Content-Type": "application/json"
-              },
-              timeout: 10000
-            }
-          );
-          responseData = fallbackRes.data;
-        } else {
-          throw scoreErr;
-        }
-      }
-
-      const deliveryRate = responseData?.delivery_ratio !== undefined && responseData?.delivery_ratio !== null ? Number(responseData.delivery_ratio) : null;
-      const cancellationRate = responseData?.cancellation_ratio !== undefined && responseData?.cancellation_ratio !== null ? Number(responseData.cancellation_ratio) : (responseData?.return_ratio !== undefined && responseData?.return_ratio !== null ? Number(responseData.return_ratio) : null);
-      const fraudReports = responseData?.total_reports !== undefined ? Number(responseData.total_reports) : (Array.isArray(responseData?.total_fraud_reports) ? responseData.total_fraud_reports.length : (Number(responseData?.total_fraud_report) || 0));
-      const volumeBand = responseData?.volume_band || "";
-      const totalParcel = Number(responseData?.total_parcels || responseData?.total_parcel || 0);
-      const totalDelivered = Number(responseData?.total_delivered || 0);
-      const totalCancelled = Number(responseData?.total_cancelled || 0);
-
-      res.json({
+      return res.json({
         success: true,
-        data: {
-          phone,
-          delivery_rate: deliveryRate,
-          cancellation_rate: cancellationRate,
-          delivery_ratio: deliveryRate,
-          cancellation_ratio: cancellationRate,
-          return_ratio: cancellationRate,
-          total_fraud_report: fraudReports,
-          total_reports: fraudReports,
-          volume_band: volumeBand,
-          total_parcel: totalParcel,
-          total_delivered: totalDelivered,
-          total_cancelled: totalCancelled,
-          raw: responseData
-        }
+        data,
       });
     } catch (error: any) {
       console.error("Error in steadfast-fraud check proxy:", error);
-      res.status(error.response?.status || 500).json({ 
-        success: false, 
-        error: error.response?.data?.error || error.response?.data?.message || "Failed to check customer fraud report" 
+      return res.status(error?.statusCode || error?.response?.status || 500).json({
+        success: false,
+        error: error?.response?.data?.error || error?.response?.data?.message || error?.message || "Failed to check customer fraud report",
       });
     }
   });

@@ -26,6 +26,12 @@ import {
 } from './utils/tracking';
 import { getAdminAuthHeaders } from './utils/adminAuth';
 import { buildProductStructuredData } from './utils/productSchema';
+import {
+  CourierFraudReport,
+  getCourierReportForPhone,
+  normalizeBdPhone,
+  parseClientCourierFraudReport,
+} from './utils/courierDisplay';
 
 // Dynamic Code-Splitting for Heavy / Secondary Modals
 const ProductDetails = lazy(() => import('./components/ProductDetails'));
@@ -967,7 +973,7 @@ function App() {
         customerName: order.customerName,
         customerPhone: order.customerPhone,
         address: order.address,
-        items: JSON.parse(JSON.stringify(order.items || []))
+        items: JSON.parse(JSON.stringify(Array.isArray(order?.items) ? order.items : []))
       });
       setIsEditingOrder(true);
     };
@@ -1719,67 +1725,41 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     const saved = localStorage.getItem("ishopbd_blacklist");
     return saved ? JSON.parse(saved) : [];
   });
-  const [courierReports, setCourierReports] = useState<Record<string, { 
-    total_parcel: number; 
-    total_delivered: number; 
-    total_cancelled: number; 
-    total_fraud_report: number;
-    delivery_rate?: number;
-    cancellation_rate?: number;
-    volume_band?: string;
-  }>>({});
+  const [courierReports, setCourierReports] = useState<Record<string, CourierFraudReport>>({});
+  const courierReportsRef = useRef<Record<string, CourierFraudReport>>({});
+  useEffect(() => {
+    courierReportsRef.current = courierReports;
+  }, [courierReports]);
+  const autoCheckedCourierPhonesRef = useRef<Set<string>>(new Set());
   const [loadingCourierReports, setLoadingCourierReports] = useState<Record<string, boolean>>({});
   const [isCourierHistoryModalOpen, setIsCourierHistoryModalOpen] = useState(false);
   const [courierModalPhone, setCourierModalPhone] = useState("");
-  const checkCourierReport = async (phone: string) => {
+  const checkCourierReport = async (phone: string, forceRefresh = false) => {
     if (!phone) return;
     const cleanPhone = phone.replace(/[^0-9]/g, "");
-    if (!cleanPhone) return;
-    setLoadingCourierReports(prev => ({ ...prev, [phone]: true, [cleanPhone]: true }));
+    const normalizedPhone = normalizeBdPhone(phone) || cleanPhone;
+    if (!normalizedPhone) return;
+    autoCheckedCourierPhonesRef.current.add(normalizedPhone);
+    setLoadingCourierReports(prev => ({
+      ...prev,
+      [phone]: true,
+      ...(cleanPhone ? { [cleanPhone]: true } : {}),
+      [normalizedPhone]: true,
+    }));
     try {
       const headers = await getAdminAuthHeaders(false);
-      const response = await axios.get(`/api/courier/steadfast/fraud/${cleanPhone}`, { headers });
-      const resData = response.data;
-      if (resData && (resData.success || resData.status === 200 || resData.delivery_ratio !== undefined)) {
-        const report = resData.data?.data || resData.data || resData;
-        const total_parcel = Number(report?.total_parcel || report?.total_parcels || report?.total_parcel_count || 0);
-        const total_delivered = Number(report?.total_delivered || report?.total_delivered_count || 0);
-        const total_cancelled = Number(report?.total_cancelled || report?.total_cancelled_count || 0);
-        const total_fraud_report = Number(report?.total_fraud_report || report?.total_reports || (Array.isArray(report?.total_fraud_reports) ? report.total_fraud_reports.length : 0));
-        
-        const delivery_rate = report?.delivery_rate !== undefined && report?.delivery_rate !== null 
-          ? Number(report.delivery_rate) 
-          : (report?.delivery_ratio !== null && report?.delivery_ratio !== undefined 
-            ? Number(report.delivery_ratio) 
-            : (total_parcel > 0 ? Math.round((total_delivered / total_parcel) * 100) : undefined));
-
-        const cancellation_rate = report?.cancellation_rate !== undefined && report?.cancellation_rate !== null
-          ? Number(report.cancellation_rate)
-          : (report?.cancellation_ratio !== null && report?.cancellation_ratio !== undefined
-            ? Number(report.cancellation_ratio)
-            : (report?.return_ratio !== null && report?.return_ratio !== undefined
-              ? Number(report.return_ratio)
-              : (total_parcel > 0 ? Math.round((total_cancelled / total_parcel) * 100) : undefined)));
-
-        const volume_band = report?.volume_band || "";
-
-        const parsedData = {
-          total_parcel,
-          total_delivered,
-          total_cancelled,
-          total_fraud_report,
-          delivery_rate,
-          cancellation_rate,
-          volume_band,
-        };
-
+      const refreshSuffix = forceRefresh ? "?refresh=1" : "";
+      const response = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(normalizedPhone)}${refreshSuffix}`, { headers });
+      const parsedData = parseClientCourierFraudReport(response.data);
+      if (parsedData) {
         setCourierReports(prev => ({
           ...prev,
           [phone]: parsedData,
-          [cleanPhone]: parsedData,
+          ...(cleanPhone ? { [cleanPhone]: parsedData } : {}),
+          [normalizedPhone]: parsedData,
         }));
       } else {
-        const errorMsg = resData?.error || resData?.message || "কুরিয়ার ডাটা পাওয়া যায়নি";
+        const errorMsg = response.data?.error || response.data?.message || "কুরিয়ার ডাটা পাওয়া যায়নি";
         toast.error(errorMsg);
       }
     } catch (err: any) {
@@ -1787,7 +1767,12 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
       const errMsg = err.response?.data?.error || err.response?.data?.message || "কুরিয়ার ডাটা ফেচ করতে সমস্যা হয়েছে";
       toast.error(errMsg);
     } finally {
-      setLoadingCourierReports(prev => ({ ...prev, [phone]: false, [cleanPhone]: false }));
+      setLoadingCourierReports(prev => ({
+        ...prev,
+        [phone]: false,
+        ...(cleanPhone ? { [cleanPhone]: false } : {}),
+        [normalizedPhone]: false,
+      }));
     }
   };
   type LangCode = "en" | "bn";
@@ -3405,6 +3390,85 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   const [adminTab, setAdminTab] = useState<
     "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
   >("orders");
+
+  useEffect(() => {
+    if (!isAdminOpen || !isAdminVerified || adminTab !== "orders") return;
+    const visibleOrders = filteredOrders.slice(0, adminOrdersLimit);
+    const pendingPhones: string[] = [];
+    for (const ord of visibleOrders) {
+      const normalized = normalizeBdPhone(ord?.customerPhone);
+      if (!normalized || normalized.length < 10) continue;
+      if (getCourierReportForPhone(courierReportsRef.current, normalized)) continue;
+      if (autoCheckedCourierPhonesRef.current.has(normalized)) continue;
+      if (!pendingPhones.includes(normalized)) {
+        pendingPhones.push(normalized);
+        if (pendingPhones.length >= 12) break;
+      }
+    }
+    if (pendingPhones.length === 0) return;
+    pendingPhones.forEach(p => autoCheckedCourierPhonesRef.current.add(p));
+
+    let isCancelled = false;
+    const fetchVisibleCourierStats = async () => {
+      setLoadingCourierReports(prev => {
+        const next = { ...prev };
+        pendingPhones.forEach(p => { next[p] = true; });
+        return next;
+      });
+      try {
+        const headers = await getAdminAuthHeaders(false);
+        let updates: Record<string, CourierFraudReport> = {};
+        try {
+          const batchRes = await axios.post("/api/courier/steadfast/fraud/batch", { phones: pendingPhones }, { headers });
+          const rawResults = batchRes.data?.results;
+          if (rawResults && typeof rawResults === "object") {
+            for (const [phoneKey, val] of Object.entries(rawResults)) {
+              const parsed = parseClientCourierFraudReport({ success: true, data: val });
+              if (parsed) updates[phoneKey] = parsed;
+            }
+          }
+        } catch (batchErr: any) {
+          const status = batchErr?.response?.status;
+          if (status === 404 || status === 405) {
+            for (let i = 0; i < pendingPhones.length; i += 3) {
+              if (isCancelled) break;
+              const chunk = pendingPhones.slice(i, i + 3);
+              await Promise.all(
+                chunk.map(async (p) => {
+                  try {
+                    const singleRes = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(p)}`, { headers });
+                    const parsed = parseClientCourierFraudReport(singleRes.data);
+                    if (parsed) updates[p] = parsed;
+                  } catch {
+                    // Silent fallback failure; manual Verify remains available
+                  }
+                })
+              );
+            }
+          }
+        }
+
+        if (!isCancelled && Object.keys(updates).length > 0) {
+          setCourierReports(prev => ({ ...prev, ...updates }));
+        }
+      } catch (err) {
+        console.warn("Background courier rate fetch skipped:", err);
+      } finally {
+        if (!isCancelled) {
+          setLoadingCourierReports(prev => {
+            const next = { ...prev };
+            pendingPhones.forEach(p => { next[p] = false; });
+            return next;
+          });
+        }
+      }
+    };
+
+    fetchVisibleCourierStats();
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAdminOpen, isAdminVerified, adminTab, filteredOrders, adminOrdersLimit]);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(
     null,
   );
@@ -6841,6 +6905,7 @@ const handleSaveQuickEdit = async () => {
                   courierStatusLabel: sr.courierLabel,
                   courierLastSyncedAt: sr.syncedAt,
                   ...(sr.trackingMessage ? { courierTrackingMessage: sr.trackingMessage } : {}),
+                  ...(sr.hubName ? { courierHub: sr.hubName } : {}),
                   ...(Array.isArray(sr.courierHistory) ? { courierHistory: sr.courierHistory } : {}),
                   status: sr.newOrderStatus,
                   ...(sr.service?.toLowerCase().includes("pathao")

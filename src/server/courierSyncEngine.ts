@@ -1,5 +1,10 @@
 import axios from "axios";
 import crypto from "crypto";
+import {
+  CourierFraudReport,
+  extractCourierHubName,
+  normalizeBdPhone,
+} from "../utils/courierDisplay";
 
 export interface CourierCredentials {
   steadfastApiKey?: string;
@@ -392,17 +397,7 @@ export function extractOrderCourierInfo(order: any): OrderCourierInfo | null {
 }
 
 export function normalizeSteadfastPhone(rawPhone: any): string {
-  const bn: Record<string, string> = {
-    '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4',
-    '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
-  };
-  let digits = String(rawPhone || '')
-    .trim()
-    .replace(/[০-৯]/g, (m) => bn[m] || m)
-    .replace(/\D/g, '');
-  if (digits.startsWith('8801') && digits.length === 13) digits = digits.slice(2);
-  else if (digits.startsWith('1') && digits.length === 10) digits = `0${digits}`;
-  return digits;
+  return normalizeBdPhone(rawPhone);
 }
 
 export async function loadCourierCredentials(db: FirebaseFirestore.Firestore): Promise<CourierCredentials> {
@@ -441,6 +436,7 @@ export async function fetchSteadfastLiveStatus(
 ): Promise<{
   rawStatus: string;
   trackingMessage?: string;
+  hubName?: string;
   consignmentId?: string;
   trackingId?: string;
   endpoint: string;
@@ -502,9 +498,11 @@ export async function fetchSteadfastLiveStatus(
         const resolvedTrack = String(
           res.data?.tracking_code || res.data?.consignment?.tracking_code || ""
         ).trim() || undefined;
+        const hubName = extractCourierHubName(trackingMessage, res.data) || undefined;
         return {
           rawStatus: rawStatus.trim(),
           trackingMessage,
+          hubName,
           consignmentId: resolvedCid,
           trackingId: resolvedTrack,
           endpoint,
@@ -534,7 +532,7 @@ let cachedPathaoToken: { token: string; expiresAt: number } | null = null;
 export async function fetchPathaoLiveStatus(
   creds: CourierCredentials,
   trackingId: string
-): Promise<{ rawStatus: string; trackingMessage?: string; consignmentId?: string; rawResponse: any }> {
+): Promise<{ rawStatus: string; trackingMessage?: string; hubName?: string; consignmentId?: string; rawResponse: any }> {
   const { pathaoClientId, pathaoClientSecret, pathaoUsername, pathaoPassword } = creds;
   if (!pathaoClientId || !pathaoClientSecret || !pathaoUsername || !pathaoPassword) {
     throw new Error("Pathao credentials are not configured.");
@@ -594,9 +592,11 @@ export async function fetchPathaoLiveStatus(
   const consignmentId =
     (typeof orderObj?.consignment_id === "string" && orderObj.consignment_id.trim()) ||
     undefined;
+  const hubName = extractCourierHubName(trackingMessage, trackRes.data) || undefined;
   return {
     rawStatus: String(rawStatus).trim(),
     trackingMessage,
+    hubName,
     consignmentId,
     rawResponse: trackRes.data,
   };
@@ -607,6 +607,7 @@ export interface CourierHistoryEntry {
   label: string;
   category: NormalizedCourierCategory;
   message: string;
+  hub?: string;
   source: string;
   timestamp: string;
 }
@@ -618,6 +619,7 @@ export interface SyncOrderResult {
   rawCourierStatus: string;
   courierLabel: string;
   trackingMessage: string;
+  hubName: string;
   courierHistory: CourierHistoryEntry[];
   oldOrderStatus: string;
   newOrderStatus: string;
@@ -661,7 +663,7 @@ export async function applyCourierUpdateToOrderDoc(
   service: string,
   rawCourierStatus: string,
   source: string,
-  extraInfo?: { consignmentId?: string; trackingId?: string; trackingMessage?: string }
+  extraInfo?: { consignmentId?: string; trackingId?: string; trackingMessage?: string; hubName?: string }
 ): Promise<SyncOrderResult> {
   const oldOrderStatus = String(orderData.status || "pending").toLowerCase();
   const evalRes = evaluateCourierOrderTransition(oldOrderStatus, rawCourierStatus);
@@ -676,11 +678,16 @@ export async function applyCourierUpdateToOrderDoc(
   const syncedAt = new Date().toISOString();
   const isPathao = service.toLowerCase().includes("pathao");
   const detailMsg = (extraInfo?.trackingMessage || "").trim() || evalRes.reason;
+  const resolvedHub =
+    (extraInfo?.hubName || "").trim() ||
+    extractCourierHubName(extraInfo?.trackingMessage || detailMsg) ||
+    "";
   const courierHistory = appendCourierHistoryEntry(orderData.courierHistory, {
     status: rawCourierStatus,
     label: evalRes.label,
     category: evalRes.normalizedCategory,
     message: detailMsg,
+    ...(resolvedHub ? { hub: resolvedHub } : {}),
     source,
     timestamp: syncedAt,
   });
@@ -693,6 +700,7 @@ export async function applyCourierUpdateToOrderDoc(
     courierSyncSource: source,
     courierStatusDetail: evalRes.reason,
     courierTrackingMessage: detailMsg,
+    ...(resolvedHub ? { courierHub: resolvedHub } : {}),
     courierHistory,
   };
 
@@ -757,6 +765,7 @@ export async function applyCourierUpdateToOrderDoc(
     rawCourierStatus,
     courierLabel: evalRes.label,
     trackingMessage: detailMsg,
+    hubName: resolvedHub,
     courierHistory,
     oldOrderStatus,
     newOrderStatus,
@@ -799,12 +808,14 @@ export async function syncSingleOrderCourierStatus(
 
   let rawStatus = "";
   let trackingMessage: string | undefined;
+  let hubName: string | undefined;
   let resolvedConsignmentId = courierInfo.consignmentId;
   let resolvedTrackingId = courierInfo.trackingId;
   if (isPathao) {
     const res = await fetchPathaoLiveStatus(creds, courierInfo.trackingId);
     rawStatus = res.rawStatus;
     trackingMessage = res.trackingMessage;
+    hubName = res.hubName;
     if (res.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = res.consignmentId;
   } else {
     const res = await fetchSteadfastLiveStatus(creds, {
@@ -814,6 +825,7 @@ export async function syncSingleOrderCourierStatus(
     });
     rawStatus = res.rawStatus;
     trackingMessage = res.trackingMessage;
+    hubName = res.hubName;
     if (res.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = res.consignmentId;
     if (res.trackingId && !resolvedTrackingId) resolvedTrackingId = res.trackingId;
   }
@@ -829,6 +841,7 @@ export async function syncSingleOrderCourierStatus(
       consignmentId: resolvedConsignmentId,
       trackingId: resolvedTrackingId,
       trackingMessage,
+      hubName,
     }
   );
 }
@@ -921,12 +934,14 @@ export async function syncAllActiveCourierOrders(
           const isPathao = courier.service.toLowerCase().includes("pathao");
           let rawStatus = "";
           let trackingMessage: string | undefined;
+          let hubName: string | undefined;
           let resolvedConsignmentId = courier.consignmentId;
           let resolvedTrackingId = courier.trackingId;
           if (isPathao) {
             const pRes = await fetchPathaoLiveStatus(creds, courier.trackingId);
             rawStatus = pRes.rawStatus;
             trackingMessage = pRes.trackingMessage;
+            hubName = pRes.hubName;
             if (pRes.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = pRes.consignmentId;
           } else {
             const sRes = await fetchSteadfastLiveStatus(creds, {
@@ -936,6 +951,7 @@ export async function syncAllActiveCourierOrders(
             });
             rawStatus = sRes.rawStatus;
             trackingMessage = sRes.trackingMessage;
+            hubName = sRes.hubName;
             if (sRes.consignmentId && !resolvedConsignmentId) resolvedConsignmentId = sRes.consignmentId;
             if (sRes.trackingId && !resolvedTrackingId) resolvedTrackingId = sRes.trackingId;
           }
@@ -944,6 +960,7 @@ export async function syncAllActiveCourierOrders(
             consignmentId: resolvedConsignmentId,
             trackingId: resolvedTrackingId,
             trackingMessage,
+            hubName,
           });
           summary.synced++;
           if (res.updated) summary.updated++;
@@ -1042,6 +1059,7 @@ export async function processSteadfastWebhook(
     body?.message ||
     body?.consignment?.tracking_message ||
     undefined;
+  const hubName = extractCourierHubName(trackingMessage, body) || undefined;
 
   const result = await applyCourierUpdateToOrderDoc(
     db,
@@ -1054,6 +1072,7 @@ export async function processSteadfastWebhook(
       consignmentId: cid ? String(cid) : undefined,
       trackingId: trackingCode ? String(trackingCode) : undefined,
       trackingMessage: typeof trackingMessage === "string" ? trackingMessage : undefined,
+      hubName,
     }
   );
 
@@ -1099,4 +1118,300 @@ export function startCourierBackgroundSync(
   backgroundSyncTimer = setInterval(runSync, intervalMs);
   backgroundSyncTimer.unref?.();
   console.log(`[COURIER_SYNC] Automated courier polling enabled (every ${intervalMinutes} mins).`);
+}
+
+export interface SteadfastFraudReportData extends CourierFraudReport {
+  phone: string;
+  delivery_rate: number | null;
+  cancellation_rate: number | null;
+  delivery_ratio: number | null;
+  cancellation_ratio: number | null;
+  return_ratio: number | null;
+  total_fraud_report: number;
+  total_reports: number;
+  volume_band: string;
+  volume_range: string;
+  total_parcel: number;
+  total_delivered: number;
+  total_cancelled: number;
+  cached?: boolean;
+  fetched_at?: string;
+  raw?: any;
+}
+
+const FRAUD_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const fraudMemoryCache = new Map<string, { fetchedAtMs: number; data: SteadfastFraudReportData }>();
+const fraudInFlight = new Map<string, Promise<SteadfastFraudReportData>>();
+
+export function clearSteadfastFraudMemoryCache(): void {
+  fraudMemoryCache.clear();
+  fraudInFlight.clear();
+}
+
+export function parseSteadfastFraudPayload(phone: string, responseData: any): SteadfastFraudReportData {
+  let deliveryRate =
+    responseData?.delivery_ratio !== undefined && responseData?.delivery_ratio !== null
+      ? Number(responseData.delivery_ratio)
+      : null;
+  let cancellationRate =
+    responseData?.cancellation_ratio !== undefined && responseData?.cancellation_ratio !== null
+      ? Number(responseData.cancellation_ratio)
+      : responseData?.return_ratio !== undefined && responseData?.return_ratio !== null
+      ? Number(responseData.return_ratio)
+      : null;
+
+  const fraudReports =
+    responseData?.total_reports !== undefined && responseData?.total_reports !== null
+      ? Number(responseData.total_reports)
+      : Array.isArray(responseData?.total_fraud_reports)
+      ? responseData.total_fraud_reports.length
+      : Number(responseData?.total_fraud_report) || 0;
+
+  const volumeBand = typeof responseData?.volume_band === "string" ? responseData.volume_band : "";
+  const volumeRange = typeof responseData?.volume_range === "string" ? responseData.volume_range : "";
+  const totalParcel = Number(responseData?.total_parcels ?? responseData?.total_parcel ?? 0) || 0;
+  const totalDelivered = Number(responseData?.total_delivered ?? 0) || 0;
+  const totalCancelled = Number(responseData?.total_cancelled ?? 0) || 0;
+
+  if (totalParcel > 0) {
+    if (deliveryRate === null || Number.isNaN(deliveryRate)) {
+      deliveryRate = Math.round((totalDelivered / totalParcel) * 100);
+    }
+    if (cancellationRate === null || Number.isNaN(cancellationRate)) {
+      cancellationRate = Math.round((totalCancelled / totalParcel) * 100);
+    }
+  }
+
+  return {
+    phone,
+    delivery_rate: deliveryRate !== null && !Number.isNaN(deliveryRate) ? deliveryRate : null,
+    cancellation_rate: cancellationRate !== null && !Number.isNaN(cancellationRate) ? cancellationRate : null,
+    delivery_ratio: deliveryRate !== null && !Number.isNaN(deliveryRate) ? deliveryRate : null,
+    cancellation_ratio: cancellationRate !== null && !Number.isNaN(cancellationRate) ? cancellationRate : null,
+    return_ratio: cancellationRate !== null && !Number.isNaN(cancellationRate) ? cancellationRate : null,
+    total_fraud_report: Number.isFinite(fraudReports) ? fraudReports : 0,
+    total_reports: Number.isFinite(fraudReports) ? fraudReports : 0,
+    volume_band: volumeBand,
+    volume_range: volumeRange,
+    total_parcel: totalParcel,
+    total_delivered: totalDelivered,
+    total_cancelled: totalCancelled,
+    raw: responseData,
+  };
+}
+
+async function resolveSteadfastFraudKeys(
+  getDb?: () => FirebaseFirestore.Firestore | null
+): Promise<{ apiKey: string; secretKey: string }> {
+  let apiKey = (process.env.STEADFAST_API_KEY || "").trim();
+  let secretKey = (process.env.STEADFAST_SECRET_KEY || "").trim();
+
+  if (!apiKey || !secretKey) {
+    try {
+      const db = getDb?.();
+      if (db) {
+        const creds = await loadCourierCredentials(db);
+        apiKey = apiKey || (creds.steadfastApiKey || "").trim();
+        secretKey = secretKey || (creds.steadfastSecretKey || "").trim();
+      }
+    } catch (err: any) {
+      console.warn("Could not fetch Steadfast keys from Firestore:", err?.message || err);
+    }
+  }
+
+  return { apiKey, secretKey };
+}
+
+async function fetchLiveSteadfastFraudFromApi(
+  phone: string,
+  apiKey: string,
+  secretKey: string
+): Promise<SteadfastFraudReportData> {
+  const headers = {
+    "Api-Key": apiKey,
+    "Secret-Key": secretKey,
+    "Content-Type": "application/json",
+  };
+
+  let responseData: any = null;
+  try {
+    const response = await axios.get(
+      `https://portal.packzy.com/api/v1/fraud_check/score/${encodeURIComponent(phone)}`,
+      { headers, timeout: 10000 }
+    );
+    responseData = response.data;
+  } catch (scoreErr: any) {
+    if (scoreErr?.response?.status === 404) {
+      const fallbackRes = await axios.get(
+        `https://portal.packzy.com/api/v1/fraud_check/${encodeURIComponent(phone)}`,
+        { headers, timeout: 10000 }
+      );
+      responseData = fallbackRes.data;
+    } else {
+      throw scoreErr;
+    }
+  }
+
+  return parseSteadfastFraudPayload(phone, responseData);
+}
+
+export async function getSteadfastFraudReportCached(
+  rawPhone: string,
+  options: {
+    getDb?: () => FirebaseFirestore.Firestore | null;
+    forceRefresh?: boolean;
+    ttlMs?: number;
+  } = {}
+): Promise<{ data: SteadfastFraudReportData; fromCache: boolean }> {
+  const phone = normalizeSteadfastPhone(rawPhone);
+  if (!phone || phone.length < 6) {
+    const err: any = new Error("Phone number is required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const ttlMs = options.ttlMs ?? FRAUD_CACHE_TTL_MS;
+  const now = Date.now();
+
+  if (!options.forceRefresh) {
+    const mem = fraudMemoryCache.get(phone);
+    if (mem && now - mem.fetchedAtMs < ttlMs) {
+      return { data: { ...mem.data, cached: true }, fromCache: true };
+    }
+
+    try {
+      const db = options.getDb?.();
+      if (db) {
+        const snap = await db.collection("courier_fraud_cache").doc(phone).get();
+        if (snap.exists) {
+          const docData = snap.data() as any;
+          const fetchedAtMs = Number(docData?.fetchedAtMs || 0);
+          if (fetchedAtMs > 0 && now - fetchedAtMs < ttlMs) {
+            const parsed = parseSteadfastFraudPayload(phone, docData?.raw ?? docData);
+            const cachedResult: SteadfastFraudReportData = {
+              ...parsed,
+              cached: true,
+              fetched_at: docData?.updatedAt || new Date(fetchedAtMs).toISOString(),
+            };
+            fraudMemoryCache.set(phone, { fetchedAtMs, data: parsed });
+            return { data: cachedResult, fromCache: true };
+          }
+        }
+      }
+    } catch (cacheReadErr: any) {
+      console.warn("[COURIER_FRAUD_CACHE] Read warning:", cacheReadErr?.message || cacheReadErr);
+    }
+  }
+
+  let pending = fraudInFlight.get(phone);
+  if (!pending) {
+    pending = (async () => {
+      const { apiKey, secretKey } = await resolveSteadfastFraudKeys(options.getDb);
+      if (!apiKey || !secretKey) {
+        const err: any = new Error(
+          "Steadfast API Key settings missing. Please configure them in Dashboard Settings or server .env."
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const fresh = await fetchLiveSteadfastFraudFromApi(phone, apiKey, secretKey);
+      const updatedAt = new Date().toISOString();
+      const storedData: SteadfastFraudReportData = {
+        ...fresh,
+        cached: false,
+        fetched_at: updatedAt,
+      };
+      fraudMemoryCache.set(phone, { fetchedAtMs: Date.now(), data: storedData });
+
+      try {
+        const db = options.getDb?.();
+        if (db) {
+          await db.collection("courier_fraud_cache").doc(phone).set(
+            {
+              ...fresh,
+              fetchedAtMs: Date.now(),
+              updatedAt,
+            },
+            { merge: true }
+          );
+        }
+      } catch (cacheWriteErr: any) {
+        console.warn("[COURIER_FRAUD_CACHE] Write warning:", cacheWriteErr?.message || cacheWriteErr);
+      }
+
+      return storedData;
+    })();
+
+    fraudInFlight.set(phone, pending);
+    pending.finally(() => {
+      fraudInFlight.delete(phone);
+    });
+  }
+
+  const data = await pending;
+  return { data, fromCache: false };
+}
+
+export async function fetchSteadfastFraudBatch(
+  rawPhones: string[],
+  options: {
+    getDb?: () => FirebaseFirestore.Firestore | null;
+    forceRefresh?: boolean;
+    maxPhones?: number;
+    concurrency?: number;
+    ttlMs?: number;
+  } = {}
+): Promise<{
+  results: Record<string, SteadfastFraudReportData>;
+  errors: Record<string, string>;
+  cachedPhones: string[];
+  fetchedPhones: string[];
+}> {
+  const maxPhones = Math.max(1, Math.min(25, options.maxPhones ?? 15));
+  const concurrency = Math.max(1, Math.min(5, options.concurrency ?? 3));
+
+  const uniquePhones: string[] = [];
+  for (const raw of rawPhones) {
+    const normalized = normalizeSteadfastPhone(raw);
+    if (normalized.length >= 6 && !uniquePhones.includes(normalized)) {
+      uniquePhones.push(normalized);
+      if (uniquePhones.length >= maxPhones) break;
+    }
+  }
+
+  const results: Record<string, SteadfastFraudReportData> = {};
+  const errors: Record<string, string> = {};
+  const cachedPhones: string[] = [];
+  const fetchedPhones: string[] = [];
+
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < uniquePhones.length) {
+      const idx = cursor++;
+      const phone = uniquePhones[idx];
+      try {
+        const { data, fromCache } = await getSteadfastFraudReportCached(phone, {
+          getDb: options.getDb,
+          forceRefresh: options.forceRefresh,
+          ttlMs: options.ttlMs,
+        });
+        results[phone] = data;
+        if (fromCache) cachedPhones.push(phone);
+        else fetchedPhones.push(phone);
+      } catch (err: any) {
+        errors[phone] =
+          err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to check customer fraud report";
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, uniquePhones.length || 1) }, () => worker())
+  );
+
+  return { results, errors, cachedPhones, fetchedPhones };
 }

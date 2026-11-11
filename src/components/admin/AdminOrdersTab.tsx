@@ -14,6 +14,7 @@ import {
   History,
   Landmark,
   Loader2,
+  MapPin,
   MessageSquare,
   Phone,
   Plus,
@@ -30,6 +31,14 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
+import {
+  formatSafeDateTime,
+  getCourierReportForPhone,
+  getOrderCourierRateDisplay,
+  getOrderItemsSafe,
+  isPhoneLoadingInRecord,
+  resolveCourierBadgeDisplay,
+} from '../../utils/courierDisplay';
 
 export interface AdminOrdersTabProps {
   orderHistory: any[];
@@ -73,7 +82,7 @@ export interface AdminOrdersTabProps {
   handleSaveQuickEdit: () => void;
   courierReports: Record<string, any>;
   loadingCourierReports: Record<string, boolean>;
-  checkCourierReport: (phone: string) => void;
+  checkCourierReport: (phone: string, forceRefresh?: boolean) => void;
   setCourierModalPhone: (phone: string) => void;
   setIsCourierHistoryModalOpen: (open: boolean) => void;
   individualSmsOrder: any;
@@ -124,38 +133,56 @@ function getCourierBadgeClass(rawStatus?: string): string {
 }
 
 function getCourierDisplayMeta(order: any) {
+  const safeOrder = order && typeof order === 'object' ? order : {};
   const cConsignment = String(
-    order.courierConsignmentId || order.couriers?.consignmentId || ''
+    safeOrder.courierConsignmentId || safeOrder.couriers?.consignmentId || ''
   ).trim();
   const explicitTrack = String(
-    order.couriers?.trackingId || order.courierTrackingId || ''
+    safeOrder.couriers?.trackingId || safeOrder.courierTrackingId || ''
   ).trim();
-  const legacyTrack = String(order.trackingId || '').trim();
-  const isOfflineOrder = String(order.orderId || '').trim().toUpperCase().startsWith('OFFLINE-');
+  const legacyTrack = String(safeOrder.trackingId || '').trim();
+  const isOfflineOrder = String(safeOrder.orderId || '').trim().toUpperCase().startsWith('OFFLINE-');
   const cTrackCode =
     explicitTrack ||
     (!cConsignment && (isOfflineOrder || legacyTrack.startsWith('#')) ? '' : legacyTrack);
   const cTrack = cTrackCode || cConsignment;
-  const cStatus = order.courierStatus || order.steadfastStatus || order.pathaoStatus;
-  const cLabel = order.courierStatusLabel || cStatus;
-  const isDispatched = Boolean(cTrack || cStatus || order.status === 'shipped');
+  const cStatus = safeOrder.courierStatus || safeOrder.steadfastStatus || safeOrder.pathaoStatus;
+  const cLabel = safeOrder.courierStatusLabel || cStatus;
+  const isDispatched = Boolean(cTrack || cStatus || safeOrder.status === 'shipped');
   const serviceName =
-    order.courierName || order.couriers?.service || (order.pathaoStatus ? 'Pathao' : 'Steadfast');
+    safeOrder.courierName || safeOrder.couriers?.service || (safeOrder.pathaoStatus ? 'Pathao' : 'Steadfast');
   const canSync = Boolean(
     cTrack ||
       String(serviceName || '').toLowerCase().includes('steadfast') ||
-      order.status === 'shipped'
+      safeOrder.status === 'shipped'
   );
+  const { badgeText, hubName, isNotBooked } = resolveCourierBadgeDisplay({
+    isDispatched,
+    courierStatus: cStatus,
+    courierStatusLabel: cLabel,
+    courierStatusNormalized: safeOrder.courierStatusNormalized,
+    courierHub: safeOrder.courierHub,
+    courierTrackingMessage: safeOrder.courierTrackingMessage || safeOrder.courierStatusDetail,
+  });
   const badgeCls = getCourierBadgeClass(cStatus || (isDispatched ? 'pending_pickup' : ''));
   const portalUrl = resolveCourierPortalUrl(serviceName, cTrack);
-  const syncTimeNote = order.courierLastSyncedAt
-    ? ` | Last synced: ${new Date(order.courierLastSyncedAt).toLocaleString('bn-BD')}`
-    : '';
-  const detailText = order.courierTrackingMessage || order.courierStatusDetail || '';
-  const tooltip = `${detailText || serviceName}${syncTimeNote}`.trim();
+  const syncedText = formatSafeDateTime(safeOrder.courierLastSyncedAt, 'bn-BD');
+  const syncTimeNote = syncedText ? ` | Last synced: ${syncedText}` : '';
+  const trackingMsgText =
+    typeof safeOrder.courierTrackingMessage === 'string'
+      ? safeOrder.courierTrackingMessage.trim()
+      : '';
+  const statusDetailText =
+    typeof safeOrder.courierStatusDetail === 'string'
+      ? safeOrder.courierStatusDetail.trim()
+      : '';
+  const detailText = trackingMsgText || statusDetailText;
+  const statusPrefix = cLabel && String(cLabel).toLowerCase() !== badgeText.toLowerCase() ? `${cLabel} • ` : '';
+  const tooltip = `${statusPrefix}${detailText || serviceName}${syncTimeNote}`.trim();
   const hasDistinctDetail =
-    Boolean(order.courierTrackingMessage) &&
-    order.courierTrackingMessage.toLowerCase() !== String(cLabel || '').toLowerCase();
+    Boolean(trackingMsgText) &&
+    trackingMsgText.toLowerCase() !== String(cLabel || '').toLowerCase() &&
+    trackingMsgText.toLowerCase() !== badgeText.toLowerCase();
 
   return {
     cConsignment,
@@ -163,6 +190,10 @@ function getCourierDisplayMeta(order: any) {
     cTrack,
     cStatus,
     cLabel,
+    badgeText,
+    hubName,
+    isNotBooked,
+    trackingMsgText,
     isDispatched,
     serviceName,
     canSync,
@@ -188,7 +219,9 @@ function OrderCourierBadge({
     cConsignment,
     cTrackCode,
     cTrack,
-    cLabel,
+    badgeText,
+    hubName,
+    trackingMsgText,
     isDispatched,
     serviceName,
     canSync,
@@ -197,7 +230,15 @@ function OrderCourierBadge({
     tooltip,
     hasDistinctDetail,
   } = getCourierDisplayMeta(order);
-  if (!isDispatched) return null;
+  if (!isDispatched) {
+    return (
+      <div className={compact ? 'pt-1 border-t border-gray-100/80 flex items-center justify-between' : 'mt-1.5'}>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100/90 text-slate-400 border border-slate-200/80 text-[10px] font-semibold">
+          Not Booked
+        </span>
+      </div>
+    );
+  }
 
   const mobileTrackText = cTrackCode || (cConsignment ? '' : cTrack);
 
@@ -215,10 +256,13 @@ function OrderCourierBadge({
             className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border w-fit uppercase tracking-wide ${badgeCls}`}
             title={tooltip || undefined}
           >
-            <Truck size={10} className="shrink-0" />
+            {hubName && badgeText.toLowerCase().includes(hubName.toLowerCase()) ? (
+              <MapPin size={10} className="shrink-0" />
+            ) : (
+              <Truck size={10} className="shrink-0" />
+            )}
             <span className="truncate max-w-[190px]">
-              {serviceName}
-              {cLabel ? `: ${cLabel}` : ': Pending Pickup'}
+              {serviceName}: {badgeText}
             </span>
           </span>
           {mobileTrackText && (
@@ -264,9 +308,9 @@ function OrderCourierBadge({
           )}
         </div>
       </div>
-      {hasDistinctDetail && (
-        <p className="text-[10px] text-slate-500 font-medium truncate max-w-[260px]" title={order.courierTrackingMessage}>
-          {order.courierTrackingMessage}
+      {hasDistinctDetail && trackingMsgText && (
+        <p className="text-[10px] text-slate-500 font-medium truncate max-w-[260px]" title={trackingMsgText}>
+          {trackingMsgText}
         </p>
       )}
     </div>
@@ -363,58 +407,41 @@ export default function AdminOrdersTab({
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
         {(() => {
-          const activeOrders = orderHistory.filter((o: any) => !o.deleted);
+          const safeOrders = Array.isArray(orderHistory) ? orderHistory : [];
+          const activeOrders = safeOrders.filter((o: any) => o && !o.deleted);
+          const getCreatedAtMs = (createdAt: any): number => {
+            if (!createdAt) return 0;
+            if (typeof createdAt === 'string') {
+              const t = new Date(createdAt).getTime();
+              return Number.isNaN(t) ? 0 : t;
+            }
+            if (typeof createdAt === 'object' && typeof createdAt.toDate === 'function') {
+              return createdAt.toDate().getTime();
+            }
+            if (typeof createdAt === 'object' && typeof createdAt.seconds === 'number') {
+              return createdAt.seconds * 1000;
+            }
+            return 0;
+          };
           let filteredForAnalytics = activeOrders;
           const now = new Date();
           if (reportTimeframe === '28d') {
             const cutoff = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
-            filteredForAnalytics = activeOrders.filter((o: any) => {
-              if (!o.createdAt) return false;
-              const t =
-                typeof o.createdAt === 'string'
-                  ? new Date(o.createdAt).getTime()
-                  : o.createdAt.seconds
-                  ? o.createdAt.seconds * 1000
-                  : 0;
-              return t >= cutoff.getTime();
-            });
+            filteredForAnalytics = activeOrders.filter((o: any) => getCreatedAtMs(o.createdAt) >= cutoff.getTime());
           } else if (reportTimeframe === '1y') {
             const cutoff = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-            filteredForAnalytics = activeOrders.filter((o: any) => {
-              if (!o.createdAt) return false;
-              const t =
-                typeof o.createdAt === 'string'
-                  ? new Date(o.createdAt).getTime()
-                  : o.createdAt.seconds
-                  ? o.createdAt.seconds * 1000
-                  : 0;
-              return t >= cutoff.getTime();
-            });
+            filteredForAnalytics = activeOrders.filter((o: any) => getCreatedAtMs(o.createdAt) >= cutoff.getTime());
           } else if (reportTimeframe === '3y') {
             const cutoff = new Date(now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
-            filteredForAnalytics = activeOrders.filter((o: any) => {
-              if (!o.createdAt) return false;
-              const t =
-                typeof o.createdAt === 'string'
-                  ? new Date(o.createdAt).getTime()
-                  : o.createdAt.seconds
-                  ? o.createdAt.seconds * 1000
-                  : 0;
-              return t >= cutoff.getTime();
-            });
+            filteredForAnalytics = activeOrders.filter((o: any) => getCreatedAtMs(o.createdAt) >= cutoff.getTime());
           } else if (reportTimeframe.startsWith('month_')) {
             const parts = reportTimeframe.split('_');
-            const targetMonth = parseInt(parts[1]);
-            const targetYear = parseInt(parts[2]);
+            const targetMonth = parseInt(parts[1], 10);
+            const targetYear = parseInt(parts[2], 10);
             filteredForAnalytics = activeOrders.filter((o: any) => {
-              if (!o.createdAt) return false;
-              const d = new Date(
-                typeof o.createdAt === 'string'
-                  ? o.createdAt
-                  : o.createdAt.seconds
-                  ? o.createdAt.seconds * 1000
-                  : 0
-              );
+              const ms = getCreatedAtMs(o.createdAt);
+              if (!ms) return false;
+              const d = new Date(ms);
               return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
             });
           }
@@ -423,7 +450,7 @@ export default function AdminOrdersTab({
           const deliveredOrders = filteredForAnalytics.filter((o) => o.status === 'delivered').length;
           const totalSales = filteredForAnalytics
             .filter((o) => o.status !== 'cancelled' && o.status !== 'returned')
-            .reduce((acc, o) => acc + (o.total || 0), 0);
+            .reduce((acc, o) => acc + (Number(o?.total) || 0), 0);
           const successRate =
             totalOrders > 0 ? Math.round((deliveredOrders / (totalOrders - pendingOrders || 1)) * 100) : 0;
 
@@ -613,9 +640,12 @@ export default function AdminOrdersTab({
       <div className="lg:hidden space-y-3">
         {(() => {
           let lastDateText = '';
-          return filteredOrders.slice(0, adminOrdersLimit).map((order: any) => {
+          const safeFiltered = Array.isArray(filteredOrders) ? filteredOrders : [];
+          return safeFiltered.slice(0, adminOrdersLimit).map((order: any) => {
+            if (!order) return null;
+            const orderItems = getOrderItemsSafe(order);
             const orderDateVal = getOrderLocalDateString(order);
-            const dateText = formatOrderGroupDate(orderDateVal);
+            const dateText = formatOrderGroupDate(orderDateVal) || '';
             const isNewDateGroup = dateText !== lastDateText;
             if (isNewDateGroup) {
               lastDateText = dateText;
@@ -677,7 +707,7 @@ export default function AdminOrdersTab({
                     <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200/60 bg-white shrink-0 self-start">
                       <img
                         loading="lazy"
-                        src={order.items[0]?.variantImage || order.items[0]?.product?.image || '/logo.png'}
+                        src={orderItems[0]?.variantImage || orderItems[0]?.product?.image || '/logo.png'}
                         className="w-full h-full object-cover"
                         alt=""
                       />
@@ -691,7 +721,7 @@ export default function AdminOrdersTab({
                         <input
                           type="checkbox"
                           className="w-3.5 h-3.5 rounded-[3px] border-gray-300 text-primary focus:ring-primary pointer-events-none cursor-pointer"
-                          checked={selectedOrderIds.includes(order.id)}
+                          checked={Array.isArray(selectedOrderIds) && selectedOrderIds.includes(order.id)}
                           onChange={() => {}}
                         />
                       </div>
@@ -706,9 +736,11 @@ export default function AdminOrdersTab({
                         }}
                       >
                         <span className="text-[13px] font-bold text-[#1e1b4b] truncate leading-tight group-hover:text-primary transition-colors">
-                          {order.items
-                            .map((i: any) => `${i.product?.name || i.name || 'Unknown'} x${i.quantity}`)
-                            .join(', ')}
+                          {orderItems.length > 0
+                            ? orderItems
+                                .map((i: any) => `${i?.product?.name || i?.name || 'Unknown'} x${i?.quantity || 1}`)
+                                .join(', ')
+                            : 'No items'}
                         </span>
                       </div>
 
@@ -727,16 +759,35 @@ export default function AdminOrdersTab({
 
                         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                           {(() => {
-                            const stats = getCustomerStats(order.customerPhone);
+                            const stats = getCustomerStats(order.customerPhone || '');
+                            const report = getCourierReportForPhone(courierReports, order.customerPhone);
+                            const isLoadingRate = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
+                            const rateDisplay = getOrderCourierRateDisplay(report, stats, isLoadingRate);
                             return (
-                              <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!order.customerPhone) return;
+                                  setCourierModalPhone(order.customerPhone);
+                                  setIsCourierHistoryModalOpen(true);
+                                  if (!report) checkCourierReport(order.customerPhone);
+                                }}
+                                title={rateDisplay.tooltip}
+                                className="flex items-center gap-1.5 cursor-pointer"
+                              >
                                 <span className="text-[10px] font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-full border border-slate-200/80 shadow-2xs whitespace-nowrap">
-                                  Total: {stats.total || (order.isPreOrder ? 1 : 1)}
+                                  Total: {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.mobileTotalText}
                                 </span>
-                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shadow-2xs whitespace-nowrap">
-                                  SCS: {stats.delivered || 0}
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs whitespace-nowrap ${
+                                    rateDisplay.fraudCount > 0
+                                      ? 'text-rose-700 bg-rose-50 border-rose-200'
+                                      : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                  }`}
+                                >
+                                  SCS: {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.mobileScsText}
                                 </span>
-                              </>
+                              </button>
                             );
                           })()}
 
@@ -872,8 +923,9 @@ export default function AdminOrdersTab({
                   className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                   onChange={handleSelectAll}
                   checked={
+                    Array.isArray(selectedOrderIds) &&
                     selectedOrderIds.length > 0 &&
-                    selectedOrderIds.length === filteredOrders.slice(0, adminOrdersLimit).length
+                    selectedOrderIds.length === (Array.isArray(filteredOrders) ? filteredOrders : []).slice(0, adminOrdersLimit).length
                   }
                 />
               </th>
@@ -883,7 +935,7 @@ export default function AdminOrdersTab({
               <th className="px-3 py-3">Customer Info</th>
               <th className="px-3 py-3 text-center w-[124px]">Status &amp; Payment</th>
               <th className="px-3 py-3 text-center w-[120px]">Delivery Rate</th>
-              <th className="px-3 py-3 text-center w-[140px]">Courier</th>
+              <th className="px-3 py-3 text-center w-[150px]">Courier</th>
               <th className="px-3 py-3 w-[152px]">
                 <div className="flex items-center justify-end gap-2 ml-auto">
                   <div className="w-[100px] text-center">SMS &amp; VERIFY</div>
@@ -895,9 +947,12 @@ export default function AdminOrdersTab({
           <tbody>
             {(() => {
               let lastDateText = '';
-              return filteredOrders.slice(0, adminOrdersLimit).map((order, idx) => {
+              const safeFiltered = Array.isArray(filteredOrders) ? filteredOrders : [];
+              return safeFiltered.slice(0, adminOrdersLimit).map((order, idx) => {
+                if (!order) return null;
+                const orderItems = getOrderItemsSafe(order);
                 const orderDateVal = getOrderLocalDateString(order);
-                const dateText = formatOrderGroupDate(orderDateVal);
+                const dateText = formatOrderGroupDate(orderDateVal) || '';
                 const isNewDateGroup = dateText !== lastDateText;
                 if (isNewDateGroup) {
                   lastDateText = dateText;
@@ -920,7 +975,8 @@ export default function AdminOrdersTab({
                       </tr>
                     )}
                     <tr
-                      className={`transition-colors overflow-hidden ${
+                      onClick={() => setSelectedOrderForDetails(order)}
+                      className={`transition-colors overflow-hidden cursor-pointer ${
                         order.status === 'pending'
                           ? 'bg-purple-100/40 hover:bg-purple-100/60'
                           : order.status === 'confirmed'
@@ -938,11 +994,11 @@ export default function AdminOrdersTab({
                           : 'bg-[#f4f7fa] hover:bg-[#ebf0f5]'
                       }`}
                     >
-                      <td className="p-4 w-10">
+                      <td className="p-4 w-10" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                          checked={selectedOrderIds.includes(order.id)}
+                          checked={Array.isArray(selectedOrderIds) && selectedOrderIds.includes(order.id)}
                           onChange={(e) => handleSelectOrder(e, order.id)}
                         />
                       </td>
@@ -951,26 +1007,27 @@ export default function AdminOrdersTab({
                           <div className="w-16 h-16 rounded-md overflow-hidden flex-shrink-0 border border-gray-100 bg-white">
                             <img
                               loading="lazy"
-                              src={order.items[0]?.variantImage || order.items[0]?.product?.image}
+                              src={orderItems[0]?.variantImage || orderItems[0]?.product?.image || '/logo.png'}
                               className="w-full h-full object-cover"
                               alt=""
                             />
                           </div>
                           <div className="flex flex-col justify-center min-w-0">
-                            <div
-                              className="flex items-center gap-2 group cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickEditOrderItems(order);
-                              }}
-                            >
+                            <div className="flex items-center gap-2 group">
                               <span className="text-[12px] font-bold text-secondary truncate">
-                                {order.items
-                                  .map((i: any) => `${i.product?.name || 'Unknown'} x${i.quantity}`)
-                                  .join(', ')}
+                                {orderItems.length > 0
+                                  ? orderItems
+                                      .map((i: any) => `${i?.product?.name || i?.name || 'Unknown'} x${i?.quantity || 1}`)
+                                      .join(', ')
+                                  : 'No items'}
                               </span>
                               <button
-                                className="text-secondary hover:text-primary shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickEditOrderItems(order);
+                                }}
+                                className="text-secondary hover:text-primary shrink-0 opacity-40 group-hover:opacity-100 transition-opacity cursor-pointer"
                                 title="Edit Order Items"
                               >
                                 <Edit3 size={12} />
@@ -985,7 +1042,7 @@ export default function AdminOrdersTab({
                       </td>
                       <td className="p-4 text-left">
                         <div className="flex flex-col items-start">
-                          <span className="text-xl font-bold text-red-600">৳{order.total}</span>
+                          <span className="text-xl font-bold text-red-600">৳{Number(order.total) || 0}</span>
                           <span
                             className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase mt-1 border whitespace-nowrap ${
                               order.deliveryArea === 'inside'
@@ -1000,7 +1057,10 @@ export default function AdminOrdersTab({
                       <td className="p-4 max-w-[200px]">
                         <div className="flex flex-col relative group">
                           {quickEditOrderId === order.id ? (
-                            <div className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex flex-col gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200"
+                            >
                               <input
                                 type="text"
                                 value={quickEditData.customerName}
@@ -1043,7 +1103,7 @@ export default function AdminOrdersTab({
                                   {order.customerName}
                                 </span>
                                 {(() => {
-                                  const custStats = getCustomerStats(order.customerPhone);
+                                  const custStats = getCustomerStats(order.customerPhone || '');
                                   if (custStats.cancelled > custStats.delivered && custStats.cancelled >= 1) {
                                     return (
                                       <span
@@ -1082,92 +1142,96 @@ export default function AdminOrdersTab({
                               </div>
                             </>
                           )}
-                          {courierReports[order.customerPhone] &&
-                            (() => {
-                              const report = courierReports[order.customerPhone];
-                              const successRate =
-                                report.delivery_rate !== undefined
-                                  ? report.delivery_rate
-                                  : report.total_parcel > 0
-                                  ? Math.round((report.total_delivered / report.total_parcel) * 100)
-                                  : 0;
-                              const cancellationRate =
-                                report.cancellation_rate !== undefined
-                                  ? report.cancellation_rate
-                                  : report.total_parcel > 0
-                                  ? Math.round((report.total_cancelled / report.total_parcel) * 100)
-                                  : 0;
-                              const isRisky =
-                                cancellationRate > 40 || (report.total_cancelled > 0 && successRate < 60);
-                              const isFraud = report.total_fraud_report > 0;
-                              return (
-                                <div
-                                  onClick={() => {
-                                    setCourierModalPhone(order.customerPhone);
-                                    setIsCourierHistoryModalOpen(true);
-                                  }}
-                                  className={`text-[10px] font-bold mt-1.5 p-2 rounded-xl border flex flex-col gap-1 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
-                                    isFraud
-                                      ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/50'
-                                      : isRisky
-                                      ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100/50'
-                                      : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/50'
-                                  }`}
-                                  title="Action"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="opacity-80">Courier (Steadfast):</span>
-                                    <div className="flex items-center gap-1">
-                                      {isFraud && (
-                                        <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse">
-                                          FRAUD ({report.total_fraud_report})
-                                        </span>
-                                      )}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          checkCourierReport(order.customerPhone);
-                                        }}
-                                        className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 hover:bg-black/5 rounded"
-                                        title="Action"
-                                      >
-                                        <RefreshCcw size={10} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] font-bold">
-                                    <div>
-                                      Total:{' '}
-                                      <span className="text-secondary">
-                                        {report.total_parcel > 0
-                                          ? report.total_parcel
-                                          : report.volume_band
-                                          ? report.volume_band.toUpperCase()
-                                          : 'Active'}
+                          {(() => {
+                            const report = getCourierReportForPhone(courierReports, order.customerPhone);
+                            if (!report) return null;
+                            const successRate =
+                              report.delivery_rate !== undefined && report.delivery_rate !== null
+                                ? Number(report.delivery_rate)
+                                : report.total_parcel > 0
+                                ? Math.round((report.total_delivered / report.total_parcel) * 100)
+                                : 0;
+                            const cancellationRate =
+                              report.cancellation_rate !== undefined && report.cancellation_rate !== null
+                                ? Number(report.cancellation_rate)
+                                : report.total_parcel > 0
+                                ? Math.round((report.total_cancelled / report.total_parcel) * 100)
+                                : 0;
+                            const isRisky =
+                              cancellationRate > 40 || (report.total_cancelled > 0 && successRate < 60);
+                            const isFraud = report.total_fraud_report > 0;
+                            return (
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCourierModalPhone(order.customerPhone);
+                                  setIsCourierHistoryModalOpen(true);
+                                }}
+                                className={`text-[10px] font-bold mt-1.5 p-2 rounded-xl border flex flex-col gap-1 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
+                                  isFraud
+                                    ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/50'
+                                    : isRisky
+                                    ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100/50'
+                                    : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/50'
+                                }`}
+                                title="View Steadfast Courier History"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="opacity-80">Courier (Steadfast):</span>
+                                  <div className="flex items-center gap-1">
+                                    {isFraud && (
+                                      <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse">
+                                        FRAUD ({report.total_fraud_report})
                                       </span>
-                                    </div>
-                                    <div>
-                                      Success:{' '}
-                                      <span className="text-green-600">
-                                        {report.total_parcel > 0 ? report.total_delivered : `${successRate}%`}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      Cancelled:{' '}
-                                      <span className="text-red-500">
-                                        {report.total_parcel > 0 ? report.total_cancelled : `${cancellationRate}%`}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      Rate:{' '}
-                                      <span className={successRate < 60 ? 'text-red-500' : 'text-green-600'}>
-                                        {successRate}%
-                                      </span>
-                                    </div>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        checkCourierReport(order.customerPhone, true);
+                                      }}
+                                      className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 hover:bg-black/5 rounded"
+                                      title="Refresh Steadfast Stats"
+                                    >
+                                      <RefreshCcw size={10} />
+                                    </button>
                                   </div>
                                 </div>
-                              );
-                            })()}
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] font-bold">
+                                  <div>
+                                    Total:{' '}
+                                    <span className="text-secondary">
+                                      {report.total_parcel > 0
+                                        ? report.total_parcel
+                                        : report.volume_range
+                                        ? report.volume_range
+                                        : report.volume_band
+                                        ? report.volume_band.toUpperCase()
+                                        : 'Active'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Success:{' '}
+                                    <span className="text-green-600">
+                                      {report.total_parcel > 0 ? report.total_delivered : `${successRate}%`}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Cancelled:{' '}
+                                    <span className="text-red-500">
+                                      {report.total_parcel > 0 ? report.total_cancelled : `${cancellationRate}%`}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Rate:{' '}
+                                    <span className={successRate < 60 ? 'text-red-500' : 'text-green-600'}>
+                                      {successRate}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                           <div className="flex items-start gap-1 mt-0.5">
                             <span className="text-[11px] text-slate-400 font-medium line-clamp-1" title={order.address}>
                               {order.address && order.address.trim() !== '' && order.address !== 'N/A'
@@ -1177,7 +1241,7 @@ export default function AdminOrdersTab({
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-4 align-middle w-[124px]">
+                      <td className="px-3 py-4 align-middle w-[124px]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col gap-2 items-center justify-center h-[68px]">
                           <select
                             value={order.status}
@@ -1259,34 +1323,56 @@ export default function AdminOrdersTab({
                       </td>
                       <td className="px-3 py-4 align-middle w-[120px]">
                         {(() => {
-                          const stats = getCustomerStats(order.customerPhone);
+                          const stats = getCustomerStats(order.customerPhone || '');
+                          const report = getCourierReportForPhone(courierReports, order.customerPhone);
+                          const isLoadingRate = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
+                          const rateDisplay = getOrderCourierRateDisplay(report, stats, isLoadingRate);
                           return (
-                            <div className="flex flex-col gap-2 w-fit shrink-0 justify-center mx-auto h-[68px]">
-                              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100/70 rounded-full px-3 h-8 w-[96px] shadow-sm transition-transform hover:scale-105">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!order.customerPhone) return;
+                                setCourierModalPhone(order.customerPhone);
+                                setIsCourierHistoryModalOpen(true);
+                                if (!report) checkCourierReport(order.customerPhone);
+                              }}
+                              title={rateDisplay.tooltip}
+                              className="flex flex-col gap-1.5 w-fit shrink-0 justify-center items-center mx-auto min-h-[68px] cursor-pointer text-left"
+                            >
+                              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100/70 rounded-full px-3 h-7 w-[100px] shadow-sm transition-transform hover:scale-105">
                                 <span className="text-[10px] font-bold text-emerald-700">Success:</span>
-                                <span className="text-[11px] font-bold text-emerald-600">{stats.delivered}</span>
+                                <span className="text-[11px] font-bold text-emerald-600">
+                                  {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.successText}
+                                </span>
                               </div>
-                              <div className="flex items-center justify-between bg-rose-50 border border-rose-100/70 rounded-full px-3 h-8 w-[96px] shadow-sm transition-transform hover:scale-105">
+                              <div className="flex items-center justify-between bg-rose-50 border border-rose-100/70 rounded-full px-3 h-7 w-[100px] shadow-sm transition-transform hover:scale-105">
                                 <span className="text-[10px] font-bold text-rose-700">Cancel:</span>
                                 <span
                                   className={`text-[11px] font-bold ${
-                                    stats.cancelled > 0 ? 'text-rose-600' : 'text-rose-400'
+                                    rateDisplay.hasCancelHighlight ? 'text-rose-600' : 'text-rose-400'
                                   }`}
                                 >
-                                  {stats.cancelled}
+                                  {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.cancelText}
                                 </span>
                               </div>
-                            </div>
+                              {rateDisplay.fraudCount > 0 && (
+                                <span className="bg-red-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full animate-pulse whitespace-nowrap">
+                                  FRAUD ({rateDisplay.fraudCount})
+                                </span>
+                              )}
+                            </button>
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-4 align-middle w-[140px]">
+                      <td className="px-3 py-4 align-middle w-[150px]">
                         {(() => {
                           const {
                             cConsignment,
                             cTrackCode,
                             cTrack,
-                            cLabel,
+                            badgeText,
+                            hubName,
                             isDispatched,
                             serviceName,
                             canSync,
@@ -1296,9 +1382,12 @@ export default function AdminOrdersTab({
                           } = getCourierDisplayMeta(order);
                           const secondaryLine =
                             cTrackCode || (cConsignment ? serviceName : cTrack || serviceName);
+                          const isShowingHub = Boolean(
+                            hubName && badgeText.toLowerCase().includes(hubName.toLowerCase())
+                          );
                           return (
                             <div
-                              className="flex flex-col items-start justify-center gap-1 w-[124px] shrink-0 mx-auto min-h-[68px]"
+                              className="flex flex-col items-start justify-center gap-1 w-[136px] shrink-0 mx-auto min-h-[68px]"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {isDispatched ? (
@@ -1327,7 +1416,10 @@ export default function AdminOrdersTab({
                                         <button
                                           type="button"
                                           disabled={syncingOrderId === order.id}
-                                          onClick={() => syncSingleCourierStatus(order.id)}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            syncSingleCourierStatus(order.id);
+                                          }}
                                           className="text-sky-600 hover:text-sky-800 cursor-pointer"
                                           title="Live Courier Status সিঙ্ক করুন"
                                         >
@@ -1342,6 +1434,7 @@ export default function AdminOrdersTab({
                                           href={portalUrl}
                                           target="_blank"
                                           rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
                                           className="text-gray-400 hover:text-sky-600"
                                           title="কুরিয়ার ওয়েবসাইটে লাইভ ট্র্যাকিং দেখুন"
                                         >
@@ -1354,10 +1447,11 @@ export default function AdminOrdersTab({
                                     type="button"
                                     onClick={() => setSelectedOrderForDetails(order)}
                                     title={tooltip || 'কুরিয়ার ট্র্যাকিং টাইমলাইন দেখুন'}
-                                    className={`inline-flex items-center justify-center border rounded-md px-2 py-0.5 max-w-full shadow-2xs transition-colors hover:brightness-95 cursor-pointer ${badgeCls}`}
+                                    className={`inline-flex items-center justify-center gap-1 border rounded-md px-2 py-0.5 max-w-full shadow-2xs transition-colors hover:brightness-95 cursor-pointer ${badgeCls}`}
                                   >
+                                    {isShowingHub && <MapPin size={9.5} className="shrink-0" />}
                                     <span className="text-[9.5px] font-bold tracking-wide uppercase truncate">
-                                      {String(cLabel || 'PENDING PICKUP').toUpperCase()}
+                                      {badgeText.toUpperCase()}
                                     </span>
                                   </button>
                                 </>
@@ -1365,17 +1459,17 @@ export default function AdminOrdersTab({
                                 <button
                                   type="button"
                                   onClick={() => setSelectedOrderForDetails(order)}
-                                  className="w-full h-8 flex items-center justify-center text-xs font-bold text-slate-300 hover:text-slate-500 transition-colors cursor-pointer"
+                                  className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100/90 hover:bg-slate-200/70 text-slate-400 hover:text-slate-600 border border-slate-200/80 text-[11px] font-semibold transition-colors cursor-pointer"
                                   title="অর্ডার ও কুরিয়ার বিস্তারিত দেখুন (পাঠাতে ডানদিকের ⋮ মেনু ব্যবহার করুন)"
                                 >
-                                  —
+                                  Not Booked
                                 </button>
                               )}
                             </div>
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-4 align-middle w-[152px]">
+                      <td className="px-3 py-4 align-middle w-[152px]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2 ml-auto">
                           <div className="flex flex-col gap-2 w-fit shrink-0 h-[68px] justify-center">
                             <div className="relative w-full">
@@ -1393,17 +1487,17 @@ export default function AdminOrdersTab({
                                     startPart = startPart.replace('', order.customerName);
                                   }
                                   let productDetails = '';
-                                  if (order.items && order.items.length > 0) {
-                                    productDetails = order.items
+                                  if (orderItems.length > 0) {
+                                    productDetails = orderItems
                                       .map((item: any) => {
-                                        const directSms = (item.smsName || item.product?.smsName || '').trim();
-                                        const rawName = (item.product?.name || item.name || 'Product').trim();
+                                        const directSms = (item?.smsName || item?.product?.smsName || '').trim();
+                                        const rawName = (item?.product?.name || item?.name || 'Product').trim();
                                         const name = directSms
                                           ? directSms
                                           : rawName.length > 25
                                           ? rawName.substring(0, 25) + '...'
                                           : rawName;
-                                        const qty = item.quantity || 1;
+                                        const qty = item?.quantity || 1;
                                         return `${name} (${qty} pcs)`;
                                       })
                                       .join('\n');
@@ -1468,12 +1562,12 @@ export default function AdminOrdersTab({
                                 )}
                               </AnimatePresence>
                             </div>
-                            {loadingCourierReports[order.customerPhone] ? (
+                            {isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone) ? (
                               <div className="flex items-center justify-center gap-1.5 bg-gray-50 border border-gray-200/70 rounded-lg px-3 h-8 w-[100px] shadow-sm text-gray-500">
                                 <Loader2 size={12} className="animate-spin" />
                                 <span className="text-[11px] font-bold">Checking...</span>
                               </div>
-                            ) : courierReports[order.customerPhone] ? (
+                            ) : getCourierReportForPhone(courierReports, order.customerPhone) ? (
                               <button
                                 onClick={() => {
                                   setCourierModalPhone(order.customerPhone);
@@ -1490,7 +1584,7 @@ export default function AdminOrdersTab({
                                 onClick={() => {
                                   setCourierModalPhone(order.customerPhone);
                                   setIsCourierHistoryModalOpen(true);
-                                  checkCourierReport(order.customerPhone);
+                                  checkCourierReport(order.customerPhone, true);
                                 }}
                                 className="flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200/60 rounded-full px-3 h-8 w-[100px] shadow-sm text-orange-600 transition-colors active:scale-95 cursor-pointer"
                                 title="Verify Customer"
@@ -1567,13 +1661,13 @@ export default function AdminOrdersTab({
                                   toggleBlacklist(order.customerPhone);
                                 }}
                                 className={`w-8 h-8 rounded-lg transition-all border shadow-sm flex items-center justify-center active:scale-90 shrink-0 ${
-                                  blacklist.includes(order.customerPhone)
+                                  Array.isArray(blacklist) && blacklist.includes(order.customerPhone)
                                     ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100'
                                     : 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100'
                                 }`}
-                                title={blacklist.includes(order.customerPhone) ? 'Unblock Number' : 'Block Number'}
+                                title={Array.isArray(blacklist) && blacklist.includes(order.customerPhone) ? 'Unblock Number' : 'Block Number'}
                               >
-                                {blacklist.includes(order.customerPhone) ? <ShieldCheck size={14} /> : <Ban size={14} />}
+                                {Array.isArray(blacklist) && blacklist.includes(order.customerPhone) ? <ShieldCheck size={14} /> : <Ban size={14} />}
                               </button>
                               <button
                                 onClick={(e) => {

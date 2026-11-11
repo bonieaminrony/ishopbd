@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CheckCircle2, Eye, EyeOff, RotateCcw, Trash2 } from 'lucide-react';
 
 export interface SecretTokenFieldProps {
+  fieldId: string;
   label: string;
   required?: boolean;
   value: string;
@@ -16,6 +17,7 @@ export interface SecretTokenFieldProps {
 }
 
 export default function SecretTokenField({
+  fieldId,
   label,
   required = false,
   value,
@@ -33,7 +35,10 @@ export default function SecretTokenField({
   return (
     <div className="md:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+        <label
+          htmlFor={fieldId}
+          className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider"
+        >
           {label} {required && <span className="text-red-500">*</span>}
         </label>
 
@@ -75,6 +80,9 @@ export default function SecretTokenField({
 
       <div className="relative">
         <input
+          key={fieldId}
+          id={fieldId}
+          name={fieldId}
           type={visible ? 'text' : 'password'}
           value={value}
           onChange={(e) => {
@@ -83,7 +91,11 @@ export default function SecretTokenField({
           }}
           placeholder={hasSavedToken && !isMarkedForClear ? placeholderSaved : placeholderNew}
           className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-12 text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
-          autoComplete="off"
+          autoComplete="new-password"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-bwignore="true"
+          spellCheck={false}
         />
         <button
           type="button"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import AdminPanel from '../components/AdminPanel';
 import { Review } from '../types';
 
@@ -453,7 +453,9 @@ describe('Customer Photo Review - Admin Moderation System', () => {
     );
 
     const approveBtns = screen.getAllByText('Approve Review');
-    fireEvent.click(approveBtns[0]);
+    await act(async () => {
+      fireEvent.click(approveBtns[0]);
+    });
     expect(handleApprove).toHaveBeenCalledWith('prod_1', 'rev_1');
   });
 
@@ -640,7 +642,9 @@ describe('Customer Photo Review - Admin Moderation System', () => {
     );
 
     const rejectButtons = screen.getAllByText('Reject');
-    fireEvent.click(rejectButtons[0]);
+    await act(async () => {
+      fireEvent.click(rejectButtons[0]);
+    });
     expect(handleReject).toHaveBeenCalled();
   });
 });

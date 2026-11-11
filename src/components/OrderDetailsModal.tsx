@@ -1,8 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
-import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw, Copy, ExternalLink } from 'lucide-react';
+import { History, X, User, AlertCircle, ShoppingBag, Truck, CheckCircle, RefreshCcw, Copy, ExternalLink, MapPin } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import {
+  formatSafeDateTime,
+  getOrderItemsSafe,
+  resolveCourierBadgeDisplay,
+} from '../utils/courierDisplay';
 
 export interface OrderDetailsModalProps {
   selectedOrderForDetails: any;
@@ -41,7 +46,22 @@ export default function OrderDetailsModal({
   syncSingleCourierStatus,
   syncingOrderId = null,
 }: OrderDetailsModalProps) {
+  useEffect(() => {
+    return () => {
+      setIsEditingOrder(false);
+    };
+  }, [setIsEditingOrder]);
+
   if (!selectedOrderForDetails) return null;
+
+  const closeModal = () => {
+    setIsEditingOrder(false);
+    setSelectedOrderForDetails(null);
+  };
+  const safeOrderHistory = Array.isArray(orderHistory) ? orderHistory : [];
+  const displayItems = isEditingOrder
+    ? getOrderItemsSafe(editingOrderData)
+    : getOrderItemsSafe(selectedOrderForDetails);
 
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
@@ -49,7 +69,7 @@ export default function OrderDetailsModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={() => setSelectedOrderForDetails(null)}
+        onClick={closeModal}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       />
       <motion.div
@@ -72,7 +92,7 @@ export default function OrderDetailsModal({
             </div>
           </div>
           <button
-            onClick={() => setSelectedOrderForDetails(null)}
+            onClick={closeModal}
             className="p-2 sm:p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
           >
             <X size={20} className="text-gray-400" />
@@ -93,10 +113,10 @@ export default function OrderDetailsModal({
                       handleUpdateOrderDetails();
                     } else {
                       setEditingOrderData({
-                        customerName: selectedOrderForDetails.customerName,
-                        customerPhone: selectedOrderForDetails.customerPhone,
-                        address: selectedOrderForDetails.address,
-                        items: JSON.parse(JSON.stringify(selectedOrderForDetails.items || []))
+                        customerName: selectedOrderForDetails.customerName || "",
+                        customerPhone: selectedOrderForDetails.customerPhone || "",
+                        address: selectedOrderForDetails.address || "",
+                        items: JSON.parse(JSON.stringify(getOrderItemsSafe(selectedOrderForDetails)))
                       });
                       setIsEditingOrder(true);
                     }
@@ -152,7 +172,9 @@ export default function OrderDetailsModal({
           
           {/* Fraud Check / History Section */}
           {(() => {
-            const customerHistory = orderHistory.filter(o => o.customerPhone === selectedOrderForDetails.customerPhone);
+            const customerHistory = selectedOrderForDetails.customerPhone
+              ? safeOrderHistory.filter(o => o?.customerPhone === selectedOrderForDetails.customerPhone)
+              : [];
             const totalOrders = customerHistory.length;
             const delivered = customerHistory.filter(o => o.status === "delivered").length;
             const returned = customerHistory.filter(o => ["cancelled", "returned", "failed"].includes(o.status)).length;
@@ -271,13 +293,18 @@ export default function OrderDetailsModal({
               <ShoppingBag size={12} /> অর্ডার করা পণ্যসমূহ
             </h4>
             <div className="space-y-3">
-              {(isEditingOrder ? editingOrderData.items : selectedOrderForDetails.items)?.map((item: any, idx: number) => (
+              {displayItems.map((item: any, idx: number) => {
+                const qty = Math.max(1, Number(item?.quantity) || 1);
+                const unitPrice = Number(getProductPrice(item?.product, qty)) || Number(item?.price) || 0;
+                const colors = Array.isArray(item?.product?.colors) ? item.product.colors : [];
+                const sizes = Array.isArray(item?.product?.sizes) ? item.product.sizes : [];
+                return (
                 <div key={idx} className="flex items-center gap-4 bg-gray-50/50 p-4 rounded-3xl border border-gray-100 group transition-all hover:bg-white hover:shadow-md">
                   <div className="w-16 h-16 rounded-2xl overflow-hidden border border-gray-100 shrink-0 bg-white">
-                    <img src={item.product?.image} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <img src={item?.variantImage || item?.product?.image || '/logo.png'} loading="lazy" decoding="async" alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-secondary text-sm truncate">{item.product?.name}</p>
+                    <p className="font-bold text-secondary text-sm truncate">{item?.product?.name || item?.name || 'Product'}</p>
                     {isEditingOrder ? (
                       <div className="flex items-center gap-3 mt-2">
                         <div className="flex flex-col gap-1 shrink-0">
@@ -285,11 +312,11 @@ export default function OrderDetailsModal({
                           <input
                             type="number"
                             min="1"
-                            value={item.quantity}
+                            value={qty}
                             onChange={(e) => {
-                              const newQty = Math.max(1, Number(e.target.value));
-                              const newItems = [...editingOrderData.items];
-                              newItems[idx].quantity = newQty;
+                              const newQty = Math.max(1, Number(e.target.value) || 1);
+                              const newItems = [...displayItems];
+                              newItems[idx] = { ...newItems[idx], quantity: newQty };
                               setEditingOrderData({ ...editingOrderData, items: newItems });
                             }}
                             className="w-16 text-xs font-bold border border-gray-200 rounded p-1.5 text-center outline-none focus:ring-1 focus:ring-primary bg-white"
@@ -297,29 +324,29 @@ export default function OrderDetailsModal({
                         </div>
                         <div className="flex flex-col gap-1 flex-1">
                           <label className="text-[8px] font-black text-gray-400 uppercase">কালার</label>
-                          {item.product?.colors && item.product.colors.length > 0 ? (
+                          {colors.length > 0 ? (
                             <select
-                              value={item.color || ""}
+                              value={item?.color || ""}
                               onChange={(e) => {
-                                const newItems = [...editingOrderData.items];
-                                newItems[idx].color = e.target.value;
+                                const newItems = [...displayItems];
+                                newItems[idx] = { ...newItems[idx], color: e.target.value };
                                 setEditingOrderData({ ...editingOrderData, items: newItems });
                               }}
                               className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white cursor-pointer"
                             >
                               <option value="">N/A (নাই)</option>
-                              {item.product.colors.map((c: string, cIdx: number) => (
+                              {colors.map((c: string, cIdx: number) => (
                                 <option key={cIdx} value={c}>{c}</option>
                               ))}
                             </select>
                           ) : (
                             <input
                               type="text"
-                              value={item.color || ""}
+                              value={item?.color || ""}
                               placeholder="কালার লিখুন"
                               onChange={(e) => {
-                                const newItems = [...editingOrderData.items];
-                                newItems[idx].color = e.target.value;
+                                const newItems = [...displayItems];
+                                newItems[idx] = { ...newItems[idx], color: e.target.value };
                                 setEditingOrderData({ ...editingOrderData, items: newItems });
                               }}
                               className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white"
@@ -328,29 +355,29 @@ export default function OrderDetailsModal({
                         </div>
                         <div className="flex flex-col gap-1 flex-1">
                           <label className="text-[8px] font-black text-gray-400 uppercase">সাইজ</label>
-                          {item.product?.sizes && item.product.sizes.length > 0 ? (
+                          {sizes.length > 0 ? (
                             <select
-                              value={item.size || ""}
+                              value={item?.size || ""}
                               onChange={(e) => {
-                                const newItems = [...editingOrderData.items];
-                                newItems[idx].size = e.target.value;
+                                const newItems = [...displayItems];
+                                newItems[idx] = { ...newItems[idx], size: e.target.value };
                                 setEditingOrderData({ ...editingOrderData, items: newItems });
                               }}
                               className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white cursor-pointer"
                             >
                               <option value="">N/A (নাই)</option>
-                              {item.product.sizes.map((s: string, sIdx: number) => (
+                              {sizes.map((s: string, sIdx: number) => (
                                 <option key={sIdx} value={s}>{s}</option>
                               ))}
                             </select>
                           ) : (
                             <input
                               type="text"
-                              value={item.size || ""}
+                              value={item?.size || ""}
                               placeholder="সাইজ লিখুন"
                               onChange={(e) => {
-                                const newItems = [...editingOrderData.items];
-                                newItems[idx].size = e.target.value;
+                                const newItems = [...displayItems];
+                                newItems[idx] = { ...newItems[idx], size: e.target.value };
                                 setEditingOrderData({ ...editingOrderData, items: newItems });
                               }}
                               className="w-full text-xs font-bold border border-gray-200 rounded p-1.5 outline-none focus:ring-1 focus:ring-primary bg-white"
@@ -360,21 +387,22 @@ export default function OrderDetailsModal({
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-gray-400">Qty: {item.quantity}</span>
-                        {item.color && item.color !== "N/A" && (
+                        <span className="text-[10px] font-bold text-gray-400">Qty: {qty}</span>
+                        {item?.color && item.color !== "N/A" && (
                            <span className="text-xs bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl font-bold text-red-600 shadow-sm">কালার: {item.color}</span>
                         )}
-                        {item.size && item.size !== "N/A" && (
+                        {item?.size && item.size !== "N/A" && (
                            <span className="text-xs bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-xl font-bold text-blue-600 shadow-sm">সাইজ: {item.size}</span>
                         )}
                       </div>
                     )}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="font-bold text-primary">৳{getProductPrice(item.product, item.quantity) * item.quantity}</p>
+                    <p className="font-bold text-primary">৳{unitPrice * qty}</p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           {/* Courier Delivery Status Card */}
@@ -386,6 +414,15 @@ export default function OrderDetailsModal({
             const cService = selectedOrderForDetails.courierName || selectedOrderForDetails.couriers?.service || (selectedOrderForDetails.pathaoStatus ? 'Pathao' : 'Steadfast');
             const cMsg = selectedOrderForDetails.courierTrackingMessage || selectedOrderForDetails.courierStatusDetail || '';
             const cHistory: any[] = Array.isArray(selectedOrderForDetails.courierHistory) ? [...selectedOrderForDetails.courierHistory].reverse() : [];
+            const { hubName } = resolveCourierBadgeDisplay({
+              isDispatched: Boolean(cTrack || cStatus || selectedOrderForDetails.status === 'shipped'),
+              courierStatus: cStatus,
+              courierStatusLabel: cLabel,
+              courierStatusNormalized: selectedOrderForDetails.courierStatusNormalized,
+              courierHub: selectedOrderForDetails.courierHub,
+              courierTrackingMessage: cMsg,
+            });
+            const lastSyncText = formatSafeDateTime(selectedOrderForDetails.courierLastSyncedAt, 'bn-BD');
             const isSteadfast = String(cService).toLowerCase().includes('steadfast');
             const isPathao = String(cService).toLowerCase().includes('pathao');
             const canSync = Boolean(cTrack || isSteadfast || selectedOrderForDetails.status === 'shipped');
@@ -410,6 +447,11 @@ export default function OrderDetailsModal({
                           {cLabel}
                         </span>
                       )}
+                      {hubName && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-sky-600 text-white">
+                          <MapPin size={10} /> {hubName}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-[11px] text-sky-800/80 font-medium">
                       {cTrack && (
@@ -425,11 +467,11 @@ export default function OrderDetailsModal({
                           </button>
                         </span>
                       )}
-                      {selectedOrderForDetails.courierLastSyncedAt && (
-                        <span>Last Sync: {new Date(selectedOrderForDetails.courierLastSyncedAt).toLocaleString("bn-BD")}</span>
+                      {lastSyncText && (
+                        <span>Last Sync: {lastSyncText}</span>
                       )}
                     </div>
-                    {cMsg && (
+                    {typeof cMsg === 'string' && cMsg && (
                       <p className="text-[11px] font-bold text-sky-900/90 leading-snug pt-0.5">
                         {cMsg}
                       </p>
@@ -466,26 +508,34 @@ export default function OrderDetailsModal({
                       কুরিয়ার মুভমেন্ট টাইমলাইন ({cHistory.length})
                     </p>
                     <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                      {cHistory.map((ev: any, idx: number) => (
+                      {cHistory.map((ev: any, idx: number) => {
+                        const evTimeText = formatSafeDateTime(ev?.timestamp, "bn-BD");
+                        return (
                         <div
-                          key={`${ev.timestamp || idx}-${idx}`}
+                          key={`${ev?.timestamp || idx}-${idx}`}
                           className="flex items-start justify-between gap-2 text-[11px] bg-white/80 border border-sky-100 rounded-xl px-3 py-2"
                         >
                           <div className="min-w-0">
-                            <span className="font-bold text-sky-900">{ev.label || ev.status}</span>
-                            {ev.message && (
+                            <span className="font-bold text-sky-900">{ev?.label || ev?.status}</span>
+                            {ev?.hub && (
+                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded">
+                                <MapPin size={9} /> {ev.hub}
+                              </span>
+                            )}
+                            {ev?.message && (
                               <p className="text-[10px] text-gray-600 font-medium leading-snug mt-0.5">
                                 {ev.message}
                               </p>
                             )}
                           </div>
-                          {ev.timestamp && (
+                          {evTimeText && (
                             <span className="text-[10px] text-gray-400 font-mono shrink-0">
-                              {new Date(ev.timestamp).toLocaleString("bn-BD")}
+                              {evTimeText}
                             </span>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -498,16 +548,18 @@ export default function OrderDetailsModal({
             <div className="flex justify-between items-center text-secondary-foreground opacity-60">
               <span className="text-xs font-bold">ওজন</span>
               <span className="font-bold italic">
-                {selectedOrderForDetails.totalWeight 
-                  ? (selectedOrderForDetails.totalWeight >= 1 
-                    ? `${selectedOrderForDetails.totalWeight.toFixed(2)} কেজি`
-                    : `${(selectedOrderForDetails.totalWeight * 1000).toFixed(0)} গ্রাম`)
-                  : "N/A"}
+                {(() => {
+                  const weight = Number(selectedOrderForDetails.totalWeight);
+                  if (!Number.isFinite(weight) || weight <= 0) return "N/A";
+                  return weight >= 1
+                    ? `${weight.toFixed(2)} কেজি`
+                    : `${(weight * 1000).toFixed(0)} গ্রাম`;
+                })()}
               </span>
             </div>
             <div className="flex justify-between items-center text-secondary-foreground opacity-60">
               <span className="text-xs font-bold">সাব-টোটাল</span>
-              <span className="font-bold italic">৳{selectedOrderForDetails.subtotal || selectedOrderForDetails.total - (selectedOrderForDetails.deliveryCharge || 0)}</span>
+              <span className="font-bold italic">৳{Number(selectedOrderForDetails.subtotal ?? ((Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0))) || 0}</span>
             </div>
              <div className="flex justify-between items-center text-secondary-foreground pb-4 border-b border-white/10">
               <span className="text-xs font-bold opacity-60">ডেলিভারি চার্জ</span>
@@ -518,7 +570,7 @@ export default function OrderDetailsModal({
                   value={selectedOrderForDetails.deliveryCharge === undefined || selectedOrderForDetails.deliveryCharge === null ? "" : selectedOrderForDetails.deliveryCharge}
                   onChange={async (e) => {
                     const val = e.target.value === "" ? 0 : Number(e.target.value);
-                    const subtotal = selectedOrderForDetails.subtotal || (selectedOrderForDetails.total - (selectedOrderForDetails.deliveryCharge || 0));
+                    const subtotal = Number(selectedOrderForDetails.subtotal) || ((Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0));
                     const newTotal = subtotal + val;
                     
                     setSelectedOrderForDetails((prev: any) => prev ? { ...prev, deliveryCharge: val, total: newTotal } : null);
@@ -537,7 +589,7 @@ export default function OrderDetailsModal({
                   type="button"
                   onClick={async () => {
                     const val = 0;
-                    const subtotal = selectedOrderForDetails.subtotal || (selectedOrderForDetails.total - (selectedOrderForDetails.deliveryCharge || 0));
+                    const subtotal = Number(selectedOrderForDetails.subtotal) || ((Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0));
                     const newTotal = subtotal;
                     
                     setSelectedOrderForDetails((prev: any) => prev ? { ...prev, deliveryCharge: val, total: newTotal } : null);
@@ -563,8 +615,8 @@ export default function OrderDetailsModal({
               </div>
             )}
             <div className="flex justify-between items-center pt-2">
-              <span className="text-lg font-bold tracking-tight"></span>
-              <span className="text-2xl font-bold text-primary italic drop-shadow-lg">৳{selectedOrderForDetails.total}</span>
+              <span className="text-lg font-bold tracking-tight">সর্বমোট</span>
+              <span className="text-2xl font-bold text-primary italic drop-shadow-lg">৳{Number(selectedOrderForDetails.total) || 0}</span>
             </div>
           </div>
         </div>
@@ -574,7 +626,7 @@ export default function OrderDetailsModal({
            <button 
              onClick={() => {
                sendToCourier(selectedOrderForDetails);
-               setSelectedOrderForDetails(null);
+               closeModal();
              }}
              className="flex-1 bg-primary text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
            >
@@ -584,7 +636,7 @@ export default function OrderDetailsModal({
               <button 
                 onClick={() => {
                   handleUpdateOrderStatus(selectedOrderForDetails.id, "confirmed");
-                  setSelectedOrderForDetails(null);
+                  closeModal();
                 }}
                 className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
               >

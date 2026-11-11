@@ -103,10 +103,31 @@ if (empty($apiKey) || empty($secretKey)) {
 
 $rawPhone = $_GET['phone'] ?? '';
 $phone = preg_replace('/[^0-9]/', '', $rawPhone);
-if (empty($phone)) {
+if (strpos($phone, '8801') === 0 && strlen($phone) === 13) {
+    $phone = substr($phone, 2);
+} elseif (strpos($phone, '1') === 0 && strlen($phone) === 10) {
+    $phone = '0' . $phone;
+}
+if (empty($phone) || strlen($phone) < 6) {
     http_response_code(400);
     echo json_encode(["success" => false, "error" => "Valid phone number required"]);
     exit;
+}
+
+$forceRefresh = isset($_GET['refresh']) && ($_GET['refresh'] === '1' || $_GET['refresh'] === 'true');
+$cacheTtlSeconds = 12 * 60 * 60;
+$cacheFile = rtrim(sys_get_temp_dir(), '/\\') . '/ishopbd_steadfast_fraud_' . md5($phone) . '.json';
+
+if (!$forceRefresh && file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtlSeconds) {
+    $cachedJson = @file_get_contents($cacheFile);
+    if ($cachedJson !== false) {
+        $cachedData = json_decode($cachedJson, true);
+        if (is_array($cachedData)) {
+            $cachedData['cached'] = true;
+            echo json_encode(["success" => true, "data" => $cachedData]);
+            exit;
+        }
+    }
 }
 
 // Function to call Steadfast endpoint
@@ -156,6 +177,7 @@ if ($httpCode === 200 && is_array($decoded)) {
     }
 
     $volumeBand = isset($decoded['volume_band']) ? strval($decoded['volume_band']) : '';
+    $volumeRange = isset($decoded['volume_range']) ? strval($decoded['volume_range']) : '';
     $totalParcel = intval($decoded['total_parcels'] ?? $decoded['total_parcel'] ?? 0);
     $totalDelivered = intval($decoded['total_delivered'] ?? 0);
     $totalCancelled = intval($decoded['total_cancelled'] ?? 0);
@@ -170,23 +192,30 @@ if ($httpCode === 200 && is_array($decoded)) {
         }
     }
 
+    $responseData = [
+        "phone" => $phone,
+        "delivery_rate" => $deliveryRate,
+        "cancellation_rate" => $cancellationRate,
+        "delivery_ratio" => $deliveryRate,
+        "cancellation_ratio" => $cancellationRate,
+        "return_ratio" => $cancellationRate,
+        "total_fraud_report" => $fraudReports,
+        "total_reports" => $fraudReports,
+        "volume_band" => $volumeBand,
+        "volume_range" => $volumeRange,
+        "total_parcel" => $totalParcel,
+        "total_delivered" => $totalDelivered,
+        "total_cancelled" => $totalCancelled,
+        "cached" => false,
+        "fetched_at" => gmdate('c'),
+        "raw" => $decoded
+    ];
+
+    @file_put_contents($cacheFile, json_encode($responseData), LOCK_EX);
+
     echo json_encode([
         "success" => true,
-        "data" => [
-            "phone" => $phone,
-            "delivery_rate" => $deliveryRate,
-            "cancellation_rate" => $cancellationRate,
-            "delivery_ratio" => $deliveryRate,
-            "cancellation_ratio" => $cancellationRate,
-            "return_ratio" => $cancellationRate,
-            "total_fraud_report" => $fraudReports,
-            "total_reports" => $fraudReports,
-            "volume_band" => $volumeBand,
-            "total_parcel" => $totalParcel,
-            "total_delivered" => $totalDelivered,
-            "total_cancelled" => $totalCancelled,
-            "raw" => $decoded
-        ]
+        "data" => $responseData
     ]);
 } else {
     http_response_code($httpCode >= 400 ? $httpCode : 500);

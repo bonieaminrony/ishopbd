@@ -406,7 +406,7 @@ export const MarketingSettings: React.FC = () => {
       {/* 1. Meta (Facebook & Instagram) Panel */}
       {/* ========================================================================= */}
       {activeTab === "meta" && (
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <div key="panel-meta" className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-100 gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -426,7 +426,7 @@ export const MarketingSettings: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={config.meta.enabled}
-                  onChange={(e) => setConfig({ ...config, meta: { ...config.meta, enabled: e.target.checked } })}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, meta: { ...prev.meta, enabled: e.target.checked } }))}
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -444,11 +444,14 @@ export const MarketingSettings: React.FC = () => {
                 Meta Pixel ID <span className="text-red-500">*</span>
               </label>
               <input
+                id="meta-pixel-id"
+                name="meta_pixel_id"
                 type="text"
                 value={config.meta.pixelId}
-                onChange={(e) => setConfig({ ...config, meta: { ...config.meta, pixelId: e.target.value } })}
+                onChange={(e) => setConfig((prev) => ({ ...prev, meta: { ...prev.meta, pixelId: e.target.value } }))}
                 placeholder="e.g. 1358996272808579"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                autoComplete="off"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 Facebook Events Manager থেকে প্রাপ্ত Pixel ID বা Dataset ID।
@@ -461,11 +464,14 @@ export const MarketingSettings: React.FC = () => {
                 Meta Test Event Code (ঐচ্ছিক / Testing)
               </label>
               <input
+                id="meta-test-event-code"
+                name="meta_test_event_code"
                 type="text"
                 value={config.meta.testEventCode || ""}
-                onChange={(e) => setConfig({ ...config, meta: { ...config.meta, testEventCode: e.target.value } })}
+                onChange={(e) => setConfig((prev) => ({ ...prev, meta: { ...prev.meta, testEventCode: e.target.value } }))}
                 placeholder="e.g. TEST12345"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary font-mono"
+                autoComplete="off"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 Events Manager &gt; Test Events ট্যাবের কোড। লাইভ রান করার সময় খালি রাখা যাবে।
@@ -474,6 +480,7 @@ export const MarketingSettings: React.FC = () => {
 
             {/* CAPI Access Token */}
             <SecretTokenField
+              fieldId="meta_capi_access_token"
               label="Meta Conversions API (CAPI) Access Token"
               required
               value={config.meta.accessToken}
@@ -508,7 +515,7 @@ export const MarketingSettings: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={config.meta.capiEnabled}
-                  onChange={(e) => setConfig({ ...config, meta: { ...config.meta, capiEnabled: e.target.checked } })}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, meta: { ...prev.meta, capiEnabled: e.target.checked } }))}
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -563,7 +570,7 @@ export const MarketingSettings: React.FC = () => {
       {/* 2. TikTok Ads Panel */}
       {/* ========================================================================= */}
       {activeTab === "tiktok" && (
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <div key="panel-tiktok" className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-100 gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -581,7 +588,7 @@ export const MarketingSettings: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={config.tiktok.enabled}
-                  onChange={(e) => setConfig({ ...config, tiktok: { ...config.tiktok, enabled: e.target.checked } })}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, tiktok: { ...prev.tiktok, enabled: e.target.checked } }))}
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
@@ -598,11 +605,14 @@ export const MarketingSettings: React.FC = () => {
                 TikTok Pixel ID <span className="text-red-500">*</span>
               </label>
               <input
+                id="tiktok-pixel-id"
+                name="tiktok_pixel_id"
                 type="text"
                 value={config.tiktok.pixelId}
-                onChange={(e) => setConfig({ ...config, tiktok: { ...config.tiktok, pixelId: e.target.value } })}
+                onChange={(e) => setConfig((prev) => ({ ...prev, tiktok: { ...prev.tiktok, pixelId: e.target.value } }))}
                 placeholder="e.g. C1234567890ABCDEFG"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+                autoComplete="off"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 TikTok Ads Manager &gt; Assets &gt; Events &gt; Web Events থেকে Pixel ID।
@@ -614,11 +624,14 @@ export const MarketingSettings: React.FC = () => {
                 TikTok Test Event Code (ঐচ্ছিক)
               </label>
               <input
+                id="tiktok-test-event-code"
+                name="tiktok_test_event_code"
                 type="text"
                 value={config.tiktok.testEventCode || ""}
-                onChange={(e) => setConfig({ ...config, tiktok: { ...config.tiktok, testEventCode: e.target.value } })}
+                onChange={(e) => setConfig((prev) => ({ ...prev, tiktok: { ...prev.tiktok, testEventCode: e.target.value } }))}
                 placeholder="e.g. TESTXXXXX"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary font-mono"
+                autoComplete="off"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 TikTok Test Events ডায়াগনস্টিকের জন্য টেস্ট কোড।
@@ -626,6 +639,7 @@ export const MarketingSettings: React.FC = () => {
             </div>
 
             <SecretTokenField
+              fieldId="tiktok_events_access_token"
               label="TikTok Events API Access Token"
               required
               value={config.tiktok.accessToken}
@@ -658,7 +672,7 @@ export const MarketingSettings: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={config.tiktok.eventsApiEnabled}
-                  onChange={(e) => setConfig({ ...config, tiktok: { ...config.tiktok, eventsApiEnabled: e.target.checked } })}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, tiktok: { ...prev.tiktok, eventsApiEnabled: e.target.checked } }))}
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#26225a]"></div>
@@ -712,7 +726,7 @@ export const MarketingSettings: React.FC = () => {
       {/* 3. Google Ads, GA4 & YouTube Panel */}
       {/* ========================================================================= */}
       {activeTab === "google" && (
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <div key="panel-google" className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-100 gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -879,7 +893,7 @@ export const MarketingSettings: React.FC = () => {
       {/* 4. WhatsApp Business Panel */}
       {/* ========================================================================= */}
       {activeTab === "whatsapp" && (
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <div key="panel-whatsapp" className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-100 gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -997,7 +1011,7 @@ export const MarketingSettings: React.FC = () => {
       {/* 5. IMO Campaign Tracking Panel */}
       {/* ========================================================================= */}
       {activeTab === "imo" && (
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <div key="panel-imo" className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-100 gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1159,7 +1173,7 @@ export const MarketingSettings: React.FC = () => {
       {/* 6. OpenAI / ChatGPT Panel */}
       {/* ========================================================================= */}
       {activeTab === "openai" && (
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+        <div key="panel-openai" className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-100 gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1201,6 +1215,7 @@ export const MarketingSettings: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <SecretTokenField
+              fieldId="openai_secret_api_key"
               label="OpenAI API Key"
               required
               value={config.openAi.apiKey}
@@ -1229,7 +1244,7 @@ export const MarketingSettings: React.FC = () => {
               </label>
               <select
                 value={config.openAi.model || "gpt-4o-mini"}
-                onChange={(e) => setConfig({ ...config, openAi: { ...config.openAi, model: e.target.value } })}
+                onChange={(e) => setConfig((prev) => ({ ...prev, openAi: { ...prev.openAi, model: e.target.value } }))}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="gpt-4o-mini">gpt-4o-mini (সুপার ফাস্ট ও কস্ট-এফিসিয়েন্ট - Recommended)</option>

@@ -12,6 +12,10 @@ import {
   syncSingleOrderCourierStatus,
   verifyWebhookToken,
 } from "../server/courierSyncEngine";
+import {
+  extractCourierHubName,
+  resolveCourierBadgeDisplay,
+} from "../utils/courierDisplay";
 
 function createMockFirestore(initialOrders: Record<string, any>, initialKeys: any = {}) {
   const ordersStore: Record<string, any> = {};
@@ -299,9 +303,70 @@ describe("Automated Courier Sync Engine (Rivo Fashion Parity)", () => {
     expect(whRes.success).toBe(true);
     expect(whRes.statusCode).toBe(200);
     expect(whRes.result?.trackingMessage).toBe("Parcel reached Chattogram Hub");
+    expect(whRes.result?.hubName).toBe("Chattogram Hub");
     expect(whRes.result?.courierHistory).toHaveLength(2);
     expect(db._ordersStore.ORD_WH.status).toBe("shipped");
     expect(db._ordersStore.ORD_WH.courierTrackingMessage).toBe("Parcel reached Chattogram Hub");
+    expect(db._ordersStore.ORD_WH.courierHub).toBe("Chattogram Hub");
+  });
+
+  it("extracts hub locations from courier messages and resolves Not Booked / Hub / Delivered badges", () => {
+    expect(extractCourierHubName("Parcel reached Chattogram Hub")).toBe("Chattogram Hub");
+    expect(extractCourierHubName("Arrived at Barishal sorting hub")).toBe("Barishal sorting hub");
+    expect(extractCourierHubName("Transferring from Dhaka Hub to Barishal Hub")).toBe("Barishal Hub");
+    expect(extractCourierHubName("Parcel reached Barishal")).toBe("Barishal");
+    expect(extractCourierHubName("Parcel booked with Steadfast courier")).toBe("");
+    expect(extractCourierHubName("", { current_hub: "Sylhet Hub" })).toBe("Sylhet Hub");
+
+    expect(resolveCourierBadgeDisplay({ isDispatched: false })).toEqual({
+      badgeText: "Not Booked",
+      hubName: "",
+      isNotBooked: true,
+    });
+
+    expect(
+      resolveCourierBadgeDisplay({
+        isDispatched: true,
+        courierStatus: "in_review",
+        courierStatusLabel: "In Review (Booked)",
+        courierStatusNormalized: "booked",
+        courierTrackingMessage: "Parcel arrived at Dhaka Hub",
+      }).badgeText
+    ).toBe("In Review (Booked)");
+
+    expect(
+      resolveCourierBadgeDisplay({
+        isDispatched: true,
+        courierStatus: "in_transit",
+        courierStatusLabel: "In Transit",
+        courierStatusNormalized: "in_transit",
+        courierTrackingMessage: "Parcel arrived at Barishal Hub",
+      })
+    ).toEqual({
+      badgeText: "Barishal Hub",
+      hubName: "Barishal Hub",
+      isNotBooked: false,
+    });
+
+    expect(
+      resolveCourierBadgeDisplay({
+        isDispatched: true,
+        courierStatus: "hold",
+        courierStatusLabel: "On Hold",
+        courierStatusNormalized: "on_hold",
+        courierHub: "Rajshahi Hub",
+      }).badgeText
+    ).toBe("On Hold · Rajshahi Hub");
+
+    expect(
+      resolveCourierBadgeDisplay({
+        isDispatched: true,
+        courierStatus: "delivered",
+        courierStatusLabel: "Delivered",
+        courierStatusNormalized: "delivered",
+        courierHub: "Barishal Hub",
+      }).badgeText
+    ).toBe("Delivered");
   });
 
   it("normalizes Bangladesh phone formats and falls back to Steadfast invoice lookup for shipped orders", async () => {

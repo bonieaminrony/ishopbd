@@ -17,6 +17,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   # Redirect direct index.html and index.php requests to app.php to bypass CDN cache
   RewriteRule ^index\.html$ app.php [L]
   RewriteRule ^index\.php$ app.php [L]
+  RewriteRule ^api/ping$ api/ping.php [L]
 
   # Route API endpoints to PHP scripts on shared hosting
   RewriteRule ^api/send-sms$ api/send-sms.php [L]

@@ -1,6 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
+import {
+  CourierFraudReport,
+  getCourierReportForPhone,
+  isPhoneLoadingInRecord,
+} from '../utils/courierDisplay';
 
 export interface CourierHistoryModalProps {
   isCourierHistoryModalOpen: any;
@@ -64,11 +69,11 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                       className="flex-1 px-4 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-gray-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-300"
                     />
                     <button
-                      onClick={() => checkCourierReport(courierModalPhone)}
-                      disabled={loadingCourierReports[courierModalPhone]}
+                      onClick={() => checkCourierReport(courierModalPhone, true)}
+                      disabled={isPhoneLoadingInRecord(loadingCourierReports, courierModalPhone)}
                       className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-sm rounded-xl transition-all disabled:opacity-50 shadow-md shadow-indigo-500/10"
                     >
-                      {loadingCourierReports[courierModalPhone] ? "চেক হচ্ছে..." : "যাচাই করুন"}
+                      {isPhoneLoadingInRecord(loadingCourierReports, courierModalPhone) ? "চেক হচ্ছে..." : "যাচাই করুন"}
                     </button>
                   </div>
                 </div>
@@ -91,12 +96,17 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                         </thead>
                         <tbody>
                           {(() => {
-                            const report = courierReports[courierModalPhone] || { total_parcel: 0, total_delivered: 0, total_cancelled: 0, total_fraud_report: 0 };
+                            const report: CourierFraudReport = getCourierReportForPhone(courierReports, courierModalPhone) || { total_parcel: 0, total_delivered: 0, total_cancelled: 0, total_fraud_report: 0 };
                             
-                            const hasRate = report.delivery_rate !== undefined || report.cancellation_rate !== undefined;
-                            const steadfastTotal = report.total_parcel > 0 ? report.total_parcel : (report.volume_band ? report.volume_band.toUpperCase() : (hasRate ? 'ACTIVE' : 0));
-                            const steadfastSuccess = report.total_parcel > 0 ? report.total_delivered : (report.delivery_rate !== undefined ? `${report.delivery_rate}%` : 0);
-                            const steadfastCancel = report.total_parcel > 0 ? report.total_cancelled : (report.cancellation_rate !== undefined ? `${report.cancellation_rate}%` : 0);
+                            const hasRate = (report.delivery_rate !== undefined && report.delivery_rate !== null) || (report.cancellation_rate !== undefined && report.cancellation_rate !== null);
+                            const volumeSummary = report.volume_range
+                              ? String(report.volume_range)
+                              : report.volume_band
+                              ? report.volume_band.toUpperCase()
+                              : (hasRate ? 'ACTIVE' : 0);
+                            const steadfastTotal = report.total_parcel > 0 ? report.total_parcel : volumeSummary;
+                            const steadfastSuccess = report.total_parcel > 0 ? report.total_delivered : (report.delivery_rate !== undefined && report.delivery_rate !== null ? `${report.delivery_rate}%` : 0);
+                            const steadfastCancel = report.total_parcel > 0 ? report.total_cancelled : (report.cancellation_rate !== undefined && report.cancellation_rate !== null ? `${report.cancellation_rate}%` : 0);
 
                             // Define row data
                             const rows = [
@@ -174,13 +184,13 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                                     মোট
                                   </td>
                                   <td className="p-3 bg-purple-50 text-purple-950 font-black border-x border-gray-150">
-                                    {sumTotal > 0 ? sumTotal : (report.volume_band ? report.volume_band.toUpperCase() : '-')}
+                                    {sumTotal > 0 ? sumTotal : (report.volume_range || (report.volume_band ? report.volume_band.toUpperCase() : '-'))}
                                   </td>
                                   <td className="p-3 bg-emerald-50 text-emerald-950 font-black border-r border-gray-150">
-                                    {sumSuccess > 0 ? sumSuccess : (report.delivery_rate !== undefined ? `${report.delivery_rate}%` : '-')}
+                                    {sumSuccess > 0 ? sumSuccess : (report.delivery_rate !== undefined && report.delivery_rate !== null ? `${report.delivery_rate}%` : '-')}
                                   </td>
                                   <td className="p-3 bg-rose-50 text-rose-950 font-black">
-                                    {sumCancel > 0 ? sumCancel : (report.cancellation_rate !== undefined ? `${report.cancellation_rate}%` : '-')}
+                                    {sumCancel > 0 ? sumCancel : (report.cancellation_rate !== undefined && report.cancellation_rate !== null ? `${report.cancellation_rate}%` : '-')}
                                   </td>
                                 </tr>
                               </>
@@ -191,18 +201,18 @@ export default function CourierHistoryModal(props: CourierHistoryModalProps) {
                     </div>
                     {/* Bottom Progress Rate bar */}
                     {(() => {
-                      const report = courierReports[courierModalPhone] || { total_parcel: 0, total_delivered: 0, total_cancelled: 0, total_fraud_report: 0 };
+                      const report: CourierFraudReport = getCourierReportForPhone(courierReports, courierModalPhone) || { total_parcel: 0, total_delivered: 0, total_cancelled: 0, total_fraud_report: 0 };
                       const sumTotal = report.total_parcel;
                       const sumSuccess = report.total_delivered;
                       const sumCancel = report.total_cancelled;
-                      const successRate = report.delivery_rate !== undefined 
+                      const successRate = report.delivery_rate !== undefined && report.delivery_rate !== null
                         ? report.delivery_rate 
                         : (sumTotal > 0 ? Math.round((sumSuccess / sumTotal) * 100) : 0);
-                      const cancelRate = report.cancellation_rate !== undefined 
+                      const cancelRate = report.cancellation_rate !== undefined && report.cancellation_rate !== null
                         ? report.cancellation_rate 
                         : (sumTotal > 0 ? Math.round((sumCancel / sumTotal) * 100) : 0);
                       
-                      const hasData = sumTotal > 0 || report.delivery_rate !== undefined || report.cancellation_rate !== undefined || report.total_fraud_report > 0;
+                      const hasData = sumTotal > 0 || (report.delivery_rate !== undefined && report.delivery_rate !== null) || (report.cancellation_rate !== undefined && report.cancellation_rate !== null) || report.total_fraud_report > 0;
                       if (!hasData) {
                         return (
                           <div className="mt-4 p-3.5 text-center text-[10px] font-bold text-gray-400 bg-gray-55 rounded-xl border border-dashed border-gray-200">

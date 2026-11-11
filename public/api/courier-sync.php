@@ -264,18 +264,97 @@ function courierAppendHistoryEntry($existingHistory, $nextEntry, $maxEntries = 1
     return array_slice($list, -$maxEntries);
 }
 
-function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $source, $trackingMessage = '') {
+function courierCleanHubCandidate($raw) {
+    if (!is_string($raw)) return '';
+    $text = preg_replace('/\s+/', ' ', trim(str_replace(["\r", "\n"], ' ', $raw)));
+    $text = preg_replace('/^(?:the\s+)/i', '', $text);
+    $text = preg_replace('/\s+(?:for|by|with|on|via)\s+.*$/i', '', $text);
+    $text = trim(preg_replace('/[.,;:!?)\]]+$/', '', $text));
+    if (strlen($text) < 2 || strlen($text) > 48 || ctype_digit($text)) return '';
+    $blocked = [
+        'steadfast', 'steadfast courier', 'pathao', 'pathao courier', 'redx',
+        'courier', 'customer', 'merchant', 'delivery', 'delivery rider', 'rider',
+        'pickup', 'pending pickup', 'booked', 'admin', 'system', 'unknown', 'n/a',
+        'na', 'none', 'null', 'parcel', 'package', 'consignment', 'order', 'hub',
+        'sorting hub', 'branch', 'point', 'center', 'centre',
+    ];
+    if (in_array(strtolower($text), $blocked, true)) return '';
+    return $text;
+}
+
+function courierExtractHubName($trackingMessage, $rawPayload = null) {
+    if (is_array($rawPayload)) {
+        $logs = is_array($rawPayload['data']['logs'] ?? null) ? $rawPayload['data']['logs'] : (is_array($rawPayload['logs'] ?? null) ? $rawPayload['logs'] : []);
+        $latestLog = !empty($logs) ? end($logs) : [];
+        $candidates = [
+            $rawPayload['current_hub'] ?? null,
+            $rawPayload['hub_name'] ?? null,
+            $rawPayload['hubName'] ?? null,
+            $rawPayload['hub'] ?? null,
+            $rawPayload['sorting_hub'] ?? null,
+            $rawPayload['current_location'] ?? null,
+            $rawPayload['destination_hub'] ?? null,
+            $rawPayload['consignment']['current_hub'] ?? null,
+            $rawPayload['consignment']['hub_name'] ?? null,
+            $rawPayload['consignment']['hub'] ?? null,
+            $rawPayload['data']['order']['current_hub'] ?? null,
+            $rawPayload['data']['order']['hub_name'] ?? null,
+            $rawPayload['data']['order']['hub'] ?? null,
+            $rawPayload['data']['current_hub'] ?? null,
+            $rawPayload['data']['hub_name'] ?? null,
+            is_array($latestLog) ? ($latestLog['hub'] ?? ($latestLog['hub_name'] ?? ($latestLog['location'] ?? null))) : null,
+        ];
+        foreach ($candidates as $cand) {
+            $cleaned = courierCleanHubCandidate($cand);
+            if ($cleaned !== '') return $cleaned;
+        }
+    }
+    if (!is_string($trackingMessage)) return '';
+    $msg = preg_replace('/\s+/', ' ', trim($trackingMessage));
+    if ($msg === '') return '';
+    if (preg_match('/(?:current\s+hub|sorting\s+hub|hub|branch|location)\s*[:\-]\s*([A-Za-z\x{0980}-\x{09FF}][A-Za-z0-9\x{0980}-\x{09FF}\s\-\'.]{1,40})/iu', $msg, $m)) {
+        $cleaned = courierCleanHubCandidate($m[1]);
+        if ($cleaned !== '') return $cleaned;
+    }
+    if (preg_match('/\bfrom\s+[A-Za-z0-9\x{0980}-\x{09FF}\s\-\'.]{2,36}?\s+to\s+([A-Za-z\x{0980}-\x{09FF}][A-Za-z0-9\x{0980}-\x{09FF}\s\-\'.]{1,38}?(?:\s+(?:Sorting\s+Hub|Hub|Branch|Point|Center|Centre|Office|Station|Warehouse))?)(?:[.,;]|$)/iu', $msg, $m)) {
+        $cleaned = courierCleanHubCandidate($m[1]);
+        if ($cleaned !== '') return $cleaned;
+    }
+    $facilityPatterns = [
+        '/(?:arrived\s+at|reached|received\s+at|currently\s+at|at|in|to|from)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9\s\-\'.]{1,36}?\s+(?:Sorting\s+Hub|Hub|Branch|Point|Center|Centre|Office|Station|Warehouse))/i',
+        '/([A-Za-z][A-Za-z0-9\s\-\'.]{1,32}?\s+(?:Sorting\s+Hub|Hub|Branch|Point|Center|Centre))\b/i',
+        '/([\x{0980}-\x{09FF}]+(?:\s+[\x{0980}-\x{09FF}]+)?\s*(?:হাব|ব্রাঞ্চ|পয়েন্ট|অফিস))/u',
+    ];
+    foreach ($facilityPatterns as $rx) {
+        if (preg_match($rx, $msg, $m)) {
+            $cleaned = courierCleanHubCandidate($m[1]);
+            if ($cleaned !== '') return $cleaned;
+        }
+    }
+    if (preg_match('/(?:arrived\s+at|reached|received\s+at|sent\s+to|dispatched\s+to|forwarded\s+to|transferred\s+to)\s+(?:the\s+)?([A-Z][A-Za-z\-\'.]{2,26}(?:\s+[A-Z][A-Za-z\-\'.]{2,20})?)/', $msg, $m)) {
+        $cleaned = courierCleanHubCandidate($m[1]);
+        if ($cleaned !== '') return $cleaned;
+    }
+    return '';
+}
+
+function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $source, $trackingMessage = '', $rawPayload = null) {
     $eval = courierEvaluateTransition($orderData['status'] ?? 'pending', $rawStatus);
     $now = gmdate('c');
     $detailMsg = trim((string)$trackingMessage) !== '' ? trim((string)$trackingMessage) : $eval['reason'];
-    $history = courierAppendHistoryEntry($orderData['courierHistory'] ?? [], [
+    $hubName = courierExtractHubName($trackingMessage, $rawPayload);
+    $historyEntry = [
         'status' => $rawStatus,
         'label' => $eval['label'],
         'category' => $eval['cat'],
         'message' => $detailMsg,
         'source' => $source,
         'timestamp' => $now,
-    ]);
+    ];
+    if ($hubName !== '') {
+        $historyEntry['hub'] = $hubName;
+    }
+    $history = courierAppendHistoryEntry($orderData['courierHistory'] ?? [], $historyEntry);
     $fields = [
         'courierStatus' => firestoreEncodeValue($rawStatus),
         'courierStatusNormalized' => firestoreEncodeValue($eval['cat']),
@@ -286,6 +365,9 @@ function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $
         'courierTrackingMessage' => firestoreEncodeValue($detailMsg),
         'courierHistory' => firestoreEncodeValue($history),
     ];
+    if ($hubName !== '') {
+        $fields['courierHub'] = firestoreEncodeValue($hubName);
+    }
     if (stripos($service, 'pathao') !== false) {
         $fields['pathaoStatus'] = firestoreEncodeValue($rawStatus);
     } else {
@@ -312,6 +394,7 @@ function courierUpdateOrderFirestore($docId, $orderData, $service, $rawStatus, $
         'rawCourierStatus' => $rawStatus,
         'courierLabel' => $eval['label'],
         'trackingMessage' => $detailMsg,
+        'hubName' => $hubName,
         'courierHistory' => $history,
         'oldOrderStatus' => $oldStatus,
         'newOrderStatus' => $newStatus,
@@ -413,7 +496,7 @@ if ($action === 'webhook' && $method === 'POST') {
         echo json_encode(['success' => false, 'message' => 'Order not found']);
         exit;
     }
-    $result = courierUpdateOrderFirestore($matchedId, $orderData, 'Steadfast', (string)$status, 'COURIER_WEBHOOK', $trackingMsg);
+    $result = courierUpdateOrderFirestore($matchedId, $orderData, 'Steadfast', (string)$status, 'COURIER_WEBHOOK', $trackingMsg, $body);
     echo json_encode(['success' => true, 'result' => $result], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -510,10 +593,10 @@ if ($action === 'sync-one' && $method === 'POST') {
     try {
         if ($isPathao) {
             $fetched = courierFetchPathao($keys, $tid ?: $cid);
-            $syncResult = courierUpdateOrderFirestore($orderId, $orderData, $svc, $fetched['rawStatus'], 'ADMIN_SINGLE_SYNC', $fetched['trackingMessage'] ?? '');
+            $syncResult = courierUpdateOrderFirestore($orderId, $orderData, $svc, $fetched['rawStatus'], 'ADMIN_SINGLE_SYNC', $fetched['trackingMessage'] ?? '', $fetched['rawResponse'] ?? null);
         } else {
             $fetched = courierFetchSteadfast($keys, $cid, $tid, $orderData['orderId'] ?? $orderId);
-            $syncResult = courierUpdateOrderFirestore($orderId, $orderData, $svc ?: 'Steadfast', $fetched['rawStatus'], 'ADMIN_SINGLE_SYNC', $fetched['trackingMessage'] ?? '');
+            $syncResult = courierUpdateOrderFirestore($orderId, $orderData, $svc ?: 'Steadfast', $fetched['rawStatus'], 'ADMIN_SINGLE_SYNC', $fetched['trackingMessage'] ?? '', $fetched['rawResponse'] ?? null);
         }
         echo json_encode(['success' => true, 'syncResult' => $syncResult], JSON_UNESCAPED_UNICODE);
     } catch (Exception $e) {
@@ -580,10 +663,10 @@ if (($action === 'sync-all' || $action === 'cron')) {
         try {
             if ($isPathao) {
                 $fetched = courierFetchPathao($keys, $tid ?: $cid);
-                $r = courierUpdateOrderFirestore($docId, $data, $svc, $fetched['rawStatus'], $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC', $fetched['trackingMessage'] ?? '');
+                $r = courierUpdateOrderFirestore($docId, $data, $svc, $fetched['rawStatus'], $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC', $fetched['trackingMessage'] ?? '', $fetched['rawResponse'] ?? null);
             } else {
                 $fetched = courierFetchSteadfast($keys, $cid, $tid, $data['orderId'] ?? $docId);
-                $r = courierUpdateOrderFirestore($docId, $data, $svc ?: 'Steadfast', $fetched['rawStatus'], $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC', $fetched['trackingMessage'] ?? '');
+                $r = courierUpdateOrderFirestore($docId, $data, $svc ?: 'Steadfast', $fetched['rawStatus'], $action === 'cron' ? 'COURIER_BACKGROUND_SYNC' : 'ADMIN_MANUAL_SYNC', $fetched['trackingMessage'] ?? '', $fetched['rawResponse'] ?? null);
             }
             $summary['synced']++;
             if ($r['updated']) $summary['updated']++;
