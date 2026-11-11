@@ -11,6 +11,7 @@ import { db } from '../lib/firebase';
 import { Product } from '../types';
 import toast from 'react-hot-toast';
 import { formatEnglishDateTime } from '../utils/helpers';
+import { getAdminAuthHeaders } from '../utils/adminAuth';
 
 export interface POSProps {
   products: Product[];
@@ -611,9 +612,10 @@ export default function POS({
           const end = (smsTemplateEnd || '').trim() || 'Thank you for shopping at iShop BD!';
           const message = `${start}\n${productNames}\nInvoice: #${shortId}\nTotal: ৳${total}\n${end}`;
           
+          const authHeaders = await getAdminAuthHeaders(true);
           fetch("/api/send-sms", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders,
             body: JSON.stringify({
               phone: cleanPhone,
               message: message

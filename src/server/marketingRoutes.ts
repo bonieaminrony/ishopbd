@@ -271,6 +271,12 @@ export function registerMarketingRoutes(
           enabled: true,
           whatsappNumber: '017XXXXXXXX',
           defaultMessage: 'হ্যালো iShop BD, আমি আপনার ওয়েবসাইট থেকে পণ্য অর্ডার করতে চাই।',
+          provider: 'meta_cloud',
+          metaPhoneNumberId: '',
+          metaAccessToken: '',
+          gatewayUrl: '',
+          gatewayToken: '',
+          autoSendCartReminder: true,
         },
         imo: {
           enabled: true,
@@ -298,6 +304,8 @@ export function registerMarketingRoutes(
       const metaTok = cleanSecretInput(finalData.meta?.accessToken);
       const ttTok = cleanSecretInput(finalData.tiktok?.accessToken);
       const oaiKey = cleanSecretInput(finalData.openAi?.apiKey);
+      const waMetaTok = cleanSecretInput(finalData.whatsapp?.metaAccessToken);
+      const waGwTok = cleanSecretInput(finalData.whatsapp?.gatewayToken);
 
       const safeConfig = {
         ...finalData,
@@ -314,6 +322,17 @@ export function registerMarketingRoutes(
           maskedAccessToken: maskSecret(ttTok),
           hasAccessToken: ttTok.length > 0,
           clearAccessToken: false,
+        },
+        whatsapp: {
+          ...finalData.whatsapp,
+          metaAccessToken: '',
+          maskedMetaAccessToken: maskSecret(waMetaTok),
+          hasMetaAccessToken: waMetaTok.length > 0,
+          clearMetaAccessToken: false,
+          gatewayToken: '',
+          maskedGatewayToken: maskSecret(waGwTok),
+          hasGatewayToken: waGwTok.length > 0,
+          clearGatewayToken: false,
         },
         openAi: {
           ...finalData.openAi,
@@ -359,6 +378,16 @@ export function registerMarketingRoutes(
         existingData?.openAi?.apiKey,
         !!incoming.openAi?.clearApiKey
       );
+      const finalWhatsAppMetaToken = resolveSecretUpdate(
+        incoming.whatsapp?.metaAccessToken,
+        existingData?.whatsapp?.metaAccessToken,
+        !!incoming.whatsapp?.clearMetaAccessToken
+      );
+      const finalWhatsAppGatewayToken = resolveSecretUpdate(
+        incoming.whatsapp?.gatewayToken,
+        existingData?.whatsapp?.gatewayToken,
+        !!incoming.whatsapp?.clearGatewayToken
+      );
 
       const mergedPayload = {
         meta: {
@@ -388,6 +417,15 @@ export function registerMarketingRoutes(
           enabled: !!incoming.whatsapp?.enabled,
           whatsappNumber: (incoming.whatsapp?.whatsappNumber || '').trim(),
           defaultMessage: (incoming.whatsapp?.defaultMessage || '').trim(),
+          provider: (incoming.whatsapp?.provider || 'meta_cloud').trim(),
+          metaPhoneNumberId: (incoming.whatsapp?.metaPhoneNumberId || '').trim(),
+          metaAccessToken: finalWhatsAppMetaToken,
+          gatewayUrl: (incoming.whatsapp?.gatewayUrl || '').trim(),
+          gatewayToken: finalWhatsAppGatewayToken,
+          autoSendCartReminder:
+            incoming.whatsapp?.autoSendCartReminder !== undefined
+              ? !!incoming.whatsapp?.autoSendCartReminder
+              : true,
         },
         imo: {
           enabled: !!incoming.imo?.enabled,
@@ -580,8 +618,49 @@ export function registerMarketingRoutes(
       }
 
       if (platform === 'whatsapp') {
-        const { whatsappNumber, defaultMessage } = req.body;
+        const { whatsappNumber, defaultMessage, provider, metaPhoneNumberId, metaAccessToken, gatewayUrl, gatewayToken } = req.body;
         const phone = (whatsappNumber || existingData?.whatsapp?.whatsappNumber || '').trim();
+        const activeProvider = provider || existingData?.whatsapp?.provider || 'meta_cloud';
+        const resolvedMetaToken = resolveSecretUpdate(metaAccessToken, existingData?.whatsapp?.metaAccessToken);
+        const resolvedPhoneId = (metaPhoneNumberId || existingData?.whatsapp?.metaPhoneNumberId || '').trim();
+        const resolvedGatewayToken = resolveSecretUpdate(gatewayToken, existingData?.whatsapp?.gatewayToken);
+        const resolvedGatewayUrl = (gatewayUrl || existingData?.whatsapp?.gatewayUrl || '').trim();
+
+        // 1. If testing Meta WhatsApp Cloud API
+        if (activeProvider === 'meta_cloud' && resolvedMetaToken && resolvedPhoneId) {
+          try {
+            const metaRes = await axios.get(`https://graph.facebook.com/v19.0/${resolvedPhoneId}`, {
+              headers: { Authorization: `Bearer ${resolvedMetaToken}` },
+              timeout: 10000,
+            });
+            const displayPhone = metaRes.data?.display_phone_number || resolvedPhoneId;
+            const verifiedName = metaRes.data?.verified_name || 'Verified';
+            return res.json({
+              success: true,
+              message: `Meta WhatsApp Cloud API Verified! Connected to: ${displayPhone} (${verifiedName}). Ready for automated cart reminders.`,
+              data: metaRes.data,
+            });
+          } catch (mErr: any) {
+            const errDetail = mErr.response?.data?.error?.message || mErr.message;
+            return res.status(400).json({
+              success: false,
+              error: `Meta WhatsApp Cloud API Connection Failed: ${errDetail}`,
+            });
+          }
+        }
+
+        // 2. If testing Gateway
+        if (activeProvider === 'gateway' && resolvedGatewayUrl) {
+          try {
+            return res.json({
+              success: true,
+              message: `WhatsApp Gateway URL Configured: ${resolvedGatewayUrl}. Gateway will be used for automated dispatches.`,
+            });
+          } catch (gErr: any) {
+            return res.status(400).json({ success: false, error: `Gateway test error: ${gErr.message}` });
+          }
+        }
+
         if (!phone) {
           return res.status(400).json({ success: false, error: 'WhatsApp Number is required.' });
         }
@@ -658,6 +737,88 @@ export function registerMarketingRoutes(
     } catch (err: any) {
       console.error(`Error testing ${platform}:`, err);
       return res.status(500).json({ success: false, error: err.message || 'Internal test error' });
+    }
+  });
+
+  // Automated WhatsApp Message Dispatch Endpoint
+  app.post('/api/send-whatsapp', async (req, res) => {
+    const isAuthorized = await verifyIsAdmin(req);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Admin access required' });
+    }
+
+    const { phone, message } = req.body;
+    if (!phone || typeof phone !== 'string' || !message || typeof message !== 'string') {
+      return res.status(400).json({ success: false, error: 'Phone number and message are required' });
+    }
+
+    // Format phone to international format: 8801XXXXXXXXX
+    let cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('01') && cleanPhone.length === 11) {
+      cleanPhone = '88' + cleanPhone;
+    }
+
+    const config = (await getMarketingConfigSafe()) || {};
+    const waConfig = config.whatsapp || {};
+
+    const provider =
+      waConfig.provider ||
+      (waConfig.metaAccessToken && waConfig.metaPhoneNumberId
+        ? 'meta_cloud'
+        : waConfig.gatewayUrl
+        ? 'gateway'
+        : 'direct');
+
+    try {
+      if (provider === 'meta_cloud' && waConfig.metaAccessToken && waConfig.metaPhoneNumberId) {
+        const metaUrl = `https://graph.facebook.com/v19.0/${waConfig.metaPhoneNumberId}/messages`;
+        const payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanPhone,
+          type: 'text',
+          text: { preview_url: true, body: message },
+        };
+        const response = await axios.post(metaUrl, payload, {
+          headers: {
+            Authorization: `Bearer ${waConfig.metaAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        });
+        return res.json({ success: true, provider: 'meta_cloud', data: response.data });
+      }
+
+      if (provider === 'gateway' && waConfig.gatewayUrl) {
+        const gatewayRes = await axios.post(
+          waConfig.gatewayUrl,
+          {
+            to: cleanPhone,
+            phone: cleanPhone,
+            message: message,
+            token: waConfig.gatewayToken,
+          },
+          {
+            headers: waConfig.gatewayToken ? { Authorization: `Bearer ${waConfig.gatewayToken}` } : {},
+            timeout: 15000,
+          }
+        );
+        return res.json({ success: true, provider: 'gateway', data: gatewayRes.data });
+      }
+
+      return res.status(400).json({
+        success: false,
+        error: 'WhatsApp API credentials not configured yet. Configure Meta Cloud API or Gateway in Marketing Settings.',
+        fallbackUrl: `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`,
+      });
+    } catch (err: any) {
+      console.error('Error sending WhatsApp message:', err?.response?.data || err.message);
+      const errDetails = err?.response?.data?.error || err?.response?.data || err.message;
+      return res.status(502).json({
+        success: false,
+        error: 'Failed to send WhatsApp message',
+        details: errDetails,
+      });
     }
   });
 }

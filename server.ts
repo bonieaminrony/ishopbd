@@ -868,6 +868,24 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       return res.status(200).json({ success: false, message: "SMS API key is not configured." });
     }
 
+    if (!isAdminSender) {
+      const lowerMsg = message.toLowerCase();
+      const isAuthorizedTemplate = 
+        message.includes("অর্ডার") || 
+        lowerMsg.includes("order") || 
+        lowerMsg.includes("ishopbd") || 
+        message.includes("কোড") || 
+        lowerMsg.includes("otp") || 
+        lowerMsg.includes("verification");
+
+      if (!isAuthorizedTemplate || message.length > 300) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Unauthorized: Custom SMS messages require admin privileges." 
+        });
+      }
+    }
+
     // Format phone number to 8801XXXXXXXXX format
     let formattedPhone = String(phone || "").trim();
     const banglaToEnglish = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
@@ -1408,10 +1426,50 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
 
         const clientTotal = Number(newOrder.total) || 0;
         const clientSubtotal = Number(newOrder.subtotal) || 0;
-        const clientDelivery = Number(newOrder.deliveryCharge) || 0;
-        const clientPoints = Number(newOrder.pointsDiscount) || 0;
+        const clientDelivery = Math.max(0, Number(newOrder.deliveryCharge) || 0);
+        const clientPoints = Math.max(0, Number(newOrder.pointsDiscount) || 0);
         if (clientPoints > userPoints) throw new Error("You do not have enough reward points!");
-        const clientDiscount = Number(newOrder.discount) || 0; // If any other discount
+        const clientDiscount = Math.max(0, Number(newOrder.discount) || 0);
+
+        // Server-Side Coupon Discount Verification
+        if (clientDiscount > 0) {
+            const rawCouponCode = String(newOrder.couponCode || newOrder.appliedCoupon || "").trim().toUpperCase();
+            if (!rawCouponCode) {
+                console.error("Discount claimed without coupon code!");
+                throw new Error("Invalid discount: coupon code is missing.");
+            }
+            const couponSnap = await transaction.get(db.collection("coupons").doc(rawCouponCode));
+            if (!couponSnap.exists) {
+                console.error(`Coupon ${rawCouponCode} not found in database!`);
+                throw new Error("Invalid coupon code.");
+            }
+            const couponData = couponSnap.data()!;
+            if (!couponData.isActive) {
+                throw new Error("This coupon is no longer active.");
+            }
+            if (couponData.expiresAt) {
+                const expiresAt = couponData.expiresAt?.toDate ? couponData.expiresAt.toDate() : new Date(couponData.expiresAt);
+                if (new Date() > expiresAt) {
+                    throw new Error("This coupon has expired.");
+                }
+            }
+            if (couponData.minOrderAmount && expectedSubtotal < couponData.minOrderAmount) {
+                throw new Error(`Minimum order of ৳${couponData.minOrderAmount} is required for this coupon.`);
+            }
+            let expectedDiscount = 0;
+            if (couponData.type === "percent") {
+                expectedDiscount = Math.round(expectedSubtotal * (Number(couponData.value || 0) / 100));
+                if (couponData.maxDiscount && expectedDiscount > couponData.maxDiscount) {
+                    expectedDiscount = couponData.maxDiscount;
+                }
+            } else if (couponData.type === "fixed") {
+                expectedDiscount = Math.min(Number(couponData.value || 0), expectedSubtotal);
+            }
+            if (Math.abs(clientDiscount - expectedDiscount) > 5) {
+                console.error(`Coupon discount discrepancy: client=${clientDiscount}, expected=${expectedDiscount}`);
+                throw new Error("Coupon discount calculation discrepancy detected.");
+            }
+        }
         
         // 1. Verify Subtotal matches server calculated subtotal
         if (Math.abs(clientSubtotal - expectedSubtotal) > 5) {
@@ -2177,13 +2235,14 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   });
 
 
-  registerPushRoutes(app, secureServiceAccountPaths);
+  registerPushRoutes(app, secureServiceAccountPaths, verifyIsAdmin);
 
   registerReviewsRoutes(app, {
     getCachedProducts,
     invalidateProductCache,
     parseFirestoreDoc,
     getIsAdminSdkHealthy: () => isAdminSdkHealthy,
+    verifyIsAdmin,
   });
 
   // Static uploads directory & fallback proxy to live server for localhost

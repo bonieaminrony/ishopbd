@@ -3826,17 +3826,54 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             // First mark it as sent so we don't send multiple times
             await setDoc(doc(db, "incomplete_orders", cart.id), { smsSent: true }, { merge: true });
             
-            // Call SMS API
-            const message = "আপনার কার্টে থাকা প্রোডাক্টটি এখনো আপনার জন্য অপেক্ষা করছে! আজই অর্ডার কনফার্ম করুন। আমাদের ওয়েবসাইট ভিজিট করুন।";
-            await fetch("/api/send-sms", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                phone: cart.phone,
-                message: message
-              })
-            });
-            console.log("Auto abandoned cart SMS sent to", cart.phone);
+            // Call SMS API with product name & short URL
+            const firstItem = cart.items?.[0];
+            const matchedProduct = products.find((p: any) => p.id === firstItem?.id);
+            const rawProdName = firstItem?.name || matchedProduct?.name || 'আপনার পছন্দের পণ্য';
+            const cleanProdName = rawProdName.length > 28 ? rawProdName.substring(0, 28) + '...' : rawProdName;
+            const prodPath = matchedProduct ? getProductPath(matchedProduct) : (firstItem?.id ? `/p/${firstItem.id}` : '');
+            const shortUrl = prodPath ? `https://ishopbd.com${prodPath}` : 'https://ishopbd.com';
+            const custName =
+              cart.name && cart.name !== 'অজ্ঞাত ক্রেতা' && cart.name !== 'অজ্ঞাত কাস্টমার'
+                ? `প্রিয় ${cart.name}`
+                : 'প্রিয় গ্রাহক';
+
+            const message = `${custName}, আপনি iShop BD-তে "${cleanProdName}" কিনতে চেয়েছিলেন। আপনি কি প্রোডাক্টটি নিতে আগ্রহী? অর্ডারটি সম্পন্ন করতে ভিজিট করুন: ${shortUrl} ধন্যবাদ!`;
+            const adminHeaders = await getAdminAuthHeaders(true);
+
+            // 1. Try WhatsApp dispatch first (free up to 1,000 conversations/month on Meta Cloud API)
+            let sentViaWhatsApp = false;
+            try {
+              const waRes = await fetch("/api/send-whatsapp", {
+                method: "POST",
+                headers: adminHeaders,
+                body: JSON.stringify({
+                  phone: cart.phone,
+                  message: message
+                })
+              });
+              const waData = await waRes.json();
+              if (waData.success) {
+                sentViaWhatsApp = true;
+                await setDoc(doc(db, "incomplete_orders", cart.id), { whatsappSent: true, smsSent: true }, { merge: true });
+                console.log("Auto abandoned cart WhatsApp sent to", cart.phone);
+              }
+            } catch (waErr) {
+              console.warn("WhatsApp auto-dispatch error, falling back to SMS:", waErr);
+            }
+
+            // 2. Fallback to SIM SMS if WhatsApp is not sent
+            if (!sentViaWhatsApp) {
+              await fetch("/api/send-sms", {
+                method: "POST",
+                headers: adminHeaders,
+                body: JSON.stringify({
+                  phone: cart.phone,
+                  message: message
+                })
+              });
+              console.log("Auto abandoned cart SMS sent to", cart.phone);
+            }
           } catch (e) {
             console.error("Failed to send auto abandoned cart SMS", e);
           }
@@ -5159,9 +5196,10 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     if (!individualSmsOrder || !individualSmsMessage.trim()) return;
     setIsSendingIndividualSms(true);
     try {
+      const adminHeaders = await getAdminAuthHeaders(true);
       const response = await fetch("/api/send-sms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders,
         body: JSON.stringify({
           phone: individualSmsOrder.customerPhone || individualSmsOrder.phone,
           message: individualSmsMessage
@@ -6656,9 +6694,10 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     
     const toastId = toast.loading(`SMS পাঠানো হচ্ছে ${order.customerPhone} তে...`);
     try {
+      const adminHeaders = await getAdminAuthHeaders(true);
       const response = await fetch("/api/send-sms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders,
         body: JSON.stringify({
           phone: order.customerPhone,
           message: message,

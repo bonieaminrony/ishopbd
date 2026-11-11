@@ -4,8 +4,23 @@ import { CheckCircle2, Copy, MessageSquare, Package, Phone, Send, ShoppingCart, 
 import toast from 'react-hot-toast';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { formatEnglishDateTime } from '../../utils/helpers';
+import { formatEnglishDateTime, getProductPath } from '../../utils/helpers';
 import IncompleteOrderModal, { CompleteIncompleteOrderPayload } from './IncompleteOrderModal';
+
+export function buildCartReminderMessage(order: any, products: any[] = []): string {
+  const firstItem = order?.items?.[0];
+  const matchedProduct = products.find((p: any) => p.id === firstItem?.id);
+  const rawProdName = firstItem?.name || matchedProduct?.name || 'আপনার পছন্দের পণ্য';
+  const cleanProdName = rawProdName.length > 30 ? rawProdName.substring(0, 30) + '...' : rawProdName;
+  const prodPath = matchedProduct ? getProductPath(matchedProduct) : (firstItem?.id ? `/p/${firstItem.id}` : '');
+  const shortUrl = prodPath ? `https://ishopbd.com${prodPath}` : 'https://ishopbd.com';
+  const custName =
+    order?.name && order?.name !== 'অজ্ঞাত ক্রেতা' && order?.name !== 'অজ্ঞাত কাস্টমার'
+      ? `প্রিয় ${order.name}`
+      : 'প্রিয় গ্রাহক';
+
+  return `${custName}, আপনি iShop BD-তে "${cleanProdName}" কিনতে চেয়েছিলেন। আপনি কি প্রোডাক্টটি নিতে আগ্রহী? অর্ডারটি সম্পন্ন করতে ভিজিট করুন: ${shortUrl} ধন্যবাদ!`;
+}
 
 export interface AdminIncompleteOrdersTabProps {
   incompleteOrders: any[];
@@ -157,9 +172,7 @@ export default function AdminIncompleteOrdersTab({
                             {hasRealPhone && (
                               <a
                                 href={`https://wa.me/${waPhone}?text=${encodeURIComponent(
-                                  `Hello ${
-                                    order.name && order.name !== 'অজ্ঞাত ক্রেতা' ? order.name : ''
-                                  }! We noticed you added items to your cart at iShop BD. Can we assist you with completing your order?`
+                                  buildCartReminderMessage(order, products)
                                 )}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -371,9 +384,7 @@ export default function AdminIncompleteOrdersTab({
 
                                 <a
                                   href={`https://wa.me/${waPhone}?text=${encodeURIComponent(
-                                    `Hello ${
-                                      order.name && order.name !== 'অজ্ঞাত ক্রেতা' ? order.name : ''
-                                    }! We noticed you added items to your cart at iShop BD. Can we assist you with completing your order?`
+                                    buildCartReminderMessage(order, products)
                                   )}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -388,9 +399,7 @@ export default function AdminIncompleteOrdersTab({
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setIndividualSmsOrder(individualSmsOrder?.id === order.id ? null : order);
-                                      setIndividualSmsMessage(
-                                        `Dear customer, your cart items at iShop BD are waiting! Complete your order now: https://www.ishopbd.com Thank you!`
-                                      );
+                                      setIndividualSmsMessage(buildCartReminderMessage(order, products));
                                     }}
                                     className={`inline-flex items-center justify-center gap-1 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
                                       individualSmsOrder?.id === order.id

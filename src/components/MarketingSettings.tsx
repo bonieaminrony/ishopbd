@@ -60,6 +60,16 @@ export interface MarketingConfig {
     enabled: boolean;
     whatsappNumber: string;
     defaultMessage?: string;
+    provider?: 'meta_cloud' | 'gateway' | 'direct';
+    metaPhoneNumberId?: string;
+    metaAccessToken?: string;
+    hasMetaAccessToken?: boolean;
+    clearMetaAccessToken?: boolean;
+    gatewayUrl?: string;
+    gatewayToken?: string;
+    hasGatewayToken?: boolean;
+    clearGatewayToken?: boolean;
+    autoSendCartReminder?: boolean;
   };
   imo: {
     enabled: boolean;
@@ -104,7 +114,17 @@ const DEFAULT_CONFIG: MarketingConfig = {
   whatsapp: {
     enabled: true,
     whatsappNumber: "017XXXXXXXX",
-    defaultMessage: "হ্যালো iShop BD, আমি আপনার ওয়েবসাইট থেকে পণ্য ক্রয় করতে চাই।"
+    defaultMessage: "হ্যালো iShop BD, আমি আপনার ওয়েবসাইট থেকে পণ্য ক্রয় করতে চাই।",
+    provider: "meta_cloud",
+    metaPhoneNumberId: "",
+    metaAccessToken: "",
+    hasMetaAccessToken: false,
+    clearMetaAccessToken: false,
+    gatewayUrl: "",
+    gatewayToken: "",
+    hasGatewayToken: false,
+    clearGatewayToken: false,
+    autoSendCartReminder: true,
   },
   imo: {
     enabled: true,
@@ -951,22 +971,134 @@ export const MarketingSettings: React.FC = () => {
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary font-mono"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
-                গ্রাহক যে নম্বরে চ্যাট শুরু করবেন। কান্ট্রি কোড সহ বা ছাড়া দেওয়া যাবে।
+                গ্রাহক যে নম্বরে চ্যাট শুরু করবেন বা যে নম্বর থেকে রিমাইন্ডার যাবে।
               </p>
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
-                Default Inquiry Message Template
+                WhatsApp API Provider
               </label>
-              <textarea
-                rows={3}
-                value={config.whatsapp.defaultMessage || ""}
-                onChange={(e) => setConfig({ ...config, whatsapp: { ...config.whatsapp, defaultMessage: e.target.value } })}
-                placeholder="e.g. হ্যালো iShop BD, আমি আপনার ওয়েবসাইট থেকে পণ্য ক্রয় করতে চাই..."
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-primary resize-none"
-              />
+              <select
+                value={config.whatsapp.provider || "meta_cloud"}
+                onChange={(e) => setConfig({ ...config, whatsapp: { ...config.whatsapp, provider: e.target.value as any } })}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="meta_cloud">Meta WhatsApp Cloud API (১,০০০ ফ্রি কনভারসেশন প্রতি মাসে)</option>
+                <option value="gateway">WhatsApp Web Gateway (UltraMsg / GreenAPI)</option>
+                <option value="direct">Direct WhatsApp Web/App Link (ম্যানুয়াল)</option>
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
+                অটোমেটিক কার্ট রিমাইন্ডার পাঠাতে Meta Cloud API বা Web Gateway নির্বাচন করুন।
+              </p>
             </div>
+          </div>
+
+          {/* Automated Abandoned Cart Reminder Toggle */}
+          <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-100 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-black text-emerald-950">অটো কার্ট রিমাইন্ডার (Automated WhatsApp Cart Reminder)</p>
+              <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                ক্রেতা কার্টে পণ্য রেখে চলে গেলে ১ ঘণ্টা পর স্বয়ংক্রিয়ভাবে তার হোয়াটসঅ্যাপে প্রোডাক্টের নাম ও শর্ট লিংকসহ রিমাইন্ডার চলে যাবে।
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={config.whatsapp.autoSendCartReminder !== false}
+                onChange={(e) => setConfig({ ...config, whatsapp: { ...config.whatsapp, autoSendCartReminder: e.target.checked } })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
+          {/* Conditional Provider Settings */}
+          {config.whatsapp.provider === "meta_cloud" && (
+            <div className="space-y-4 p-5 bg-gray-50/80 rounded-2xl border border-gray-200/80">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-gray-800">Meta WhatsApp Cloud API Credentials</span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                  1,000 Free / Month
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                    Meta Phone Number ID
+                  </label>
+                  <input
+                    type="text"
+                    value={config.whatsapp.metaPhoneNumberId || ""}
+                    onChange={(e) => setConfig({ ...config, whatsapp: { ...config.whatsapp, metaPhoneNumberId: e.target.value } })}
+                    placeholder="e.g. 109876543210987"
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2.5 px-3.5 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    developers.facebook.com &gt; আপনার WhatsApp App &gt; API Setup থেকে পাবেন।
+                  </p>
+                </div>
+                <div>
+                  <SecretTokenField
+                    fieldId="whatsapp_meta_access_token"
+                    label="Meta Permanent Access Token"
+                    value={config.whatsapp.metaAccessToken || ""}
+                    hasSavedToken={!!config.whatsapp.hasMetaAccessToken}
+                    maskedPreview={config.whatsapp.maskedMetaAccessToken}
+                    isMarkedForClear={!!config.whatsapp.clearMetaAccessToken}
+                    placeholderNew="e.g. EAAG... অ্যাক্সেস টোকেন পেস্ট করুন"
+                    onChangeValue={(val) => setConfig((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, metaAccessToken: val, clearMetaAccessToken: false } }))}
+                    onToggleClear={(clear) => setConfig((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, clearMetaAccessToken: clear, metaAccessToken: "" } }))}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {config.whatsapp.provider === "gateway" && (
+            <div className="space-y-4 p-5 bg-gray-50/80 rounded-2xl border border-gray-200/80">
+              <span className="text-xs font-black text-gray-800">WhatsApp Gateway (UltraMsg / GreenAPI) Credentials</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+                    Gateway API Endpoint URL
+                  </label>
+                  <input
+                    type="text"
+                    value={config.whatsapp.gatewayUrl || ""}
+                    onChange={(e) => setConfig({ ...config, whatsapp: { ...config.whatsapp, gatewayUrl: e.target.value } })}
+                    placeholder="https://api.ultramsg.com/instanceXXXXX/messages/chat"
+                    className="w-full bg-white border border-gray-200 rounded-xl py-2.5 px-3.5 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <SecretTokenField
+                    fieldId="whatsapp_gateway_token"
+                    label="Gateway Instance Token"
+                    value={config.whatsapp.gatewayToken || ""}
+                    hasSavedToken={!!config.whatsapp.hasGatewayToken}
+                    maskedPreview={config.whatsapp.maskedGatewayToken}
+                    isMarkedForClear={!!config.whatsapp.clearGatewayToken}
+                    placeholderNew="Gateway Instance Token পেস্ট করুন"
+                    onChangeValue={(val) => setConfig((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, gatewayToken: val, clearGatewayToken: false } }))}
+                    onToggleClear={(clear) => setConfig((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, clearGatewayToken: clear, gatewayToken: "" } }))}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">
+              Default Inquiry Message Template
+            </label>
+            <textarea
+              rows={2}
+              value={config.whatsapp.defaultMessage || ""}
+              onChange={(e) => setConfig({ ...config, whatsapp: { ...config.whatsapp, defaultMessage: e.target.value } })}
+              placeholder="e.g. হ্যালো iShop BD, আমি আপনার ওয়েবসাইট থেকে পণ্য ক্রয় করতে চাই..."
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-primary resize-none"
+            />
           </div>
 
           <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -975,7 +1107,12 @@ export const MarketingSettings: React.FC = () => {
               disabled={testResults["whatsapp"]?.loading}
               onClick={() => runPlatformTest("whatsapp", {
                 whatsappNumber: config.whatsapp.whatsappNumber,
-                defaultMessage: config.whatsapp.defaultMessage
+                defaultMessage: config.whatsapp.defaultMessage,
+                provider: config.whatsapp.provider,
+                metaPhoneNumberId: config.whatsapp.metaPhoneNumberId,
+                metaAccessToken: config.whatsapp.metaAccessToken,
+                gatewayUrl: config.whatsapp.gatewayUrl,
+                gatewayToken: config.whatsapp.gatewayToken
               })}
               className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50"
             >

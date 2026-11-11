@@ -7,6 +7,7 @@ export interface ReviewsRoutesDeps {
   invalidateProductCache: () => void;
   parseFirestoreDoc: (doc: any) => any;
   getIsAdminSdkHealthy: () => boolean;
+  verifyIsAdmin?: (req: any) => Promise<boolean>;
 }
 
 /**
@@ -49,7 +50,7 @@ function normalizeReviewCreatedAt(createdAt: any): string {
 
 export function registerReviewsRoutes(
   app: Express,
-  { getCachedProducts, invalidateProductCache, parseFirestoreDoc, getIsAdminSdkHealthy }: ReviewsRoutesDeps
+  { getCachedProducts, invalidateProductCache, parseFirestoreDoc, getIsAdminSdkHealthy, verifyIsAdmin }: ReviewsRoutesDeps
 ): void {
   // Get Product Reviews API (Admin SDK + REST API + Cache fallback)
   app.get('/api/reviews', async (req, res) => {
@@ -173,7 +174,8 @@ export function registerReviewsRoutes(
       const productSnap = await productRef.get();
       const productData = productSnap.exists ? productSnap.data() || {} : {};
 
-      const reviewStatus = review.status || 'pending';
+      const isAdminCaller = verifyIsAdmin ? await verifyIsAdmin(req) : false;
+      const reviewStatus = isAdminCaller ? (review.status || 'approved') : 'pending';
       const reviewData = {
         id: reviewId,
         productId: cleanProdId,
@@ -213,8 +215,14 @@ export function registerReviewsRoutes(
   });
 
   // Admin Reviews List API
-  app.get('/api/admin/reviews', async (_req, res) => {
+  app.get('/api/admin/reviews', async (req, res) => {
     try {
+      if (verifyIsAdmin) {
+        const isAuth = await verifyIsAdmin(req);
+        if (!isAuth) {
+          return res.status(401).json({ success: false, error: 'Unauthorized: Admin access required' });
+        }
+      }
       const db = getFirestore();
       let allReviews: any[] = [];
 
@@ -292,6 +300,12 @@ export function registerReviewsRoutes(
   // Admin Review Status Update API (Approve / Reject)
   app.post('/api/admin/reviews/status', async (req, res) => {
     try {
+      if (verifyIsAdmin) {
+        const isAuth = await verifyIsAdmin(req);
+        if (!isAuth) {
+          return res.status(401).json({ success: false, error: 'Unauthorized: Admin access required' });
+        }
+      }
       const { productId, reviewId, status } = req.body;
       if (!productId || !reviewId || !status) {
         return res.status(400).json({ error: 'productId, reviewId, and status are required.' });
@@ -324,6 +338,12 @@ export function registerReviewsRoutes(
   // Admin Review Delete API
   app.delete('/api/admin/reviews', async (req, res) => {
     try {
+      if (verifyIsAdmin) {
+        const isAuth = await verifyIsAdmin(req);
+        if (!isAuth) {
+          return res.status(401).json({ success: false, error: 'Unauthorized: Admin access required' });
+        }
+      }
       const productId = String(req.body.productId || req.query.productId || '').trim();
       const reviewId = String(req.body.reviewId || req.query.reviewId || '').trim();
 

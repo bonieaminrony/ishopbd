@@ -42,8 +42,18 @@ async function getFCMToken(serviceAccountPath?: string): Promise<{ access_token:
   };
 }
 
-export function registerPushRoutes(app: Express, secureServiceAccountPaths: string[]): void {
-  app.get('/api/send-push', async (_req, res) => {
+export function registerPushRoutes(
+  app: Express,
+  secureServiceAccountPaths: string[],
+  verifyIsAdmin?: (req: any) => Promise<boolean>
+): void {
+  app.get('/api/send-push', async (req, res) => {
+    if (verifyIsAdmin) {
+      const isAuth = await verifyIsAdmin(req);
+      if (!isAuth) {
+        return res.status(401).json({ status: 'unauthorized', error: 'Admin access required' });
+      }
+    }
     const fcmServiceAccountPath = secureServiceAccountPaths.find((p) => fs.existsSync(p)) || '';
     try {
       const authData = await getFCMToken(fcmServiceAccountPath);
@@ -62,6 +72,12 @@ export function registerPushRoutes(app: Express, secureServiceAccountPaths: stri
   });
 
   app.post('/api/send-push', async (req, res) => {
+    if (verifyIsAdmin) {
+      const isAuth = await verifyIsAdmin(req);
+      if (!isAuth) {
+        return res.status(401).json({ error: 'Unauthorized: Admin access required' });
+      }
+    }
     const { token, title = 'i SHOP BD Notification', body, link = '/', icon = '/logo.png' } = req.body;
     if (!token || !body) {
       return res.status(400).json({ error: 'Missing token or body' });
