@@ -497,3 +497,23 @@ export function parseClientCourierFraudReport(resData: any): CourierFraudReport 
     volume_range: typeof report?.volume_range === 'string' ? report.volume_range : '',
   };
 }
+
+export function selectAutoCheckCandidatePhones(
+  records: Array<{ customerPhone?: unknown; phone?: unknown }>,
+  existingReports: Record<string, any> | undefined | null,
+  attemptedPhones: Set<string>,
+  maxCount = 25,
+): string[] {
+  const pending: string[] = [];
+  for (const row of records) {
+    const normalized = normalizeBdPhone(row?.customerPhone ?? row?.phone);
+    if (!normalized || normalized.length < 10) continue;
+    if (getCourierReportForPhone(existingReports, normalized)) continue;
+    if (attemptedPhones.has(normalized)) continue;
+    if (!pending.includes(normalized)) {
+      pending.push(normalized);
+      if (pending.length >= maxCount) break;
+    }
+  }
+  return pending;
+}

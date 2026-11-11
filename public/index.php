@@ -403,6 +403,11 @@ function getEffectiveRequestUri() {
 // Fetch all cached products
 $allProducts = getAllProductsCached();
 
+// 0. Detect /order-success URL — set SEO tags for Google Ads conversion page
+$effectiveUriEarly = getEffectiveRequestUri();
+$pathEarly = parse_url($effectiveUriEarly, PHP_URL_PATH) ?: $effectiveUriEarly;
+$isOrderSuccessPage = ($pathEarly === '/order-success');
+
 // 1. Detect Product URL
 $productIdentifier = isset($_GET['p']) ? $_GET['p'] : (isset($_GET['product']) ? $_GET['product'] : (isset($_GET['landing']) ? $_GET['landing'] : null));
 if (!$productIdentifier) {
@@ -795,6 +800,30 @@ if ($matchedProduct) {
         $catFallback .= "</ul></div>";
         $html = str_replace('<div id="root">', '<div id="root">' . $catFallback, $html);
 
+    } else if ($isOrderSuccessPage) {
+        // 2b. /order-success — Google Ads Conversion Tracking Page
+        $successUrl = "$baseUrl/order-success";
+        $successTitle = "অর্ডার সম্পন্ন হয়েছে | i SHOP BD";
+        $successDesc  = "আপনার অর্ডার সফলভাবে সম্পন্ন হয়েছে। ধন্যবাদ! | i SHOP BD Bangladesh";
+        $urlEscaped   = htmlspecialchars($successUrl, ENT_QUOTES, 'UTF-8');
+        $titleEscaped = htmlspecialchars($successTitle, ENT_QUOTES, 'UTF-8');
+        $descEscaped  = htmlspecialchars($successDesc, ENT_QUOTES, 'UTF-8');
+        $imgEscaped   = htmlspecialchars($defaultOgImage, ENT_QUOTES, 'UTF-8');
+
+        $html = preg_replace('/<title>.*?<\/title>/is', "<title>{$titleEscaped}</title>", $html);
+        $html = preg_replace('/<meta name="description" content="[^"]*"\s*\/?>/i', "<meta name=\"description\" content=\"{$descEscaped}\" />", $html);
+        $html = preg_replace('/<meta property="og:url" content="[^"]*"\s*\/?>/i', "<meta property=\"og:url\" content=\"{$urlEscaped}\" />", $html);
+        $html = preg_replace('/<meta property="og:title" content="[^"]*"\s*\/?>/i', "<meta property=\"og:title\" content=\"{$titleEscaped}\" />", $html);
+        $html = preg_replace('/<meta property="og:description" content="[^"]*"\s*\/?>/i', "<meta property=\"og:description\" content=\"{$descEscaped}\" />", $html);
+        $html = preg_replace('/<meta property="og:image" content="[^"]*"\s*\/?>/i', "<meta property=\"og:image\" content=\"{$imgEscaped}\" /><meta property=\"og:image:secure_url\" content=\"{$imgEscaped}\" />", $html);
+        if (strpos($html, '<!-- CANONICAL_URL_PLACEHOLDER -->') !== false) {
+            $html = str_replace('<!-- CANONICAL_URL_PLACEHOLDER -->', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
+        } else {
+            $html = preg_replace('/<link rel="canonical" href="[^"]*"\s*\/?>/i', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
+        }
+        // noindex so Google doesn't index this page (it's only for conversion tracking)
+        $html = str_replace('</head>', "<meta name=\"robots\" content=\"noindex,nofollow\" /></head>", $html);
+
     } else {
         // 3. Homepage Default
         $currentUrl = "$baseUrl/";
@@ -814,9 +843,9 @@ if ($matchedProduct) {
         // Home Crawlable Fallback
         $homeCrawlerFallback = '
       <div id="seo-crawler-fallback" style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;">
-        <h1>i SHOP BD (আই শপ বিডি) - Online Gadgets & Electronics Store in Bangladesh</h1>
-        <p>i SHOP BD (ishopbd.com) হলো বাংলাদেশের বিশ্বস্ত অনলাইন গ্যাজেট এবং লাইফস্টাইল ই-কমার্স শপ। সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Smart Watch, Headphone ও এক্সেসরিজ কিনুন ক্যাশ অন হোম ডেলিভারিতে।</p>
-        <p>অফিসিয়াল ওয়েবসাইট: https://ishopbd.com | ব্র্যান্ড: i SHOP BD (ishopbd)</p>
+        <h1>i SHOP BD (আই শপ বিডি) - Online Gadgets, Winter Koti & Lifestyle Store in Bangladesh</h1>
+        <p>i SHOP BD (ishopbd.com) হলো বাংলাদেশের বিশ্বস্ত অনলাইন গ্যাজেট, শীতের কোটি (Winter Koti / Waistcoat) এবং লাইফস্টাইল ই-কমার্স শপ। সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Smart Watch, Headphone ও প্রিমিয়াম ফ্যাশনেবল শীতের কোটি কিনুন ক্যাশ অন হোম ডেলিভারিতে।</p>
+        <p>অফিসিয়াল ওয়েবসাইট: https://ishopbd.com | ব্র্যান্ড: i SHOP BD (ishopbd) | Catalog Feed: https://ishopbd.com/llms.txt</p>
       </div>
 ';
         $html = str_replace('</body>', $homeCrawlerFallback . '</body>', $html);

@@ -17,9 +17,11 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   # Redirect direct index.html and index.php requests to app.php to bypass CDN cache
   RewriteRule ^index\.html$ app.php [L]
   RewriteRule ^index\.php$ app.php [L]
+  RewriteRule ^llms\.txt$ api/llms.php [L]
 
   # Route API endpoints to PHP scripts on shared hosting
   RewriteRule ^api/ping$ api/ping.php [L]
+  RewriteRule ^api/merchant-feed\.xml$ api/merchant-feed.php [L]
   RewriteRule ^api/send-sms$ api/send-sms.php [L]
   RewriteRule ^api/send-bulk-sms$ api/send-bulk-sms.php [L]
   RewriteRule ^api/confirm-order$ api/confirm-order.php [L]
@@ -138,7 +140,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
 </FilesMatch>
 
 # Allow only the specific API and entry PHP files
-<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|ping|marketing|track-event|courier-sync)\.php$">
+<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|ping|marketing|track-event|courier-sync|llms|merchant-feed)\.php$">
   <IfModule mod_authz_core.c>
     Require all granted
   </IfModule>

@@ -9,6 +9,44 @@ export interface AiRoutesDeps {
   extractClientIp: (headers: any, remoteAddress?: string) => string;
 }
 
+const RECOMMENDATIONS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const RECOMMENDATIONS_429_COOLDOWN_MS = 15 * 60 * 1000;
+const recommendationsCache = new Map<string, { expiresAt: number; productIds: string[] }>();
+let aiRecsCooldownUntilMs = 0;
+
+function fallbackRecommendProductIds(
+  allProducts: Array<{ id: string; name: string; category: string }>,
+  currentProductId: string,
+  viewedProductIds: string[],
+  searchQuery: string,
+): string[] {
+  const current = allProducts.find((p) => p.id === currentProductId);
+  const viewedCats = new Set(
+    allProducts.filter((p) => viewedProductIds.includes(p.id)).map((p) => p.category.toLowerCase()),
+  );
+  const terms = String(searchQuery || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length >= 2);
+
+  return allProducts
+    .filter((p) => p.id !== currentProductId)
+    .map((p) => {
+      let score = 0;
+      const catLower = p.category.toLowerCase();
+      const nameLower = p.name.toLowerCase();
+      if (current && catLower === current.category.toLowerCase()) score += 4;
+      if (viewedCats.has(catLower)) score += 2;
+      for (const t of terms) {
+        if (nameLower.includes(t) || catLower.includes(t)) score += 3;
+      }
+      return { id: p.id, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((x) => x.id);
+}
+
 export function registerAiRoutes(app: Express, { rateLimit, getCachedProducts, extractClientIp }: AiRoutesDeps): void {
   app.post('/api/chat', async (req, res) => {
     const ip = extractClientIp(req.headers, req.socket.remoteAddress) || 'unknown';
@@ -186,6 +224,17 @@ Guidelines:
         return res.json({ productIds: [] });
       }
 
+      const cacheKey = `${String(currentProductId || '')}|${(Array.isArray(viewedProductIds) ? viewedProductIds.slice(0, 5).join(',') : '')}|${String(searchQuery || '').trim().toLowerCase()}`;
+      const cachedEntry = recommendationsCache.get(cacheKey);
+      if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+        return res.json({ productIds: cachedEntry.productIds, cached: true });
+      }
+
+      if (Date.now() < aiRecsCooldownUntilMs) {
+        const fallbackIds = fallbackRecommendProductIds(allProducts, currentProductId, viewedProductIds, searchQuery);
+        return res.json({ productIds: fallbackIds, fallback: true });
+      }
+
       const currentProduct = allProducts.find((p) => p.id === currentProductId);
       const viewedProducts = allProducts.filter((p) => viewedProductIds.includes(p.id));
 
@@ -214,28 +263,54 @@ Rule 2: Respond ONLY with a valid JSON array of strings containing the selected 
         apiKey: process.env.GEMINI_API_KEY,
       });
 
-      const response = await genAI.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      });
-
-      let text = response.text || '[]';
-      text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-
-      try {
-        const productIds = JSON.parse(text);
-        if (Array.isArray(productIds)) {
-          const validIds = productIds.filter((id) => allProducts.some((p) => p.id === id));
-          return res.json({ productIds: validIds.slice(0, 5) });
+      let text = '';
+      for (const model of ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite']) {
+        try {
+          const response = await genAI.models.generateContent({
+            model,
+            contents: prompt,
+          });
+          if (response.text) {
+            text = response.text;
+            break;
+          }
+        } catch (modelErr: any) {
+          if (modelErr?.status === 429 || String(modelErr?.message || '').includes('429')) {
+            aiRecsCooldownUntilMs = Date.now() + RECOMMENDATIONS_429_COOLDOWN_MS;
+          }
         }
-      } catch (_parseErr) {
-        console.error('Failed to parse Gemini recommendations JSON output:', text);
       }
 
-      res.json({ productIds: [] });
+      if (text) {
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        try {
+          const productIds = JSON.parse(text);
+          if (Array.isArray(productIds)) {
+            const validIds = productIds.filter((id) => allProducts.some((p) => p.id === id)).slice(0, 5);
+            recommendationsCache.set(cacheKey, {
+              expiresAt: Date.now() + RECOMMENDATIONS_CACHE_TTL_MS,
+              productIds: validIds,
+            });
+            return res.json({ productIds: validIds });
+          }
+        } catch (_parseErr) {
+          console.error('Failed to parse Gemini recommendations JSON output:', text);
+        }
+      }
+
+      const fallbackIds = fallbackRecommendProductIds(allProducts, currentProductId, viewedProductIds, searchQuery);
+      recommendationsCache.set(cacheKey, {
+        expiresAt: Date.now() + 30 * 60 * 1000,
+        productIds: fallbackIds,
+      });
+      res.json({ productIds: fallbackIds, fallback: true });
     } catch (error: any) {
-      console.error('AI Recommendations Error:', error);
-      res.status(500).json({ error: 'Failed to generate recommendations' });
+      if (error?.status === 429 || String(error?.message || '').includes('429')) {
+        aiRecsCooldownUntilMs = Date.now() + RECOMMENDATIONS_429_COOLDOWN_MS;
+      } else {
+        console.error('AI Recommendations Error:', error);
+      }
+      res.json({ productIds: [], fallback: true });
     }
   });
 }

@@ -26,6 +26,7 @@ import {
 } from './utils/tracking';
 import { getAdminAuthHeaders } from './utils/adminAuth';
 import { findMatchingAdminRecord, resolveAdminAccess } from './utils/adminRole';
+import { persistCustomerOrderSafely } from './utils/checkoutOrder';
 import { buildProductStructuredData } from './utils/productSchema';
 import type { CompleteIncompleteOrderPayload } from './components/admin/IncompleteOrderModal';
 import {
@@ -33,6 +34,7 @@ import {
   getCourierReportForPhone,
   normalizeBdPhone,
   parseClientCourierFraudReport,
+  selectAutoCheckCandidatePhones,
 } from './utils/courierDisplay';
 
 // Dynamic Code-Splitting for Heavy / Secondary Modals
@@ -627,8 +629,8 @@ function App() {
           purchaseTracked: false,
         };
         try {
-          // Concurrently create order and decrement stock in Firestore
-          const stockPromises = checkoutItems.map((item) => {
+          // Create order first; only moderators/admins update product stock directly from client
+          const stockTasks = checkoutItems.map((item) => () => {
             const pId = item.product.id;
             const reqQty = Number(item.quantity) || 1;
             const currentProd = products.find(p => p.id === pId) || item.product;
@@ -655,10 +657,11 @@ function App() {
             return updateDoc(doc(db, "products", pId), updatePayload);
           });
 
-          await Promise.all([
-            setDoc(doc(db, "orders", orderId), newOrder),
-            ...stockPromises
-          ]);
+          await persistCustomerOrderSafely({
+            writeOrder: () => setDoc(doc(db, "orders", orderId), newOrder),
+            stockTasks,
+            canClientUpdateStock: isAdmin,
+          });
           
           // Send confirmation email via PHP endpoint
           try {
@@ -714,6 +717,7 @@ function App() {
           // Purchase conversion is intentionally deferred until admin confirms the order.
 
           setCompletedOrderReceipt({ ...newOrder, orderId });
+          window.history.pushState({ orderSuccess: true }, "", "/order-success");
           setIsCheckoutOpen(false);
           setCheckoutItems([]);
           
@@ -845,10 +849,11 @@ function App() {
             updatePayload.stock = Math.max(0, currentStock - reqQty);
           }
 
-          await Promise.all([
-            setDoc(doc(db, "orders", orderData.orderId), orderData),
-            updateDoc(doc(db, "products", pId), updatePayload)
-          ]);
+          await persistCustomerOrderSafely({
+            writeOrder: () => setDoc(doc(db, "orders", orderData.orderId), orderData),
+            stockTasks: [() => updateDoc(doc(db, "products", pId), updatePayload)],
+            canClientUpdateStock: isAdmin,
+          });
           
           // Send confirmation email via PHP endpoint
           try {
@@ -901,6 +906,7 @@ function App() {
           } catch (err) {}
           // Show receipt
           setCompletedOrderReceipt(orderData);
+          window.history.pushState({ orderSuccess: true }, "", "/order-success");
           
           // Reset form
           setInlineOrderName("");
@@ -1737,6 +1743,7 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
   }, [courierReports]);
   const autoCheckedCourierPhonesRef = useRef<Set<string>>(new Set());
   const autoCheckPausedUntilRef = useRef<number>(0);
+  const [autoCourierRetryTick, setAutoCourierRetryTick] = useState(0);
   const [loadingCourierReports, setLoadingCourierReports] = useState<Record<string, boolean>>({});
   const [isCourierHistoryModalOpen, setIsCourierHistoryModalOpen] = useState(false);
   const [courierModalPhone, setCourierModalPhone] = useState("");
@@ -3318,6 +3325,14 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     const path = window.location.pathname;
     const isCheckoutParam = new URLSearchParams(window.location.search).get("checkout") === "true";
     
+    // Don't override the /order-success URL while receipt is showing
+    if (completedOrderReceipt) {
+      if (path !== "/order-success") {
+        window.history.pushState({ orderSuccess: true }, "", "/order-success");
+      }
+      return;
+    }
+    
     if (isCheckoutOpen) {
       if (!isCheckoutParam) {
         window.history.pushState({ checkout: true }, "", "/?checkout=true");
@@ -3338,7 +3353,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         window.history.pushState({}, "", "/");
       }
     }
-  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, products.length]);
+  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, products.length, completedOrderReceipt]);
 
   // Handle browser Back / Forward buttons smoothly
   useEffect(() => {
@@ -3352,6 +3367,14 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         categoryParam = path.replace(/^\/category\//, "").split("/")[0];
       } else if (!categoryParam && path.startsWith("/c/")) {
         categoryParam = path.replace(/^\/c\//, "").split("/")[0];
+      }
+
+      if (path === "/order-success") {
+        // Stay on order-success — receipt modal handles display
+        return;
+      } else if (completedOrderReceipt && path !== "/order-success") {
+        // User navigated away from /order-success — dismiss receipt
+        setCompletedOrderReceipt(null);
       }
 
       if (isCheckout) {
@@ -3383,30 +3406,38 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [products, categories, selectedCategory]);
+  }, [products, categories, selectedCategory, completedOrderReceipt]);
   const [adminTab, setAdminTab] = useState<
     "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
   >("orders");
 
   useEffect(() => {
-    if (!isAdminOpen || !isAdminVerified || adminTab !== "orders") return;
-    if (Date.now() < autoCheckPausedUntilRef.current) return;
-    const visibleOrders = filteredOrders.slice(0, adminOrdersLimit);
-    const pendingPhones: string[] = [];
-    for (const ord of visibleOrders) {
-      const normalized = normalizeBdPhone(ord?.customerPhone);
-      if (!normalized || normalized.length < 10) continue;
-      if (getCourierReportForPhone(courierReportsRef.current, normalized)) continue;
-      if (autoCheckedCourierPhonesRef.current.has(normalized)) continue;
-      if (!pendingPhones.includes(normalized)) {
-        pendingPhones.push(normalized);
-        if (pendingPhones.length >= 25) break;
-      }
+    if (!isAdminOpen || !isAdminVerified) return;
+    if (adminTab !== "orders" && adminTab !== "incomplete_orders") return;
+
+    const nowMs = Date.now();
+    if (nowMs < autoCheckPausedUntilRef.current) {
+      const waitMs = Math.min(autoCheckPausedUntilRef.current - nowMs + 1500, 5 * 60 * 1000 + 2000);
+      const cooldownTimer = setTimeout(() => setAutoCourierRetryTick((t) => t + 1), waitMs);
+      return () => clearTimeout(cooldownTimer);
     }
+
+    const candidateSource =
+      adminTab === "orders"
+        ? filteredOrders.slice(0, adminOrdersLimit)
+        : incompleteOrders.slice(0, 30);
+
+    const pendingPhones = selectAutoCheckCandidatePhones(
+      candidateSource,
+      courierReportsRef.current,
+      autoCheckedCourierPhonesRef.current,
+      25,
+    );
     if (pendingPhones.length === 0) return;
-    pendingPhones.forEach(p => autoCheckedCourierPhonesRef.current.add(p));
 
     let isCancelled = false;
+    let followupTimer: ReturnType<typeof setTimeout> | null = null;
+
     const fetchVisibleCourierStats = async () => {
       setLoadingCourierReports(prev => {
         const next = { ...prev };
@@ -3415,22 +3446,44 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       });
       try {
         const headers = await getAdminAuthHeaders(false);
-        let updates: Record<string, CourierFraudReport> = {};
+        const updates: Record<string, CourierFraudReport> = {};
+        let isRateLimited = false;
+        let fetchedLiveCount = 0;
+
         try {
           const batchRes = await axios.post("/api/courier/steadfast/fraud/batch", { phones: pendingPhones }, { headers });
           if (batchRes.data?.rateLimited) {
+            isRateLimited = true;
             autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
           }
+          fetchedLiveCount = Array.isArray(batchRes.data?.fetchedPhones) ? batchRes.data.fetchedPhones.length : 0;
+
           const rawResults = batchRes.data?.results;
           if (rawResults && typeof rawResults === "object") {
             for (const [phoneKey, val] of Object.entries(rawResults)) {
               const parsed = parseClientCourierFraudReport({ success: true, data: val });
-              if (parsed) updates[phoneKey] = parsed;
+              if (parsed) {
+                updates[phoneKey] = parsed;
+                autoCheckedCourierPhonesRef.current.add(phoneKey);
+              }
+            }
+          }
+
+          const batchErrors = batchRes.data?.errors;
+          if (batchErrors && typeof batchErrors === "object") {
+            for (const [errPhone, errMsg] of Object.entries(batchErrors)) {
+              const msgLower = String(errMsg || "").toLowerCase();
+              if (!msgLower.includes("rate limit") && !msgLower.includes("429") && !msgLower.includes("missing")) {
+                autoCheckedCourierPhonesRef.current.add(errPhone);
+              }
             }
           }
         } catch (batchErr: any) {
           const status = batchErr?.response?.status;
-          if (status === 404 || status === 405) {
+          if (status === 429) {
+            isRateLimited = true;
+            autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
+          } else if (status === 404 || status === 405) {
             const fallbackTargets = pendingPhones.slice(0, 3);
             await Promise.all(
               fallbackTargets.map(async (p) => {
@@ -3438,9 +3491,14 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
                 try {
                   const singleRes = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(p)}`, { headers });
                   const parsed = parseClientCourierFraudReport(singleRes.data);
-                  if (parsed) updates[p] = parsed;
+                  if (parsed) {
+                    updates[p] = parsed;
+                    autoCheckedCourierPhonesRef.current.add(p);
+                    fetchedLiveCount++;
+                  }
                 } catch (singleErr: any) {
                   if (singleErr?.response?.status === 429) {
+                    isRateLimited = true;
                     autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
                   }
                 }
@@ -3451,6 +3509,17 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
 
         if (!isCancelled && Object.keys(updates).length > 0) {
           setCourierReports(prev => ({ ...prev, ...updates }));
+        }
+
+        if (!isCancelled) {
+          const remainingCount = pendingPhones.filter(
+            (p) => !updates[p] && !autoCheckedCourierPhonesRef.current.has(p),
+          ).length;
+          if (isRateLimited) {
+            followupTimer = setTimeout(() => setAutoCourierRetryTick((t) => t + 1), 5 * 60 * 1000 + 2000);
+          } else if (remainingCount > 0 && fetchedLiveCount > 0) {
+            followupTimer = setTimeout(() => setAutoCourierRetryTick((t) => t + 1), 3500);
+          }
         }
       } catch (err) {
         console.warn("Background courier rate fetch skipped:", err);
@@ -3468,8 +3537,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     fetchVisibleCourierStats();
     return () => {
       isCancelled = true;
+      if (followupTimer) clearTimeout(followupTimer);
     };
-  }, [isAdminOpen, isAdminVerified, adminTab, filteredOrders, adminOrdersLimit]);
+  }, [isAdminOpen, isAdminVerified, adminTab, filteredOrders, incompleteOrders, adminOrdersLimit, autoCourierRetryTick]);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(
     null,
   );
@@ -6398,6 +6468,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
         ...orderData,
         id: docRef.id
       });
+      window.history.pushState({ orderSuccess: true }, "", "/order-success");
       // Save phone profile in local storage for future autofills
       try {
         savePhoneProfile(phone, name, address, landingDistrict, landingThana, landingArea);

@@ -1019,6 +1019,91 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   });
 
   
+  app.get("/llms.txt", async (_req, res) => {
+    try {
+      const products = await getCachedProducts().catch(() => []);
+      const active = products.filter((p: any) => !p.deleted && p.isPublished !== false);
+      const lines = [
+        "# i SHOP BD (আই শপ বিডি)",
+        "",
+        "> Authentic Online Gadget, Fashion, Winter Koti & Lifestyle E-Commerce Store in Bangladesh (`https://ishopbd.com`).",
+        "",
+        "## Store Policy & Delivery",
+        "- Currency: BDT (৳)",
+        "- Payment: Cash on Delivery (COD), bKash, Nagad nationwide across 64 districts",
+        "- Catalog XML Feed: https://ishopbd.com/api/merchant-feed.xml",
+        "- Sitemap: https://ishopbd.com/sitemap.xml",
+        "",
+        `## Active Products (${active.length})`,
+        "",
+        ...active.map((p: any) => {
+          const slug = getProductSlug(p);
+          const stock = Array.isArray(p.variants) && p.variants.length > 0
+            ? p.variants.reduce((s: number, v: any) => s + Math.max(0, Number(v?.stock || 0)), 0)
+            : Number(p.stock ?? 10);
+          const avail = stock > 0 ? "In Stock" : (p.isComingSoon ? "Pre-Order" : "Out of Stock");
+          return `- [${p.name}](https://ishopbd.com/p/${encodeURIComponent(slug)}) — Price: ৳${Number(p.price || 0)} BDT | Category: ${p.category || "General"} | Availability: ${avail}`;
+        }),
+      ];
+      res.setHeader("Content-Type", "text/plain; charset=UTF-8");
+      res.setHeader("Cache-Control", "public, max-age=1800");
+      res.send(lines.join("\n") + "\n");
+    } catch (e: any) {
+      res.status(500).send(e.message);
+    }
+  });
+
+  app.get("/api/merchant-feed.xml", async (_req, res) => {
+    try {
+      const products = await getCachedProducts().catch(() => []);
+      const active = products.filter((p: any) => !p.deleted && p.isPublished !== false);
+      const esc = (v: unknown) =>
+        String(v ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      const itemsXml = active.map((p: any) => {
+        const slug = getProductSlug(p);
+        const link = `https://ishopbd.com/p/${encodeURIComponent(slug)}`;
+        const rawImg = String(p.image || "").trim();
+        const img = rawImg && !rawImg.startsWith("data:")
+          ? (rawImg.startsWith("http") ? rawImg : `https://ishopbd.com/${rawImg.replace(/^\/+/, "")}`)
+          : `https://ishopbd.com/api/product-image/${encodeURIComponent(p.id)}`;
+        const priceNum = Number(p.price || 0);
+        const origNum = Number(p.originalPrice || 0);
+        const stock = Array.isArray(p.variants) && p.variants.length > 0
+          ? p.variants.reduce((s: number, v: any) => s + Math.max(0, Number(v?.stock || 0)), 0)
+          : Number(p.stock ?? 10);
+        const availability = stock > 0 ? "in_stock" : (p.isComingSoon ? "preorder" : "out_of_stock");
+        const desc = esc(String(p.shortDescription || p.description || p.name || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4900));
+        return [
+          "    <item>",
+          `      <g:id>${esc(p.id)}</g:id>`,
+          `      <g:title>${esc(String(p.name || "").slice(0, 150))}</g:title>`,
+          `      <g:description>${desc || esc(p.name)}</g:description>`,
+          `      <g:link>${esc(link)}</g:link>`,
+          `      <g:image_link>${esc(img)}</g:image_link>`,
+          "      <g:condition>new</g:condition>",
+          `      <g:availability>${availability}</g:availability>`,
+          origNum > priceNum && priceNum > 0
+            ? `      <g:price>${origNum.toFixed(2)} BDT</g:price>\n      <g:sale_price>${priceNum.toFixed(2)} BDT</g:sale_price>`
+            : `      <g:price>${priceNum.toFixed(2)} BDT</g:price>`,
+          `      <g:brand>${esc(p.brand || "i SHOP BD")}</g:brand>`,
+          `      <g:product_type>${esc(p.category || "General")}</g:product_type>`,
+          `      <g:shipping><g:country>BD</g:country><g:price>${p.isFreeDelivery ? "0.00" : "80.00"} BDT</g:price></g:shipping>`,
+          "    </item>",
+        ].join("\n");
+      }).join("\n");
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:g="http://base.google.com/ns.0">\n  <channel>\n    <title>i SHOP BD Product Catalog</title>\n    <link>https://ishopbd.com</link>\n    <description>i SHOP BD Gadgets, Fashion &amp; Winter Koti Catalog</description>\n${itemsXml}\n  </channel>\n</rss>\n`;
+      res.setHeader("Content-Type", "application/xml; charset=UTF-8");
+      res.setHeader("Cache-Control", "public, max-age=1800");
+      res.send(xml);
+    } catch (e: any) {
+      res.status(500).send(e.message);
+    }
+  });
+
   app.get("/sitemap.xml", async (req, res) => {
     try {
       const distSitemapPath = path.join(process.cwd(), 'dist', 'sitemap.xml');
