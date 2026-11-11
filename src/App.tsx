@@ -59,7 +59,7 @@ const LandingPageEditorModal = lazy(() => import('./components/LandingPageEditor
 const MobileCategoryDrawer = lazy(() => import('./components/MobileCategoryDrawer').then(m => ({ default: m.MobileCategoryDrawer })));
 const LandingPageView = lazy(() => import('./components/LandingPageView'));
 import SiteFooter from './components/SiteFooter';
-import { printOrderInvoice, downloadOrdersCSV } from './utils/adminExports';
+import { printOrderInvoice, printBulkOrderStickers, downloadOrdersCSV } from './utils/adminExports';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Moon, Sun, PackageOpen } from "lucide-react";
 import {Edit3,
@@ -1044,7 +1044,7 @@ function App() {
   const [supportChats, setSupportChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [replyMessage, setReplyMessage] = useState("");
-  const [adminOrdersLimit, setAdminOrdersLimit] = useState(50);
+  const [adminOrdersLimit, setAdminOrdersLimit] = useState(100);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
     null,
   );
@@ -1883,6 +1883,12 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     setSelectedOrderIds(prev => 
       prev.includes(id) ? prev.filter(orderId => orderId !== id) : [...prev, id]
     );
+  };
+  const handleBulkPrintStickers = () => {
+    if (selectedOrderIds.length === 0) return;
+    const selectedOrders = filteredOrders.filter(o => selectedOrderIds.includes(o.id));
+    const ordersToPrint = selectedOrders.length > 0 ? selectedOrders : orderHistory.filter(o => selectedOrderIds.includes(o.id));
+    printBulkOrderStickers(ordersToPrint, siteConfig);
   };
   const handleBulkSendToSteadfast = async () => {
     if (selectedOrderIds.length === 0) return;
@@ -7201,15 +7207,13 @@ const handleSaveQuickEdit = async () => {
                 <option value="delivered">ডেলিভারড</option>
                 <option value="cancelled">ক্যান্সেল</option>
               </select>
-              <button 
-                onClick={() => {
-                   toast.success(`${selectedOrderIds.length} টি ইনভয়েস প্রিন্টের জন্য রেডি!`);
-                   setSelectedOrderIds([]);
-                }}
-                className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95 flex items-center gap-2"
+              <button
+                type="button"
+                onClick={handleBulkPrintStickers}
+                className="bg-gray-900 hover:bg-black text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
               >
                 <Printer size={16} />
-                <span className="hidden sm:inline">প্রিন্ট</span>
+                <span className="hidden sm:inline">স্টিকার প্রিন্ট</span>
               </button>
               
               <button 
@@ -8375,7 +8379,7 @@ const handleSaveQuickEdit = async () => {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminReviews, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, fetchAdminReviews, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleApproveReview, handleDeleteAdmin, handleDeleteBanner, handleDeleteReviewAdmin, handleDuplicateProduct, handleEditUserBalance, handlePrintInvoice, handleQuickEditOrderItems, handleRejectReview, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isAdminReviewsLoading, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isSyncingCourier, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, syncAllCourierStatuses, syncSingleCourierStatus, syncingOrderId, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
+        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminReviews, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, fetchAdminReviews, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleApproveReview, handleDeleteAdmin, handleDeleteBanner, handleDeleteReviewAdmin, handleDuplicateProduct, handleEditUserBalance, handleBulkPrintStickers, handlePrintInvoice, handleQuickEditOrderItems, handleRejectReview, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isAdminReviewsLoading, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isSyncingCourier, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, syncAllCourierStatuses, syncSingleCourierStatus, syncingOrderId, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
       </AnimatePresence>
       <AnimatePresence>
         {selectedOrderForDetails && (

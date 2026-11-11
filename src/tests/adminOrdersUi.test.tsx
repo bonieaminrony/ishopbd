@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import AdminOrdersTab, { AdminOrdersTabProps } from '../components/admin/AdminOrdersTab';
 import OrderDetailsModal from '../components/OrderDetailsModal';
+import { buildBulkOrderStickersHtml, renderCode39BarcodeSvg } from '../utils/adminExports';
 
 function makeBaseOrdersProps(overrides: Partial<AdminOrdersTabProps> = {}): AdminOrdersTabProps {
   return {
@@ -383,5 +384,92 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
       />
     );
     expect(screen.getByText(/Steadfast কুরিয়ার ডেলিভারি রেশিও/i)).toBeInTheDocument();
+  });
+
+  it('generates compact shipping stickers with shop logo, customer, courier tracking, and size/color without prices by default', () => {
+    const barcode = renderCode39BarcodeSvg('319143440');
+    expect(barcode).toContain('<svg');
+    expect(barcode).toContain('<rect');
+
+    const orders = [
+      {
+        id: 'ORD-000101',
+        customerName: 'Karim Ahmed',
+        customerPhone: '01711223344',
+        address: 'House 12, Road 4, Mirpur 10, Dhaka',
+        total: 1850,
+        deliveryArea: 'inside',
+        date: '11 Nov 2026',
+        courierName: 'Steadfast',
+        courierConsignmentId: '319143440',
+        courierTrackingId: 'SFR261110TEST1',
+        courierStatus: 'in_transit',
+        items: [
+          {
+            product: { name: 'Fashionable Koti', price: 1250 },
+            quantity: 2,
+            size: 'L',
+            color: 'Black',
+          },
+          {
+            product: { name: 'Smart Watch Ultra', price: 600 },
+            quantity: 1,
+            size: 'N/A',
+            color: 'N/A',
+          },
+        ],
+      },
+      {
+        id: 'ORD-000102',
+        customerName: 'Unbooked Customer',
+        customerPhone: '01899887766',
+        address: 'Bogura Sadar',
+        total: 990,
+        deliveryArea: 'outside',
+        items: [{ product: { name: 'Neckband Earphone' }, quantity: 1 }],
+      },
+    ];
+
+    const htmlDefault = buildBulkOrderStickersHtml(orders, {
+      shopName: 'i SHOP BD',
+      logoUrl: '/logo.png',
+      baseUrl: 'http://localhost:3000',
+    });
+
+    expect(htmlDefault).toContain('i SHOP BD');
+    expect(htmlDefault).toContain('http://localhost:3000/logo.png');
+    expect(htmlDefault).toContain('Karim Ahmed');
+    expect(htmlDefault).toContain('01711223344');
+    expect(htmlDefault).toContain('#319143440');
+    expect(htmlDefault).toContain('SFR261110TEST1');
+    expect(htmlDefault).toContain('Fashionable Koti');
+    expect(htmlDefault).toContain('Size: L');
+    expect(htmlDefault).toContain('Color: Black');
+    expect(htmlDefault).toContain('Smart Watch Ultra');
+    expect(htmlDefault).toContain('×2 pcs');
+    expect(htmlDefault).toContain('Unbooked Customer');
+    expect(htmlDefault).toContain('NOT BOOKED');
+    // Prices must remain hidden by default on stickers
+    expect(htmlDefault).not.toContain('body class=" show-prices"');
+    expect(htmlDefault).toContain('.sticker-price-block {\n      display: none;');
+
+    const htmlThermal = buildBulkOrderStickersHtml(orders, { layout: 'thermal' });
+    expect(htmlThermal).toContain('4in 6in');
+
+    // AdminOrdersTab surfaces the bulk Stickers button when orders are marked
+    const onBulkPrintStickers = vi.fn();
+    render(
+      <AdminOrdersTab
+        {...makeBaseOrdersProps({
+          orderHistory: orders,
+          filteredOrders: orders,
+          selectedOrderIds: ['ORD-000101', 'ORD-000102'],
+          onBulkPrintStickers,
+        })}
+      />
+    );
+    const bulkBtn = screen.getByRole('button', { name: /Stickers \(2\)/i });
+    fireEvent.click(bulkBtn);
+    expect(onBulkPrintStickers).toHaveBeenCalledTimes(1);
   });
 });

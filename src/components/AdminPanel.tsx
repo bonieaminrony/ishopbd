@@ -91,6 +91,7 @@ export interface AdminPanelProps {
   handleDuplicateProduct: any;
   handleEditUserBalance: any;
   handlePrintInvoice: any;
+  handleBulkPrintStickers?: any;
   handleQuickEditOrderItems: any;
   handleSaveBanner: any;
   handleSaveQuickEdit: any;
@@ -287,6 +288,7 @@ export default function AdminPanel(props: AdminPanelProps) {
     handleDuplicateProduct,
     handleEditUserBalance,
     handlePrintInvoice,
+    handleBulkPrintStickers,
     handleQuickEditOrderItems,
     handleRejectReview,
     handleSaveBanner,
@@ -728,6 +730,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     setCompletedOrderReceipt={setCompletedOrderReceipt}
                     sendToCourier={sendToCourier}
                     handlePrintInvoice={handlePrintInvoice}
+                    onBulkPrintStickers={handleBulkPrintStickers}
                     toggleBlacklist={toggleBlacklist}
                     blacklist={blacklist}
                     deleteOrder={deleteOrder}

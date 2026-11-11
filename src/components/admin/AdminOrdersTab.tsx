@@ -94,6 +94,7 @@ export interface AdminOrdersTabProps {
   setCompletedOrderReceipt: (order: any) => void;
   sendToCourier: (order: any) => void;
   handlePrintInvoice: (order: any) => void;
+  onBulkPrintStickers?: () => void;
   toggleBlacklist: (phone: string) => void;
   blacklist: string[];
   deleteOrder: (id: string) => void;
@@ -371,6 +372,7 @@ export default function AdminOrdersTab({
   setCompletedOrderReceipt,
   sendToCourier,
   handlePrintInvoice,
+  onBulkPrintStickers,
   toggleBlacklist,
   blacklist,
   deleteOrder,
@@ -581,6 +583,17 @@ export default function AdminOrdersTab({
             >
               <RefreshCcw size={15} className={isSyncingCourier ? 'animate-spin' : ''} />
               {isSyncingCourier ? 'Syncing...' : 'Sync Courier'}
+            </button>
+          )}
+          {Array.isArray(selectedOrderIds) && selectedOrderIds.length > 0 && onBulkPrintStickers && (
+            <button
+              type="button"
+              onClick={onBulkPrintStickers}
+              title="সিলেক্ট করা অর্ডারগুলোর পার্সেল স্টিকার প্রিন্ট করুন"
+              className="bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95 cursor-pointer"
+            >
+              <Printer size={15} />
+              Stickers ({selectedOrderIds.length})
             </button>
           )}
           <div className="relative font-sans" ref={exportDropdownRef}>
@@ -1661,7 +1674,7 @@ export default function AdminOrdersTab({
       {filteredOrders.length > adminOrdersLimit && (
         <div className="flex justify-center mt-6 mb-10">
           <button
-            onClick={() => setAdminOrdersLimit((prev) => prev + 50)}
+            onClick={() => setAdminOrdersLimit((prev) => prev + 100)}
             className="bg-white border-2 border-primary text-primary px-8 py-3 rounded-2xl font-bold text-sm hover:bg-primary hover:text-white transition-all shadow-lg active:scale-95 flex items-center gap-2"
           >
             <Plus size={18} /> Load More ({filteredOrders.length - adminOrdersLimit} remaining)
