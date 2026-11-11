@@ -25,7 +25,9 @@ import {
   getOrderTrackingSignals,
 } from './utils/tracking';
 import { getAdminAuthHeaders } from './utils/adminAuth';
+import { findMatchingAdminRecord, resolveAdminAccess } from './utils/adminRole';
 import { buildProductStructuredData } from './utils/productSchema';
+import type { CompleteIncompleteOrderPayload } from './components/admin/IncompleteOrderModal';
 import {
   CourierFraudReport,
   getCourierReportForPhone,
@@ -1552,6 +1554,7 @@ function App() {
     smsTemplateStart?: string;
     smsTemplateEnd?: string;
     isSmsConfirmEnabled?: boolean;
+    isReminderSmsEnabled?: boolean;
     isAiEnabled?: boolean;
     promoPopupEnabled?: boolean;
     promoPopupImage?: string;
@@ -1589,6 +1592,7 @@ checkoutWarningText: data.checkoutWarningText !== undefined ? data.checkoutWarni
           smsTemplateStart: data.smsTemplateStart || "",
           smsTemplateEnd: data.smsTemplateEnd || "",
           isSmsConfirmEnabled: data.isSmsConfirmEnabled !== undefined ? data.isSmsConfirmEnabled : true,
+          isReminderSmsEnabled: data.isReminderSmsEnabled !== undefined ? data.isReminderSmsEnabled : true,
           computerAppUrl: data.computerAppUrl || "",
           androidAppUrl: data.androidAppUrl || "",
           iphoneAppUrl: data.iphoneAppUrl || "",
@@ -1623,6 +1627,7 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
           smsTemplateStart: "",
           smsTemplateEnd: "",
           isSmsConfirmEnabled: true,
+          isReminderSmsEnabled: true,
           computerAppUrl: "",
           androidAppUrl: "",
           iphoneAppUrl: "",
@@ -2030,13 +2035,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       }
     }
     // Priority 2: Direct match in admin list
-    const found = adminList.find((a) => 
-      (a.id === user.uid) || 
-      (a.email?.toLowerCase().trim() === userEmail) || 
-      (a.id?.toLowerCase().trim() === userEmail) || 
-      (a.email?.toLowerCase().trim() === cleanEmail) || 
-      (a.id?.toLowerCase().trim() === cleanEmail)
-    );
+    const found = findMatchingAdminRecord(adminList, user);
     if (found && found.password && found.password.trim() === inputPass) {
       // Check for 2FA if enabled
       if (found.require2FA && found.phone) {
@@ -2387,17 +2386,11 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       unsub();
     };
   }, [user, isQuotaExceeded]);
-  const isMasterAdmin = useMemo(() => {
-    if (!user) return false;
-    const userEmail = (user.email || "").toLowerCase().trim();
-    const cleanEmail = userEmail.endsWith("@mobile.user") ? userEmail.replace("@mobile.user", "") : userEmail;
-    
-    const masterEmailsLower = masterEmails.map(e => e.toLowerCase().trim());
-    
-    if (masterEmailsLower.includes(userEmail) || masterEmailsLower.includes(cleanEmail)) return true;
-    
-    return myAdminDoc?.role === "admin" || myAdminDoc?.role === "owner";
-  }, [user, myAdminDoc, masterEmails]);
+  const resolvedAdminAccess = useMemo(
+    () => resolveAdminAccess({ user, myAdminDoc, adminList, masterEmails }),
+    [user, myAdminDoc, adminList, masterEmails],
+  );
+  const isMasterAdmin = resolvedAdminAccess.isMasterAdmin;
   const handleSendAdminOTP = async () => {
     const userEmail = user?.email || "";
     const cleanEmail = userEmail.endsWith("@mobile.user") ? userEmail.replace("@mobile.user", "") : userEmail;
@@ -2434,14 +2427,11 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       setIsSendingOTP(false);
     }
   };
-  const isAdmin = useMemo(() => {
-    if (!user) return false;
-    if (isMasterAdmin) return true;
-    const userEmail = user.email || "";
-    const cleanEmail = userEmail.endsWith("@mobile.user") ? userEmail.replace("@mobile.user", "") : userEmail;
-    
-    return myAdminDoc?.role === "admin" || myAdminDoc?.role === "owner" || myAdminDoc?.role === "moderator";
-  }, [user, isMasterAdmin, myAdminDoc]);
+  const isAdmin = resolvedAdminAccess.isAdmin;
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+    setAdminViewMode(resolvedAdminAccess.adminViewMode);
+  }, [user, isAdmin, resolvedAdminAccess.adminViewMode]);
 
   const [isAdminVerified, setIsAdminVerified] = useState(false);
   const [is2FAPending, setIs2FAPending] = useState(false);
@@ -3215,20 +3205,17 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       safeSetLocalStorage(STORAGE_KEYS.ADMINS, JSON.stringify(admins));
       
       if (user) {
-        const userEmail = (user.email || "").toLowerCase().trim();
-        const cleanEmail = userEmail.endsWith("@mobile.user") ? userEmail.replace("@mobile.user", "") : userEmail;
-        const masterEmailsLower = masterEmails.map(e => e.toLowerCase().trim());
-        const isMaster = masterEmailsLower.includes(userEmail) || masterEmailsLower.includes(cleanEmail);
-        const found = admins.find((a) => {
-          const aEmail = (a.email || "").toLowerCase().trim();
-          const aId = (a.id || "").toLowerCase().trim();
-          return (aId === user.uid) || (aEmail === userEmail) || (aId === userEmail) || (aEmail === cleanEmail) || (aId === cleanEmail);
+        const snapshotAccess = resolveAdminAccess({
+          user,
+          myAdminDoc,
+          adminList: admins,
+          masterEmails,
         });
-        
-        if (found || isMaster) {
-          const role = found?.role || (isMaster ? "admin" : "moderator");
-          setAdminViewMode(role === "admin" ? "full" : "support_only");
-          
+        const found = findMatchingAdminRecord(admins, user);
+
+        if (found || snapshotAccess.isMasterAdmin || snapshotAccess.isAdmin) {
+          setAdminViewMode(snapshotAccess.adminViewMode);
+
           const sessionVerified = localStorage.getItem(`admin_verified_${user.uid}`) === "true" ||
                                   sessionStorage.getItem(`admin_verified_${user.uid}`) === "true";
           if (sessionVerified) {
@@ -3757,7 +3744,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   }, [user, isAdmin, isQuotaExceeded]);
   // Background Poller for Abandoned Carts Auto SMS
   useEffect(() => {
-    if (!isAdmin) return; // Only run when admin is logged in
+    if (!isAdmin || siteConfig?.isReminderSmsEnabled === false) return; // Only run when admin is logged in & reminders enabled
     const checkAbandonedCarts = async () => {
       const oneHourAgo = Date.now() - (60 * 60 * 1000);
       
@@ -3786,7 +3773,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     };
     const intervalId = setInterval(checkAbandonedCarts, 5 * 60 * 1000); // Check every 5 minutes
     return () => clearInterval(intervalId);
-  }, [incompleteOrders, isAdmin]);
+  }, [incompleteOrders, isAdmin, siteConfig?.isReminderSmsEnabled]);
   const handleSyncMockData = async () => {
     if (!isAdminVerified || isQuotaExceeded) return;
     if (!confirm("আমরা ক? নিশ্চিত?")) return;
@@ -3967,6 +3954,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         checkoutWarningText: config.checkoutWarningText || "",
         smsTemplateStart: config.smsTemplateStart || "",
         isSmsConfirmEnabled: config.isSmsConfirmEnabled !== undefined ? config.isSmsConfirmEnabled : true,
+        isReminderSmsEnabled: config.isReminderSmsEnabled !== undefined ? config.isReminderSmsEnabled : true,
         smsTemplateEnd: config.smsTemplateEnd || "",
         supportPhone1: config.supportPhone1,
         supportPhone2: config.supportPhone2,
@@ -6710,6 +6698,158 @@ const handleSaveQuickEdit = async () => {
         toast.error("Failed to update info");
       }
     };
+    const handleCompleteIncompleteOrder = async (
+      incompleteOrder: any,
+      payload: CompleteIncompleteOrderPayload,
+    ) => {
+      const orderId = Date.now().toString();
+      const shortId = String(orderId).slice(-6).toUpperCase();
+      const isPreOrder = payload.items.some((item) => Boolean(item.isComingSoon || item.product?.isComingSoon));
+      const newOrder: any = {
+        orderId,
+        shortId,
+        customerName: payload.customerName,
+        customerPhone: payload.customerPhone,
+        address: payload.address,
+        deliveryArea: payload.deliveryArea,
+        deliveryCharge: payload.deliveryCharge,
+        discount: payload.discount,
+        subtotal: payload.subtotal,
+        total: payload.total,
+        codAmount: payload.total,
+        paymentMethod: payload.paymentMethod,
+        transId: payload.paymentMethod !== "cod" ? (payload.transId || "N/A") : "N/A",
+        note: payload.note,
+        isPreOrder,
+        items: payload.items.map((item) => {
+          const currentProd = products.find((p) => p.id === item.productId) || item.product;
+          const directSmsName = String(item.smsName || currentProd?.smsName || "").trim();
+          return {
+            product: {
+              id: item.productId || currentProd?.id || `custom_${orderId}`,
+              name: item.name,
+              smsName: directSmsName,
+              price: item.unitPrice,
+              buyingPrice: item.buyingPrice || currentProd?.buyingPrice || 0,
+              image: item.image || currentProd?.image || "",
+              colors: currentProd?.colors || [],
+              sizes: (currentProd as any)?.sizes || [],
+              variants: currentProd?.variants || [],
+              isComingSoon: Boolean(item.isComingSoon || currentProd?.isComingSoon),
+            },
+            smsName: directSmsName,
+            price: item.unitPrice,
+            quantity: item.quantity,
+            color: item.color ? item.color : undefined,
+            size: item.size ? item.size : undefined,
+          };
+        }),
+        date: new Date().toLocaleString("bn-BD"),
+        status: payload.status || "pending",
+        createdAt: serverTimestamp(),
+        customerEmail: incompleteOrder?.customerEmail || incompleteOrder?.email || "",
+        district: payload.district || incompleteOrder?.district || "",
+        userId: incompleteOrder?.userId || "guest",
+        source: "incomplete_order_recovered",
+        recoveredFromIncompleteId: incompleteOrder?.id || null,
+        purchaseTracked: payload.status === "confirmed",
+      };
+
+      const stockPromises = payload.items
+        .filter((item) => Boolean(item.productId) && products.some((p) => p.id === item.productId))
+        .map((item) => {
+          const currentProd = products.find((p) => p.id === item.productId)!;
+          const reqQty = Math.max(1, Number(item.quantity) || 1);
+          const updatePayload: any = {
+            salesCount: increment(reqQty),
+          };
+          if (Array.isArray(currentProd.variants) && currentProd.variants.length > 0) {
+            const updatedVariants = currentProd.variants.map((v: any) => {
+              const isMatch = (!item.color || v.name === item.color) && (!item.size || v.size === item.size);
+              if (isMatch) {
+                return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - reqQty) };
+              }
+              return v;
+            });
+            const newTotalStock = updatedVariants.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+            updatePayload.variants = updatedVariants;
+            updatePayload.stock = Math.max(0, newTotalStock);
+          } else {
+            const currentStock = Math.max(0, Number(currentProd.stock) || 0);
+            updatePayload.stock = Math.max(0, currentStock - reqQty);
+          }
+          return updateDoc(doc(db, "products", currentProd.id), updatePayload).catch(() => {});
+        });
+
+      await Promise.all([
+        setDoc(doc(db, "orders", orderId), newOrder),
+        ...stockPromises,
+      ]);
+
+      if (incompleteOrder?.id) {
+        await deleteDoc(doc(db, "incomplete_orders", incompleteOrder.id)).catch(() => {});
+        setIncompleteOrders((prev) => prev.filter((item) => item.id !== incompleteOrder.id));
+      }
+
+      const localOrder = {
+        ...newOrder,
+        id: orderId,
+        createdAt: new Date().toISOString(),
+      };
+      const updatedHistory = [localOrder, ...orderHistory];
+      setOrderHistory(updatedHistory);
+      try {
+        localStorage.setItem("ishopbd_orders", JSON.stringify(updatedHistory));
+      } catch (e) {
+        console.warn("Failed to save orders to localStorage:", e);
+      }
+
+      try {
+        axios.post("/api/confirm-order", newOrder).catch(() => {});
+      } catch {}
+
+      if (payload.status === "confirmed") {
+        try {
+          trackConfirmedOrderPurchase({
+            orderId,
+            total: newOrder.total,
+            items: newOrder.items,
+            customerName: newOrder.customerName,
+            customerPhone: newOrder.customerPhone,
+            customerEmail: newOrder.customerEmail,
+            district: newOrder.district,
+            deliveryArea: newOrder.deliveryArea,
+            userId: newOrder.userId,
+          });
+        } catch {}
+      }
+
+      if (payload.sendSms && newOrder.customerPhone) {
+        try {
+          const productNames = newOrder.items
+            .map((i: any) => {
+              const directSms = (i.smsName || i.product?.smsName || "").trim();
+              if (directSms) return directSms;
+              const fallback = (i.product?.name || i.name || "").trim();
+              return fallback.length > 25 ? fallback.substring(0, 25) + "..." : fallback;
+            })
+            .filter(Boolean)
+            .join(", ");
+          const message = `প্রিয় গ্রাহক, আপনার অর্ডারটি সফল হয়েছে
+${productNames}
+অর্ডার নাম্বার: #${shortId}
+মোট বিল: ৳${newOrder.total}
+নতুন পণ্য অর্ডার করতে ভিজিট করুন: www.ishopbd.com ধন্যবাদ!`;
+          fetch("/api/send-sms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: newOrder.customerPhone, message }),
+          }).catch(() => {});
+        } catch {}
+      }
+
+      toast.success(`অর্ডার #${shortId} সফলভাবে প্লেস হয়েছে!`);
+    };
     const handleUpdateOrderStatus = async (
     orderId: string,
     newStatus: string,
@@ -8379,7 +8519,7 @@ const handleSaveQuickEdit = async () => {
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminReviews, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, fetchAdminReviews, filteredOrders, formatOrderGroupDate, getCustomerStats, getOrderLocalDateString, handleAddAdmin, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleApproveReview, handleDeleteAdmin, handleDeleteBanner, handleDeleteReviewAdmin, handleDuplicateProduct, handleEditUserBalance, handleBulkPrintStickers, handlePrintInvoice, handleQuickEditOrderItems, handleRejectReview, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isAdminReviewsLoading, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isSyncingCourier, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, syncAllCourierStatuses, syncSingleCourierStatus, syncingOrderId, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
+        {isAdminOpen && <AdminPanel {...{ isAdminOpen, activeBanners, activeProductDropdown, addVariant, adminChatEndRef, adminEndDate, adminKeys, adminList, adminOrderAreaFilter, adminOrdersLimit, adminReplyingTo, adminReviews, adminStartDate, adminTab, adminViewMode, allOrderPhones, blacklist, bulkNotifForm, bulkSmsMessage, bulkSmsPage, bulkSmsProgress, bulkSmsResult, bulkSmsSearch, bulkSmsSelectedPhones, campaigns, categories, checkCourierReport, copyCategoryLink, copyLandingPageLink, courierReports, deleteCampaign, deleteCategory, deleteOrder, deleteProduct, deletingCatId, editingAdmin, editingBanner, editingCampaign, editingCategory, editingProduct, expenses, exportDropdownRef, exportOrdersToCSV, fetchAdminReviews, filteredOrders, formatOrderGroupDate, getCustomerStats, getProductPrice, getOrderLocalDateString, handleAddAdmin, handleCompleteIncompleteOrder, handleAdminChatImageUpload, handleAdminImageUpload, handleAdminMultiImageUpload, handleAdminReply, handleAdminVoiceToggle, handleApproveRefund, handleApproveReview, handleDeleteAdmin, handleDeleteBanner, handleDeleteReviewAdmin, handleDuplicateProduct, handleEditUserBalance, handleBulkPrintStickers, handlePrintInvoice, handleQuickEditOrderItems, handleRejectReview, handleSaveBanner, handleSaveQuickEdit, handleSaveSiteConfig, handleSelectAll, handleSelectOrder, handleSendBulkNotification, handleSendBulkSms, handleSendDirectNotification, handleSendIndividualSms, handleSetPrimaryImage, handleToggleReaction, handleUpdateAdmin, handleUpdateOrderStatus, handleUpdatePaymentMethod, handleVariantImageUpload, incompleteOrders, individualSmsMessage, individualSmsOrder, isAdminRecording, isAdminReviewsLoading, isExportDropdownOpen, isMasterAdmin, isSendingBulkNotif, isSendingBulkSms, isSendingIndividualSms, isSyncingCourier, isUsersLoading, limit, loadingCourierReports, newAdminEmail, newAdminPassword, newAdminPhone, newAdminRole, newBanner, notifications, openLandingEditor, orderHistory, orderSearchQuery, productDropdownRef, productFormErrors, products, query, quickEditData, quickEditOrderId, refundRequests, removeImage, removeVariant, replyMessage, reportTimeframe, saveCampaign, saveCategory, saveProduct, selectChat, selectedChat, selectedOrderIds, selectedOrderStatusFilter, sendToCourier, setActiveProductDropdown, setAdminEndDate, setAdminKeys, setAdminOrderAreaFilter, setAdminOrdersLimit, setAdminReplyingTo, setAdminStartDate, setAdminTab, setBulkNotifForm, setBulkSmsMessage, setBulkSmsPage, setBulkSmsSearch, setBulkSmsSelectedPhones, setCompletedOrderReceipt, setCourierModalPhone, setEditingAdmin, setEditingBanner, setEditingCampaign, setEditingCategory, setEditingProduct, setIndividualSmsMessage, setIndividualSmsOrder, setIsAdminOpen, setIsCourierHistoryModalOpen, setIsExportDropdownOpen, setIsQuotaExceeded, setIsUsersLoading, setNewAdminEmail, setNewAdminPassword, setNewAdminPhone, setNewAdminRole, setNewBanner, setNotifications, setOrderSearchQuery, setProductFormErrors, setQuickEditData, setQuickEditOrderId, setReplyMessage, setReportTimeframe, setSelectedChat, setSelectedOrderForDetails, setSelectedOrderStatusFilter, setShowOnlyPreOrders, setSiteConfig, setUserList, setUserListSearch, showOnlyPreOrders, siteConfig, supportChats, syncAllCourierStatuses, syncSingleCourierStatus, syncingOrderId, toggleBlacklist, togglePublishStatus, userList, userListSearch, isSavingProduct, deletedOrders, restoreOrder, permanentDeleteOrder }} />}
       </AnimatePresence>
       <AnimatePresence>
         {selectedOrderForDetails && (
@@ -8417,9 +8557,7 @@ const handleSaveQuickEdit = async () => {
             {/* Support & Orders / Messenger Button */}
             <button
               onClick={() => {
-                if (!isMasterAdmin) {
-                  setAdminViewMode("support_only");
-                }
+                setAdminViewMode(isMasterAdmin ? "full" : "support_only");
                 setAdminTab("orders");
                 setIsAdminOpen(true);
               }}

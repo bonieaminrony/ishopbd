@@ -77,7 +77,7 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
       ? rawLogo
       : `${baseUrl}${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`;
 
-  const defaultLayout = options.layout || 'a4-4';
+  const defaultLayout = options.layout || 'thermal';
   const showPriceClass = options.showPrice ? ' show-prices' : '';
 
   const stickerCardsHtml = safeOrders
@@ -146,11 +146,9 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
         <article class="sticker-card">
           <div class="sticker-header">
             <div class="shop-brand">
-              <img src="${escapeHtml(resolvedLogo)}" alt="${escapeHtml(shopName)}" class="shop-logo" onerror="this.style.display='none'" />
-              <div>
-                <div class="shop-name">${escapeHtml(shopName)}</div>
-                <div class="shop-sub">PARCEL SHIPPING LABEL</div>
-              </div>
+              <img src="${escapeHtml(resolvedLogo)}" alt="${escapeHtml(shopName)}" class="shop-logo" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';" />
+              <div class="shop-name-fallback">${escapeHtml(shopName)}</div>
+              <div class="shop-sub">PARCEL SHIPPING LABEL</div>
             </div>
             <div class="order-meta">
               <div class="order-id">ORDER #${escapeHtml(shortOrderId)}</div>
@@ -261,7 +259,7 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
     }
     .stickers-sheet.layout-a4-4 { grid-template-columns: repeat(2, 95mm); justify-content: center; gap: 6mm; }
     .stickers-sheet.layout-a4-6 { grid-template-columns: repeat(2, 95mm); justify-content: center; gap: 4mm; }
-    .stickers-sheet.layout-thermal { max-width: 96mm; grid-template-columns: 96mm; justify-content: center; }
+    .stickers-sheet.layout-thermal { max-width: 100mm; grid-template-columns: 96mm; justify-content: center; gap: 14px; }
 
     .sticker-card {
       background: #ffffff;
@@ -289,11 +287,11 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
       display: flex; justify-content: space-between; align-items: center;
       border-bottom: 1.5px solid #e2e8f0; padding-bottom: 6px; gap: 8px;
     }
-    .shop-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .shop-logo { height: 28px; width: auto; max-width: 84px; object-fit: contain; }
-    .shop-name { font-size: 13px; font-weight: 900; color: #0f172a; line-height: 1.1; }
+    .shop-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+    .shop-logo { height: 28px; width: auto; max-width: 140px; object-fit: contain; display: block; }
+    .shop-name-fallback { display: none; font-size: 13px; font-weight: 900; color: #0f172a; line-height: 1.1; }
     .shop-sub { font-size: 8px; font-weight: 800; color: #64748b; letter-spacing: 0.08em; }
-    .order-meta { text-align: right; shrink: 0; }
+    .order-meta { text-align: right; flex-shrink: 0; }
     .order-id { font-size: 11px; font-weight: 900; color: #0f172a; background: #f1f5f9; padding: 2px 7px; border-radius: 6px; }
     .order-date { font-size: 9px; font-weight: 600; color: #64748b; margin-top: 2px; }
 
@@ -377,9 +375,9 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
     </div>
     <div class="toolbar-right">
       <select id="layout-select" class="select-layout" onchange="const s=document.getElementById('sheet'); s.className='stickers-sheet layout-'+this.value; document.getElementById('page-size-style').textContent = this.value === 'thermal' ? '@page { size: 4in 6in; margin: 2mm; }' : '@page { size: A4 portrait; margin: 6mm; }';">
+        <option value="thermal"${defaultLayout === 'thermal' ? ' selected' : ''}>স্টিকার রোল (১টি করে সিরিয়াল · 4×6 in)</option>
         <option value="a4-4"${defaultLayout === 'a4-4' ? ' selected' : ''}>A4 স্টিকার (৪টি/পৃষ্ঠা · 95×132mm)</option>
         <option value="a4-6"${defaultLayout === 'a4-6' ? ' selected' : ''}>A4 কমপ্যাক্ট (৬টি/পৃষ্ঠা · 95×88mm)</option>
-        <option value="thermal"${defaultLayout === 'thermal' ? ' selected' : ''}>Thermal Sticker (4×6 in)</option>
       </select>
       <label class="toggle-label">
         <input type="checkbox" id="toggle-price" ${options.showPrice ? 'checked' : ''} onchange="document.body.classList.toggle('show-prices', this.checked)" />
@@ -412,7 +410,7 @@ export function printBulkOrderStickers(orders: any[], siteConfig?: any): void {
     shopName: siteConfig?.siteName || 'i SHOP BD',
     logoUrl: siteConfig?.logo || '/logo.png',
     baseUrl: typeof window !== 'undefined' ? window.location.origin : '',
-    layout: 'a4-4',
+    layout: 'thermal',
     showPrice: false,
   });
 

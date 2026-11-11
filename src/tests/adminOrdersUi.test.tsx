@@ -1,7 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import AdminOrdersTab, { AdminOrdersTabProps } from '../components/admin/AdminOrdersTab';
+import AdminIncompleteOrdersTab from '../components/admin/AdminIncompleteOrdersTab';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import { buildBulkOrderStickersHtml, renderCode39BarcodeSvg } from '../utils/adminExports';
 
@@ -436,8 +437,11 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
       baseUrl: 'http://localhost:3000',
     });
 
-    expect(htmlDefault).toContain('i SHOP BD');
     expect(htmlDefault).toContain('http://localhost:3000/logo.png');
+    expect(htmlDefault).toContain('PARCEL SHIPPING LABEL');
+    expect(htmlDefault).toContain('layout-thermal');
+    expect(htmlDefault).toContain('4in 6in');
+    expect(htmlDefault).not.toContain('class="shop-name"');
     expect(htmlDefault).toContain('Karim Ahmed');
     expect(htmlDefault).toContain('01711223344');
     expect(htmlDefault).toContain('#319143440');
@@ -471,5 +475,122 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
     const bulkBtn = screen.getByRole('button', { name: /Stickers \(2\)/i });
     fireEvent.click(bulkBtn);
     expect(onBulkPrintStickers).toHaveBeenCalledTimes(1);
+
+    // Optional explicit A4 grid stays available when requested
+    const htmlA4 = buildBulkOrderStickersHtml(orders, { layout: 'a4-4' });
+    expect(htmlA4).toContain('layout-a4-4');
+  });
+
+  it('opens IncompleteOrderModal from incomplete order row, edits size/color/qty/pricing/delivery and places order', async () => {
+    const checkCourierReport = vi.fn();
+    const onCompleteIncompleteOrder = vi.fn().mockResolvedValue(undefined);
+    const mockProducts = [
+      {
+        id: 'prod-koti-1',
+        name: 'Premium Koti',
+        smsName: 'Koti',
+        price: 500,
+        buyingPrice: 300,
+        image: '/koti.png',
+        colors: ['Black', 'White'],
+        sizes: ['M', 'L', 'XL'],
+        variants: [],
+      },
+    ];
+    const mockIncompleteOrders = [
+      {
+        id: 'sess_inc_1',
+        name: 'অজ্ঞাত ক্রেতা',
+        phone: '01712345678',
+        address: 'Mirpur 10',
+        district: 'ঢাকা',
+        type: 'cart_checkout',
+        totalAmount: 500,
+        items: [
+          {
+            id: 'prod-koti-1',
+            name: 'Premium Koti',
+            price: 500,
+            quantity: 1,
+            size: 'M',
+            color: 'Black',
+            image: '/koti.png',
+          },
+        ],
+      },
+    ];
+
+    render(
+      <AdminIncompleteOrdersTab
+        incompleteOrders={mockIncompleteOrders}
+        getCustomerStats={() => ({ total: 2, delivered: 1 })}
+        individualSmsOrder={null}
+        setIndividualSmsOrder={vi.fn()}
+        individualSmsMessage=""
+        setIndividualSmsMessage={vi.fn()}
+        handleSendIndividualSms={vi.fn()}
+        isSendingIndividualSms={false}
+        products={mockProducts}
+        getProductPrice={(prod, _qty) => Number(prod?.price || 0)}
+        courierReports={{
+          '01712345678': {
+            total_parcel: 8,
+            total_delivered: 7,
+            total_cancelled: 1,
+            total_fraud_report: 0,
+          },
+        }}
+        loadingCourierReports={{}}
+        checkCourierReport={checkCourierReport}
+        siteConfig={{ isSmsConfirmEnabled: true }}
+        onCompleteIncompleteOrder={onCompleteIncompleteOrder}
+      />,
+    );
+
+    const verifyBtns = screen.getAllByRole('button', { name: /Verify & Order/i });
+    fireEvent.click(verifyBtns[0]);
+
+    // Modal opened with courier & website stats visible
+    expect(screen.getByRole('dialog', { name: /Verify and Complete Incomplete Order/i })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Customer Name'), { target: { value: 'Md. Hasan' } });
+    fireEvent.change(screen.getByLabelText('Customer Phone'), { target: { value: '01712345678' } });
+    fireEvent.change(screen.getByLabelText('Delivery Address'), { target: { value: 'Road 4, Dhanmondi, Dhaka' } });
+
+    // Edit Size, Color, Quantity, Unit Price, Delivery Charge, Discount
+    fireEvent.change(screen.getByLabelText('Size 1'), { target: { value: 'XL' } });
+    fireEvent.change(screen.getByLabelText('Color 1'), { target: { value: 'White' } });
+    fireEvent.click(screen.getByLabelText('Increase quantity 1'));
+    fireEvent.change(screen.getByLabelText('Unit Price 1'), { target: { value: '450' } });
+    fireEvent.change(screen.getByLabelText('Delivery Charge'), { target: { value: '70' } });
+    fireEvent.change(screen.getByLabelText('Discount'), { target: { value: '50' } });
+    fireEvent.change(screen.getByLabelText('Order Status'), { target: { value: 'confirmed' } });
+
+    // 2 * 450 + 70 - 50 = 920
+    expect((screen.getByLabelText('Final Total') as HTMLInputElement).value).toBe('920');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Place Order/i }));
+    });
+
+    expect(onCompleteIncompleteOrder).toHaveBeenCalledTimes(1);
+
+    const [passedOrder, passedPayload] = onCompleteIncompleteOrder.mock.calls[0];
+    expect(passedOrder.id).toBe('sess_inc_1');
+    expect(passedPayload.customerName).toBe('Md. Hasan');
+    expect(passedPayload.customerPhone).toBe('01712345678');
+    expect(passedPayload.address).toBe('Road 4, Dhanmondi, Dhaka');
+    expect(passedPayload.deliveryCharge).toBe(70);
+    expect(passedPayload.discount).toBe(50);
+    expect(passedPayload.subtotal).toBe(900);
+    expect(passedPayload.total).toBe(920);
+    expect(passedPayload.status).toBe('confirmed');
+    expect(passedPayload.items[0]).toMatchObject({
+      productId: 'prod-koti-1',
+      size: 'XL',
+      color: 'White',
+      quantity: 2,
+      unitPrice: 450,
+    });
   });
 });

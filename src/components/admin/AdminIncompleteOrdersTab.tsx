@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Copy, MessageSquare, Package, Phone, Send, ShoppingCart, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Copy, MessageSquare, Package, Phone, Send, ShoppingCart, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { formatEnglishDateTime } from '../../utils/helpers';
+import IncompleteOrderModal, { CompleteIncompleteOrderPayload } from './IncompleteOrderModal';
 
 export interface AdminIncompleteOrdersTabProps {
   incompleteOrders: any[];
@@ -15,6 +16,16 @@ export interface AdminIncompleteOrdersTabProps {
   setIndividualSmsMessage: (msg: string) => void;
   handleSendIndividualSms: () => void;
   isSendingIndividualSms: boolean;
+  products?: any[];
+  getProductPrice?: (product: any, qty: number) => number;
+  courierReports?: Record<string, any>;
+  loadingCourierReports?: Record<string, boolean>;
+  checkCourierReport?: (phone: string, forceRefresh?: boolean) => void;
+  siteConfig?: any;
+  onCompleteIncompleteOrder?: (
+    incompleteOrder: any,
+    payload: CompleteIncompleteOrderPayload,
+  ) => Promise<void>;
 }
 
 export default function AdminIncompleteOrdersTab({
@@ -26,7 +37,16 @@ export default function AdminIncompleteOrdersTab({
   setIndividualSmsMessage,
   handleSendIndividualSms,
   isSendingIndividualSms,
+  products = [],
+  getProductPrice,
+  courierReports,
+  loadingCourierReports,
+  checkCourierReport,
+  siteConfig,
+  onCompleteIncompleteOrder,
 }: AdminIncompleteOrdersTabProps) {
+  const [verifyingOrder, setVerifyingOrder] = useState<any | null>(null);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -118,6 +138,16 @@ export default function AdminIncompleteOrdersTab({
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
+                            {onCompleteIncompleteOrder && (
+                              <button
+                                type="button"
+                                onClick={() => setVerifyingOrder(order)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-bold hover:bg-indigo-700 transition-all shadow-2xs cursor-pointer"
+                                title="Verify & Place Order"
+                              >
+                                <CheckCircle2 size={11} /> Order
+                              </button>
+                            )}
                             <span className="text-[10px] font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-full border border-slate-200/80 shadow-2xs whitespace-nowrap">
                               Total: {stats.total || 1}
                             </span>
@@ -318,7 +348,17 @@ export default function AdminIncompleteOrdersTab({
                           {formatEnglishDateTime(order.date || order.updatedAt || order.createdAt)}
                         </td>
                         <td className="p-4">
-                          <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                            {onCompleteIncompleteOrder && (
+                              <button
+                                type="button"
+                                onClick={() => setVerifyingOrder(order)}
+                                className="inline-flex items-center justify-center gap-1 bg-indigo-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-xs shadow-indigo-600/20 active:scale-95 cursor-pointer"
+                                title="Verify, Edit & Place Order"
+                              >
+                                <CheckCircle2 size={13} /> Verify &amp; Order
+                              </button>
+                            )}
                             {hasRealPhone ? (
                               <>
                                 <a
@@ -438,6 +478,21 @@ export default function AdminIncompleteOrdersTab({
           </>
         )}
       </div>
+
+      {verifyingOrder && onCompleteIncompleteOrder && (
+        <IncompleteOrderModal
+          order={verifyingOrder}
+          onClose={() => setVerifyingOrder(null)}
+          products={products}
+          getProductPrice={getProductPrice}
+          getCustomerStats={getCustomerStats}
+          courierReports={courierReports}
+          loadingCourierReports={loadingCourierReports}
+          checkCourierReport={checkCourierReport}
+          siteConfig={siteConfig}
+          onCompleteOrder={onCompleteIncompleteOrder}
+        />
+      )}
     </div>
   );
 }

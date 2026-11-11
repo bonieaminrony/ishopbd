@@ -78,8 +78,10 @@ export interface AdminPanelProps {
   filteredOrders: any;
   formatOrderGroupDate: any;
   getCustomerStats: any;
+  getProductPrice?: any;
   getOrderLocalDateString: any;
   handleAddAdmin: any;
+  handleCompleteIncompleteOrder?: any;
   handleAdminChatImageUpload: any;
   handleAdminImageUpload: any;
   handleAdminMultiImageUpload: any;
@@ -273,8 +275,10 @@ export default function AdminPanel(props: AdminPanelProps) {
     filteredOrders,
     formatOrderGroupDate,
     getCustomerStats,
+    getProductPrice,
     getOrderLocalDateString,
     handleAddAdmin,
+    handleCompleteIncompleteOrder,
     handleAdminChatImageUpload,
     handleAdminImageUpload,
     handleAdminMultiImageUpload,
@@ -746,6 +750,13 @@ export default function AdminPanel(props: AdminPanelProps) {
                     setIndividualSmsMessage={setIndividualSmsMessage}
                     handleSendIndividualSms={handleSendIndividualSms}
                     isSendingIndividualSms={isSendingIndividualSms}
+                    products={products}
+                    getProductPrice={getProductPrice}
+                    courierReports={courierReports}
+                    loadingCourierReports={loadingCourierReports}
+                    checkCourierReport={checkCourierReport}
+                    siteConfig={siteConfig}
+                    onCompleteIncompleteOrder={handleCompleteIncompleteOrder}
                   />
                 )}
                 {adminTab === "products" && (
@@ -1620,6 +1631,23 @@ export default function AdminPanel(props: AdminPanelProps) {
                                     onChange={(e) => setSiteConfig(prev => prev ? {...prev, isSmsConfirmEnabled: e.target.checked} : null)}
                                     className="w-5 h-5 accent-primary rounded border-gray-300"
                                   />
+                                </div>
+                                {/* Customer Reminder SMS Toggle */}
+                                <div className="flex items-center justify-between bg-white border border-blue-100 rounded-xl px-4 py-3">
+                                  <div>
+                                    <p className="text-sm font-bold text-gray-700">Customer Reminder Message</p>
+                                    <p className="text-xs text-gray-400">চালু থাকলে অসম্পূর্ণ অর্ডার/কার্টের ১ ঘণ্টা পর কাস্টমার অটো রিমাইন্ডার SMS পাবে; বন্ধ থাকলে পাবে না</p>
+                                  </div>
+                                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      aria-label="Customer Reminder Message"
+                                      checked={siteConfig?.isReminderSmsEnabled !== false}
+                                      onChange={(e) => setSiteConfig(prev => prev ? {...prev, isReminderSmsEnabled: e.target.checked} : null)}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                  </label>
                                 </div>
                               </div>
                             </div>

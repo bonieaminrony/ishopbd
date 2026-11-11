@@ -647,4 +647,211 @@ describe('Customer Photo Review - Admin Moderation System', () => {
     });
     expect(handleReject).toHaveBeenCalled();
   });
+
+  it('toggles Customer Reminder Message setting in AdminPanel Settings tab', async () => {
+    const onSiteConfigChange = vi.fn();
+    function ReminderSettingsHarness() {
+      const [cfg, setCfg] = React.useState<any>({ isReminderSmsEnabled: true });
+      return (
+        <AdminPanel
+          isAdminOpen={true}
+          adminTab="settings"
+          adminViewMode="full"
+          adminReviews={[]}
+          handleApproveReview={vi.fn()}
+          handleRejectReview={vi.fn()}
+          handleDeleteReviewAdmin={vi.fn()}
+          activeBanners={[]}
+          activeProductDropdown={null}
+          addVariant={vi.fn()}
+          adminChatEndRef={{ current: null }}
+          adminEndDate=""
+          adminKeys={[]}
+          adminList={[]}
+          adminOrderAreaFilter="all"
+          adminOrdersLimit={50}
+          adminReplyingTo={null}
+          adminStartDate=""
+          allOrderPhones={[]}
+          blacklist={[]}
+          bulkNotifForm={{ title: '', message: '', target: 'all', sound: 'default', channel: 'app' }}
+          bulkSmsMessage=""
+          bulkSmsPage={1}
+          bulkSmsProgress={0}
+          bulkSmsResult={null}
+          bulkSmsSearch=""
+          bulkSmsSelectedPhones={new Set()}
+          campaigns={[]}
+          categories={[]}
+          checkCourierReport={vi.fn()}
+          copyCategoryLink={vi.fn()}
+          copyLandingPageLink={vi.fn()}
+          courierReports={{}}
+          deleteCampaign={vi.fn()}
+          deleteCategory={vi.fn()}
+          deleteOrder={vi.fn()}
+          deleteProduct={vi.fn()}
+          deletingCatId={null}
+          editingAdmin={null}
+          editingBanner={null}
+          editingCampaign={null}
+          editingCategory={null}
+          editingProduct={null}
+          expenses={[]}
+          exportDropdownRef={{ current: null }}
+          exportOrdersToCSV={vi.fn()}
+          filteredOrders={[]}
+          formatOrderGroupDate={vi.fn()}
+          getCustomerStats={vi.fn()}
+          getOrderLocalDateString={vi.fn()}
+          handleAddAdmin={vi.fn()}
+          handleAdminChatImageUpload={vi.fn()}
+          handleAdminImageUpload={vi.fn()}
+          handleAdminMultiImageUpload={vi.fn()}
+          handleAdminReply={vi.fn()}
+          handleAdminVoiceToggle={vi.fn()}
+          handleApproveRefund={vi.fn()}
+          handleDeleteAdmin={vi.fn()}
+          handleDeleteBanner={vi.fn()}
+          handleDuplicateProduct={vi.fn()}
+          handleEditUserBalance={vi.fn()}
+          handlePrintInvoice={vi.fn()}
+          handleQuickEditOrderItems={vi.fn()}
+          handleSaveBanner={vi.fn()}
+          handleSaveQuickEdit={vi.fn()}
+          handleSaveSiteConfig={vi.fn()}
+          handleSelectAll={vi.fn()}
+          handleSelectOrder={vi.fn()}
+          handleSendBulkNotification={vi.fn()}
+          handleSendBulkSms={vi.fn()}
+          handleSendDirectNotification={vi.fn()}
+          handleSendIndividualSms={vi.fn()}
+          handleToggleReaction={vi.fn()}
+          handleUpdateAdmin={vi.fn()}
+          handleUpdateOrderStatus={vi.fn()}
+          handleUpdatePaymentMethod={vi.fn()}
+          handleVariantImageUpload={vi.fn()}
+          incompleteOrders={[]}
+          individualSmsMessage=""
+          individualSmsOrder={null}
+          isAdminRecording={false}
+          isExportDropdownOpen={false}
+          isMasterAdmin={true}
+          isSendingBulkNotif={false}
+          isSendingBulkSms={false}
+          isSendingIndividualSms={false}
+          isUsersLoading={false}
+          limit={vi.fn()}
+          loadingCourierReports={{}}
+          newAdminEmail=""
+          newAdminPassword=""
+          newAdminPhone=""
+          newAdminRole="admin"
+          newBanner={{}}
+          notifications={[]}
+          openLandingEditor={vi.fn()}
+          orderHistory={[]}
+          orderSearchQuery=""
+          productDropdownRef={{ current: null }}
+          productFormErrors={{}}
+          products={[]}
+          query={vi.fn()}
+          quickEditData={{}}
+          quickEditOrderId={null}
+          refundRequests={[]}
+          removeImage={vi.fn()}
+          removeVariant={vi.fn()}
+          replyMessage=""
+          reportTimeframe="28d"
+          saveCampaign={vi.fn()}
+          saveCategory={vi.fn()}
+          saveProduct={vi.fn()}
+          selectChat={vi.fn()}
+          selectedChat={null}
+          selectedOrderIds={new Set()}
+          selectedOrderStatusFilter="all"
+          sendToCourier={vi.fn()}
+          setActiveProductDropdown={vi.fn()}
+          setAdminEndDate={vi.fn()}
+          setAdminKeys={vi.fn()}
+          setAdminOrderAreaFilter={vi.fn()}
+          setAdminOrdersLimit={vi.fn()}
+          setAdminReplyingTo={vi.fn()}
+          setAdminStartDate={vi.fn()}
+          setAdminTab={vi.fn()}
+          setBulkNotifForm={vi.fn()}
+          setBulkSmsMessage={vi.fn()}
+          setBulkSmsPage={vi.fn()}
+          setBulkSmsSearch={vi.fn()}
+          setBulkSmsSelectedPhones={vi.fn()}
+          setCompletedOrderReceipt={vi.fn()}
+          setCourierModalPhone={vi.fn()}
+          setEditingAdmin={vi.fn()}
+          setEditingBanner={vi.fn()}
+          setEditingCampaign={vi.fn()}
+          setEditingCategory={vi.fn()}
+          setEditingProduct={vi.fn()}
+          setIndividualSmsMessage={vi.fn()}
+          setIndividualSmsOrder={vi.fn()}
+          setIsAdminOpen={vi.fn()}
+          setIsCourierHistoryModalOpen={vi.fn()}
+          setIsExportDropdownOpen={vi.fn()}
+          setIsQuotaExceeded={vi.fn()}
+          setIsUsersLoading={vi.fn()}
+          setNewAdminEmail={vi.fn()}
+          setNewAdminPassword={vi.fn()}
+          setNewAdminPhone={vi.fn()}
+          setNewAdminRole={vi.fn()}
+          setNewBanner={vi.fn()}
+          setNotifications={vi.fn()}
+          setOrderSearchQuery={vi.fn()}
+          setProductFormErrors={vi.fn()}
+          setQuickEditData={vi.fn()}
+          setQuickEditOrderId={vi.fn()}
+          setReplyMessage={vi.fn()}
+          setReportTimeframe={vi.fn()}
+          setSelectedChat={vi.fn()}
+          setSelectedOrderForDetails={vi.fn()}
+          setSelectedOrderStatusFilter={vi.fn()}
+          setShowOnlyPreOrders={vi.fn()}
+          setSiteConfig={(updater: any) => {
+            setCfg((prev: any) => {
+              const next = typeof updater === 'function' ? updater(prev) : updater;
+              onSiteConfigChange(next);
+              return next;
+            });
+          }}
+          setUserList={vi.fn()}
+          setUserListSearch={vi.fn()}
+          showOnlyPreOrders={false}
+          siteConfig={cfg}
+          supportChats={[]}
+          toggleBlacklist={vi.fn()}
+          togglePublishStatus={vi.fn()}
+          userList={[]}
+          userListSearch=""
+          isSavingProduct={false}
+          deletedOrders={[]}
+          restoreOrder={vi.fn()}
+          permanentDeleteOrder={vi.fn()}
+        />
+      );
+    }
+
+    render(<ReminderSettingsHarness />);
+
+    const toggle = screen.getByLabelText('Customer Reminder Message') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(toggle.checked).toBe(false);
+    expect(onSiteConfigChange).toHaveBeenLastCalledWith({ isReminderSmsEnabled: false });
+
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(toggle.checked).toBe(true);
+    expect(onSiteConfigChange).toHaveBeenLastCalledWith({ isReminderSmsEnabled: true });
+  });
 });
