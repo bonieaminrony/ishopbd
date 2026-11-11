@@ -297,9 +297,11 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
       />
     );
 
-    // Score-only Steadfast response displays percentage delivery/cancel rates
-    expect(screen.getAllByText('97%').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('2%').length).toBeGreaterThanOrEqual(2);
+    // Score-only Steadfast response displays compact inline pill beside customer name + Delivery Rate column
+    expect(screen.getByText('SF 97%')).toBeInTheDocument();
+    expect(screen.getByText('97%')).toBeInTheDocument();
+    expect(screen.getAllByText(/97%/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('2%')).toBeInTheDocument();
     expect(screen.getByText('Total: 25+')).toBeInTheDocument();
 
     // Parcel-count response displays delivered/cancelled counts + FRAUD badge

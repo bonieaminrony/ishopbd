@@ -1095,7 +1095,7 @@ export default function AdminOrdersTab({
                             </div>
                           ) : (
                             <>
-                              <div className="flex items-center gap-2 flex-nowrap max-w-[350px]">
+                              <div className="flex items-center gap-1.5 flex-nowrap max-w-[350px]">
                                 <span
                                   className="text-[14px] font-bold text-slate-800 truncate shrink"
                                   title={order.customerName}
@@ -1104,37 +1104,90 @@ export default function AdminOrdersTab({
                                 </span>
                                 {(() => {
                                   const custStats = getCustomerStats(order.customerPhone || '');
-                                  if (custStats.cancelled > custStats.delivered && custStats.cancelled >= 1) {
-                                    return (
+                                  const report = getCourierReportForPhone(courierReports, order.customerPhone);
+                                  const isChecking = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
+                                  const rateDisplay = getOrderCourierRateDisplay(report, custStats, isChecking);
+                                  const hasCourier = rateDisplay.source === 'courier' && Boolean(report);
+
+                                  const customerBadge =
+                                    custStats.cancelled > custStats.delivered && custStats.cancelled >= 1 ? (
                                       <span
-                                        className="bg-rose-100 text-rose-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-rose-200 animate-pulse shrink-0"
-                                        title="High Cancel Rate"
+                                        className="bg-rose-100 text-rose-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-rose-200 animate-pulse shrink-0"
+                                        title="High Cancel Rate (Website)"
                                       >
                                         RISK
                                       </span>
-                                    );
-                                  }
-                                  if (custStats.delivered > custStats.cancelled && custStats.delivered >= 1) {
-                                    return (
+                                    ) : custStats.delivered > custStats.cancelled && custStats.delivered >= 1 ? (
                                       <span
-                                        className="bg-emerald-100 text-emerald-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0"
-                                        title="Good Customer"
+                                        className="bg-emerald-100 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-emerald-200 shrink-0"
+                                        title="Good Customer (Website)"
                                       >
                                         GOOD
                                       </span>
-                                    );
-                                  }
-                                  if (custStats.delivered === 0 && custStats.cancelled === 0) {
-                                    return (
+                                    ) : !hasCourier && !isChecking && custStats.delivered === 0 && custStats.cancelled === 0 ? (
                                       <span
-                                        className="bg-blue-100 text-blue-700 text-[9px] font-bold px-2 py-0.5 rounded-full border border-blue-200 animate-pulse shrink-0"
+                                        className="bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 animate-pulse shrink-0"
                                         title="New Customer"
                                       >
                                         VERIFY
                                       </span>
-                                    );
-                                  }
-                                  return null;
+                                    ) : null;
+
+                                  const compactCourierLabel = hasCourier && report
+                                    ? report.total_fraud_report > 0
+                                      ? `FRAUD (${report.total_fraud_report})`
+                                      : report.total_parcel > 0
+                                      ? `SF ${report.total_delivered}/${report.total_parcel}`
+                                      : `SF ${rateDisplay.successText}`
+                                    : '';
+
+                                  const successPct =
+                                    report && report.delivery_rate !== undefined && report.delivery_rate !== null
+                                      ? Number(report.delivery_rate)
+                                      : report && report.total_parcel > 0
+                                      ? Math.round((report.total_delivered / report.total_parcel) * 100)
+                                      : 100;
+                                  const cancelPct =
+                                    report && report.cancellation_rate !== undefined && report.cancellation_rate !== null
+                                      ? Number(report.cancellation_rate)
+                                      : report && report.total_parcel > 0
+                                      ? Math.round((report.total_cancelled / report.total_parcel) * 100)
+                                      : 0;
+                                  const isCourierRisky = cancelPct > 40 || (Boolean(report?.total_cancelled) && successPct < 60);
+
+                                  return (
+                                    <>
+                                      {customerBadge}
+                                      {hasCourier && report ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCourierModalPhone(order.customerPhone);
+                                            setIsCourierHistoryModalOpen(true);
+                                          }}
+                                          title={rateDisplay.tooltip}
+                                          className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap transition-transform hover:scale-105 cursor-pointer ${
+                                            report.total_fraud_report > 0
+                                              ? 'bg-red-600 text-white border-red-700 animate-pulse'
+                                              : isCourierRisky
+                                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          }`}
+                                        >
+                                          {compactCourierLabel}
+                                        </button>
+                                      ) : isChecking ? (
+                                        <span
+                                          className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200 shrink-0"
+                                          title="Checking Steadfast courier history..."
+                                        >
+                                          <Loader2 size={8} className="animate-spin" />
+                                          SF
+                                        </span>
+                                      ) : null}
+                                    </>
+                                  );
                                 })()}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
@@ -1142,105 +1195,6 @@ export default function AdminOrdersTab({
                               </div>
                             </>
                           )}
-                          {(() => {
-                            const report = getCourierReportForPhone(courierReports, order.customerPhone);
-                            const isChecking = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
-                            if (!report) {
-                              if (!isChecking) return null;
-                              return (
-                                <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mt-1.5">
-                                  <Loader2 size={10} className="animate-spin" />
-                                  <span>Steadfast রেশিও লোড হচ্ছে...</span>
-                                </div>
-                              );
-                            }
-                            const successRate =
-                              report.delivery_rate !== undefined && report.delivery_rate !== null
-                                ? Number(report.delivery_rate)
-                                : report.total_parcel > 0
-                                ? Math.round((report.total_delivered / report.total_parcel) * 100)
-                                : 0;
-                            const cancellationRate =
-                              report.cancellation_rate !== undefined && report.cancellation_rate !== null
-                                ? Number(report.cancellation_rate)
-                                : report.total_parcel > 0
-                                ? Math.round((report.total_cancelled / report.total_parcel) * 100)
-                                : 0;
-                            const isRisky =
-                              cancellationRate > 40 || (report.total_cancelled > 0 && successRate < 60);
-                            const isFraud = report.total_fraud_report > 0;
-                            return (
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCourierModalPhone(order.customerPhone);
-                                  setIsCourierHistoryModalOpen(true);
-                                }}
-                                className={`text-[10px] font-bold mt-1.5 p-2 rounded-xl border flex flex-col gap-1 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
-                                  isFraud
-                                    ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/50'
-                                    : isRisky
-                                    ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100/50'
-                                    : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/50'
-                                }`}
-                                title="View Steadfast Courier History"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="opacity-80">Courier (Steadfast):</span>
-                                  <div className="flex items-center gap-1">
-                                    {isFraud && (
-                                      <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded animate-pulse">
-                                        FRAUD ({report.total_fraud_report})
-                                      </span>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        checkCourierReport(order.customerPhone, true);
-                                      }}
-                                      className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 hover:bg-black/5 rounded"
-                                      title="Refresh Steadfast Stats"
-                                    >
-                                      <RefreshCcw size={10} />
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px] font-bold">
-                                  <div>
-                                    Total:{' '}
-                                    <span className="text-secondary">
-                                      {report.total_parcel > 0
-                                        ? report.total_parcel
-                                        : report.volume_range
-                                        ? report.volume_range
-                                        : report.volume_band
-                                        ? report.volume_band.toUpperCase()
-                                        : 'Active'}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    Success:{' '}
-                                    <span className="text-green-600">
-                                      {report.total_parcel > 0 ? report.total_delivered : `${successRate}%`}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    Cancelled:{' '}
-                                    <span className="text-red-500">
-                                      {report.total_parcel > 0 ? report.total_cancelled : `${cancellationRate}%`}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    Rate:{' '}
-                                    <span className={successRate < 60 ? 'text-red-500' : 'text-green-600'}>
-                                      {successRate}%
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
                           <div className="flex items-start gap-1 mt-0.5">
                             <span className="text-[11px] text-slate-400 font-medium line-clamp-1" title={order.address}>
                               {order.address && order.address.trim() !== '' && order.address !== 'N/A'
