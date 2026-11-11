@@ -10,7 +10,6 @@ import {
   Download,
   Edit3,
   ExternalLink,
-  Eye,
   History,
   Landmark,
   Loader2,
@@ -28,11 +27,11 @@ import {
   Trash2,
   TrendingUp,
   Truck,
-  UserCheck,
   X,
 } from 'lucide-react';
 import {
   formatSafeDateTime,
+  formatWhatsAppUrl,
   getCourierReportForPhone,
   getOrderCourierRateDisplay,
   getOrderItemsSafe,
@@ -791,13 +790,9 @@ export default function AdminOrdersTab({
                             );
                           })()}
 
-                          {order.customerPhone && (
+                          {formatWhatsAppUrl(order.customerPhone) && (
                             <a
-                              href={`https://wa.me/880${
-                                order.customerPhone.startsWith('0')
-                                  ? order.customerPhone.substring(1)
-                                  : order.customerPhone
-                              }`}
+                              href={formatWhatsAppUrl(order.customerPhone)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="w-7 h-7 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all border border-emerald-200/70 shadow-2xs"
@@ -914,7 +909,7 @@ export default function AdminOrdersTab({
 
       {/* Desktop View */}
       <div className="hidden lg:block overflow-x-auto rounded-2xl border border-gray-100 bg-slate-50">
-        <table className="w-full text-left min-w-[1060px] border-separate border-spacing-y-2">
+        <table className="w-full text-left min-w-[1220px] border-separate border-spacing-y-2">
           <thead>
             <tr className="text-[10px] text-slate-500 uppercase font-bold tracking-widest bg-slate-50">
               <th className="px-4 py-3 w-10">
@@ -930,15 +925,15 @@ export default function AdminOrdersTab({
                 />
               </th>
 
-              <th className="px-3 py-3">Product Info</th>
-              <th className="px-3 py-3 text-left">Total Price</th>
-              <th className="px-3 py-3">Customer Info</th>
-              <th className="px-3 py-3 text-center w-[124px]">Status &amp; Payment</th>
-              <th className="px-3 py-3 text-center w-[120px]">Delivery Rate</th>
+              <th className="px-3 py-3 w-[235px]">Product Info</th>
+              <th className="px-3 py-3 text-left w-[125px]">Total Price</th>
+              <th className="px-3 py-3 min-w-[195px] max-w-[240px]">Customer Info</th>
+              <th className="px-3 py-3 text-center w-[166px]">Courier History</th>
               <th className="px-3 py-3 text-center w-[150px]">Courier</th>
-              <th className="px-3 py-3 w-[152px]">
+              <th className="px-3 py-3 text-center w-[124px]">Status &amp; Payment</th>
+              <th className="px-3 py-3 w-[216px]">
                 <div className="flex items-center justify-end gap-2 ml-auto">
-                  <div className="w-[100px] text-center">SMS &amp; VERIFY</div>
+                  <div className="w-[174px] text-center">ACTIONS</div>
                   <div className="w-8 shrink-0"></div>
                 </div>
               </th>
@@ -1002,9 +997,9 @@ export default function AdminOrdersTab({
                           onChange={(e) => handleSelectOrder(e, order.id)}
                         />
                       </td>
-                      <td className="p-4 max-w-[240px] w-[240px]">
-                        <div className="flex gap-4 items-center">
-                          <div className="w-16 h-16 rounded-md overflow-hidden flex-shrink-0 border border-gray-100 bg-white">
+                      <td className="px-3 py-4 w-[235px] max-w-[235px] align-middle">
+                        <div className="flex gap-3.5 items-center">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100 bg-white">
                             <img
                               loading="lazy"
                               src={orderItems[0]?.variantImage || orderItems[0]?.product?.image || '/logo.png'}
@@ -1040,7 +1035,7 @@ export default function AdminOrdersTab({
                           </div>
                         </div>
                       </td>
-                      <td className="p-4 text-left">
+                      <td className="px-3 py-4 text-left w-[125px] align-middle">
                         <div className="flex flex-col items-start">
                           <span className="text-xl font-bold text-red-600">৳{Number(order.total) || 0}</span>
                           <span
@@ -1054,7 +1049,7 @@ export default function AdminOrdersTab({
                           </span>
                         </div>
                       </td>
-                      <td className="p-4 max-w-[200px]">
+                      <td className="px-3 py-4 min-w-[195px] max-w-[240px] align-middle">
                         <div className="flex flex-col relative group">
                           {quickEditOrderId === order.id ? (
                             <div
@@ -1094,10 +1089,10 @@ export default function AdminOrdersTab({
                               </div>
                             </div>
                           ) : (
-                            <>
-                              <div className="flex items-center gap-1.5 flex-nowrap max-w-[350px]">
+                            <div className="min-w-0 flex flex-col">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span
-                                  className="text-[14px] font-bold text-slate-800 truncate shrink"
+                                  className="text-[13.5px] font-bold text-slate-800 whitespace-normal leading-snug break-words"
                                   title={order.customerName}
                                 >
                                   {order.customerName}
@@ -1106,103 +1101,285 @@ export default function AdminOrdersTab({
                                   const custStats = getCustomerStats(order.customerPhone || '');
                                   const report = getCourierReportForPhone(courierReports, order.customerPhone);
                                   const isChecking = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
-                                  const rateDisplay = getOrderCourierRateDisplay(report, custStats, isChecking);
-                                  const hasCourier = rateDisplay.source === 'courier' && Boolean(report);
-
-                                  const customerBadge =
-                                    custStats.cancelled > custStats.delivered && custStats.cancelled >= 1 ? (
+                                  if (custStats.cancelled > custStats.delivered && custStats.cancelled >= 1) {
+                                    return (
                                       <span
                                         className="bg-rose-100 text-rose-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-rose-200 animate-pulse shrink-0"
                                         title="High Cancel Rate (Website)"
                                       >
                                         RISK
                                       </span>
-                                    ) : custStats.delivered > custStats.cancelled && custStats.delivered >= 1 ? (
+                                    );
+                                  }
+                                  if (custStats.delivered > custStats.cancelled && custStats.delivered >= 1) {
+                                    return (
                                       <span
                                         className="bg-emerald-100 text-emerald-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-emerald-200 shrink-0"
                                         title="Good Customer (Website)"
                                       >
                                         GOOD
                                       </span>
-                                    ) : !hasCourier && !isChecking && custStats.delivered === 0 && custStats.cancelled === 0 ? (
+                                    );
+                                  }
+                                  if (!report && !isChecking && custStats.delivered === 0 && custStats.cancelled === 0) {
+                                    return (
                                       <span
                                         className="bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-blue-200 animate-pulse shrink-0"
                                         title="New Customer"
                                       >
                                         VERIFY
                                       </span>
-                                    ) : null;
-
-                                  const compactCourierLabel = hasCourier && report
-                                    ? report.total_fraud_report > 0
-                                      ? `FRAUD (${report.total_fraud_report})`
-                                      : report.total_parcel > 0
-                                      ? `SF ${report.total_delivered}/${report.total_parcel}`
-                                      : `SF ${rateDisplay.successText}`
-                                    : '';
-
-                                  const successPct =
-                                    report && report.delivery_rate !== undefined && report.delivery_rate !== null
-                                      ? Number(report.delivery_rate)
-                                      : report && report.total_parcel > 0
-                                      ? Math.round((report.total_delivered / report.total_parcel) * 100)
-                                      : 100;
-                                  const cancelPct =
-                                    report && report.cancellation_rate !== undefined && report.cancellation_rate !== null
-                                      ? Number(report.cancellation_rate)
-                                      : report && report.total_parcel > 0
-                                      ? Math.round((report.total_cancelled / report.total_parcel) * 100)
-                                      : 0;
-                                  const isCourierRisky = cancelPct > 40 || (Boolean(report?.total_cancelled) && successPct < 60);
-
-                                  return (
-                                    <>
-                                      {customerBadge}
-                                      {hasCourier && report ? (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setCourierModalPhone(order.customerPhone);
-                                            setIsCourierHistoryModalOpen(true);
-                                          }}
-                                          title={rateDisplay.tooltip}
-                                          className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border shrink-0 whitespace-nowrap transition-transform hover:scale-105 cursor-pointer ${
-                                            report.total_fraud_report > 0
-                                              ? 'bg-red-600 text-white border-red-700 animate-pulse'
-                                              : isCourierRisky
-                                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                          }`}
-                                        >
-                                          {compactCourierLabel}
-                                        </button>
-                                      ) : isChecking ? (
-                                        <span
-                                          className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full border border-slate-200 shrink-0"
-                                          title="Checking Steadfast courier history..."
-                                        >
-                                          <Loader2 size={8} className="animate-spin" />
-                                          SF
-                                        </span>
-                                      ) : null}
-                                    </>
-                                  );
+                                    );
+                                  }
+                                  return null;
                                 })()}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-[12px] font-bold text-slate-500">{order.customerPhone}</span>
                               </div>
-                            </>
+                              <div className="flex items-start gap-1 mt-0.5">
+                                <span className="text-[11px] text-slate-400 font-medium line-clamp-1" title={order.address}>
+                                  {order.address && order.address.trim() !== '' && order.address !== 'N/A'
+                                    ? order.address.split(' - (')[0]
+                                    : 'No address'}
+                                </span>
+                              </div>
+                            </div>
                           )}
-                          <div className="flex items-start gap-1 mt-0.5">
-                            <span className="text-[11px] text-slate-400 font-medium line-clamp-1" title={order.address}>
-                              {order.address && order.address.trim() !== '' && order.address !== 'N/A'
-                                ? order.address.split(' - (')[0]
-                                : 'No address'}
-                            </span>
-                          </div>
                         </div>
+                      </td>
+                      <td className="px-3 py-4 align-middle w-[166px]">
+                        {(() => {
+                          const stats = getCustomerStats(order.customerPhone || '');
+                          const report = getCourierReportForPhone(courierReports, order.customerPhone);
+                          const isChecking = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
+                          const rateDisplay = getOrderCourierRateDisplay(report, stats, isChecking);
+                          const hasCourier = rateDisplay.source === 'courier' && Boolean(report);
+
+                          if (!hasCourier && isChecking) {
+                            return (
+                              <div className="w-[152px] mx-auto px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white/80 flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500 min-h-[64px] shadow-2xs">
+                                <Loader2 size={11} className="animate-spin text-indigo-500 shrink-0" />
+                                <span>Steadfast লোড...</span>
+                              </div>
+                            );
+                          }
+
+                          if (hasCourier && report) {
+                            const successPct =
+                              report.delivery_rate !== undefined && report.delivery_rate !== null
+                                ? Number(report.delivery_rate)
+                                : report.total_parcel > 0
+                                ? Math.round((report.total_delivered / report.total_parcel) * 100)
+                                : 100;
+                            const cancelPct =
+                              report.cancellation_rate !== undefined && report.cancellation_rate !== null
+                                ? Number(report.cancellation_rate)
+                                : report.total_parcel > 0
+                                ? Math.round((report.total_cancelled / report.total_parcel) * 100)
+                                : 0;
+                            const isCourierRisky = cancelPct > 40 || (report.total_cancelled > 0 && successPct < 60);
+                            const isFraud = report.total_fraud_report > 0;
+
+                            return (
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCourierModalPhone(order.customerPhone);
+                                  setIsCourierHistoryModalOpen(true);
+                                }}
+                                title={rateDisplay.tooltip}
+                                className={`w-[154px] mx-auto text-[9.5px] font-bold px-2.5 py-2 rounded-xl border flex flex-col justify-center gap-1 min-h-[64px] shadow-2xs transition-all hover:scale-[1.02] cursor-pointer ${
+                                  isFraud
+                                    ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/60'
+                                    : isCourierRisky
+                                    ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100/60'
+                                    : 'bg-emerald-50/90 border-emerald-200 text-emerald-800 hover:bg-emerald-100/60'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-[9px] uppercase tracking-wide opacity-80">Steadfast</span>
+                                  <div className="flex items-center gap-1">
+                                    {isFraud && (
+                                      <span className="bg-red-600 text-white text-[8px] font-extrabold px-1 py-0.2 rounded animate-pulse">
+                                        FRAUD ({report.total_fraud_report})
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        checkCourierReport(order.customerPhone, true);
+                                      }}
+                                      className="text-gray-400 hover:text-gray-700 p-0.5 rounded hover:bg-black/5 transition-colors"
+                                      title="Refresh Steadfast Stats"
+                                    >
+                                      <RefreshCcw size={9} />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 whitespace-nowrap">
+                                  <div>
+                                    Total: <span className="text-slate-900">{rateDisplay.mobileTotalText}</span>
+                                  </div>
+                                  <div>
+                                    Rate:{' '}
+                                    <span className={successPct < 60 ? 'text-rose-600' : 'text-emerald-700'}>
+                                      {successPct}%
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Success: <span className="text-emerald-700">{rateDisplay.successText}</span>
+                                  </div>
+                                  <div>
+                                    Cancel:{' '}
+                                    <span className={rateDisplay.hasCancelHighlight ? 'text-rose-600' : 'text-rose-400'}>
+                                      {rateDisplay.cancelText}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!order.customerPhone) return;
+                                setCourierModalPhone(order.customerPhone);
+                                setIsCourierHistoryModalOpen(true);
+                                checkCourierReport(order.customerPhone, true);
+                              }}
+                              title={rateDisplay.tooltip}
+                              className="w-[152px] mx-auto text-[9.5px] font-bold px-2.5 py-2 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 flex flex-col justify-center gap-1 min-h-[64px] shadow-2xs transition-all cursor-pointer text-left"
+                            >
+                              <div className="flex items-center justify-between gap-1 w-full">
+                                <span className="text-[9px] uppercase tracking-wide text-slate-400">Courier History</span>
+                                <span className="text-[8.5px] text-indigo-600 font-extrabold">Check</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 whitespace-nowrap">
+                                <div>
+                                  Total: <span className="text-slate-900">{stats.total || 1}</span>
+                                </div>
+                                <div>
+                                  Success: <span className="text-emerald-600">{stats.delivered}</span>
+                                </div>
+                                <div>
+                                  Cancel:{' '}
+                                  <span className={stats.cancelled > 0 ? 'text-rose-600' : 'text-slate-400'}>
+                                    {stats.cancelled}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3 py-4 align-middle w-[150px]">
+                        {(() => {
+                          const {
+                            cConsignment,
+                            cTrackCode,
+                            cTrack,
+                            badgeText,
+                            hubName,
+                            isDispatched,
+                            serviceName,
+                            canSync,
+                            badgeCls,
+                            portalUrl,
+                            tooltip,
+                          } = getCourierDisplayMeta(order);
+                          const secondaryLine =
+                            cTrackCode || (cConsignment ? serviceName : cTrack || serviceName);
+                          const isShowingHub = Boolean(
+                            hubName && badgeText.toLowerCase().includes(hubName.toLowerCase())
+                          );
+                          return (
+                            <div
+                              className="flex flex-col items-center justify-center gap-1 w-[136px] shrink-0 mx-auto min-h-[68px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {isDispatched ? (
+                                <>
+                                  {cConsignment && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedOrderForDetails(order)}
+                                      title={tooltip || 'কুরিয়ার ট্র্যাকিং টাইমলাইন দেখুন'}
+                                      className="text-[11px] font-bold text-sky-600 hover:text-sky-700 leading-tight truncate max-w-full cursor-pointer"
+                                    >
+                                      #{cConsignment}
+                                    </button>
+                                  )}
+                                  <div className="flex items-center justify-center gap-1.5 w-full">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedOrderForDetails(order)}
+                                      className="text-[10px] font-mono font-medium text-slate-500 hover:text-slate-800 truncate text-center cursor-pointer"
+                                      title={cTrack || serviceName}
+                                    >
+                                      {secondaryLine}
+                                    </button>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {syncSingleCourierStatus && canSync && (
+                                        <button
+                                          type="button"
+                                          disabled={syncingOrderId === order.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            syncSingleCourierStatus(order.id);
+                                          }}
+                                          className="text-sky-600 hover:text-sky-800 cursor-pointer"
+                                          title="Live Courier Status সিঙ্ক করুন"
+                                        >
+                                          <RefreshCcw
+                                            size={11}
+                                            className={syncingOrderId === order.id ? 'animate-spin' : ''}
+                                          />
+                                        </button>
+                                      )}
+                                      {portalUrl && (
+                                        <a
+                                          href={portalUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-gray-400 hover:text-sky-600"
+                                          title="কুরিয়ার ওয়েবসাইটে লাইভ ট্র্যাকিং দেখুন"
+                                        >
+                                          <ExternalLink size={11} />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedOrderForDetails(order)}
+                                    title={tooltip || 'কুরিয়ার ট্র্যাকিং টাইমলাইন দেখুন'}
+                                    className={`inline-flex items-center justify-center gap-1 border rounded-md px-2 py-0.5 max-w-full shadow-2xs transition-colors hover:brightness-95 cursor-pointer ${badgeCls}`}
+                                  >
+                                    {isShowingHub && <MapPin size={9.5} className="shrink-0" />}
+                                    <span className="text-[9.5px] font-bold tracking-wide uppercase truncate">
+                                      {badgeText.toUpperCase()}
+                                    </span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedOrderForDetails(order)}
+                                  className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-100/90 hover:bg-slate-200/70 text-slate-400 hover:text-slate-600 border border-slate-200/80 text-[11px] font-semibold transition-colors cursor-pointer"
+                                  title="অর্ডার ও কুরিয়ার বিস্তারিত দেখুন (পাঠাতে ডানদিকের ⋮ মেনু ব্যবহার করুন)"
+                                >
+                                  Not Booked
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-4 align-middle w-[124px]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col gap-2 items-center justify-center h-[68px]">
@@ -1284,157 +1461,9 @@ export default function AdminOrdersTab({
                           </select>
                         </div>
                       </td>
-                      <td className="px-3 py-4 align-middle w-[120px]">
-                        {(() => {
-                          const stats = getCustomerStats(order.customerPhone || '');
-                          const report = getCourierReportForPhone(courierReports, order.customerPhone);
-                          const isLoadingRate = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
-                          const rateDisplay = getOrderCourierRateDisplay(report, stats, isLoadingRate);
-                          return (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!order.customerPhone) return;
-                                setCourierModalPhone(order.customerPhone);
-                                setIsCourierHistoryModalOpen(true);
-                                if (!report) checkCourierReport(order.customerPhone);
-                              }}
-                              title={rateDisplay.tooltip}
-                              className="flex flex-col gap-1.5 w-fit shrink-0 justify-center items-center mx-auto min-h-[68px] cursor-pointer text-left"
-                            >
-                              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100/70 rounded-full px-3 h-7 w-[100px] shadow-sm transition-transform hover:scale-105">
-                                <span className="text-[10px] font-bold text-emerald-700">Success:</span>
-                                <span className="text-[11px] font-bold text-emerald-600">
-                                  {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.successText}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between bg-rose-50 border border-rose-100/70 rounded-full px-3 h-7 w-[100px] shadow-sm transition-transform hover:scale-105">
-                                <span className="text-[10px] font-bold text-rose-700">Cancel:</span>
-                                <span
-                                  className={`text-[11px] font-bold ${
-                                    rateDisplay.hasCancelHighlight ? 'text-rose-600' : 'text-rose-400'
-                                  }`}
-                                >
-                                  {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.cancelText}
-                                </span>
-                              </div>
-                              {rateDisplay.fraudCount > 0 && (
-                                <span className="bg-red-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full animate-pulse whitespace-nowrap">
-                                  FRAUD ({rateDisplay.fraudCount})
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-3 py-4 align-middle w-[150px]">
-                        {(() => {
-                          const {
-                            cConsignment,
-                            cTrackCode,
-                            cTrack,
-                            badgeText,
-                            hubName,
-                            isDispatched,
-                            serviceName,
-                            canSync,
-                            badgeCls,
-                            portalUrl,
-                            tooltip,
-                          } = getCourierDisplayMeta(order);
-                          const secondaryLine =
-                            cTrackCode || (cConsignment ? serviceName : cTrack || serviceName);
-                          const isShowingHub = Boolean(
-                            hubName && badgeText.toLowerCase().includes(hubName.toLowerCase())
-                          );
-                          return (
-                            <div
-                              className="flex flex-col items-start justify-center gap-1 w-[136px] shrink-0 mx-auto min-h-[68px]"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {isDispatched ? (
-                                <>
-                                  {cConsignment && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedOrderForDetails(order)}
-                                      title={tooltip || 'কুরিয়ার ট্র্যাকিং টাইমলাইন দেখুন'}
-                                      className="text-[11px] font-bold text-sky-600 hover:text-sky-700 leading-tight truncate max-w-full cursor-pointer"
-                                    >
-                                      #{cConsignment}
-                                    </button>
-                                  )}
-                                  <div className="flex items-center justify-between gap-1 w-full">
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedOrderForDetails(order)}
-                                      className="text-[10px] font-mono font-medium text-slate-500 hover:text-slate-800 truncate text-left cursor-pointer"
-                                      title={cTrack || serviceName}
-                                    >
-                                      {secondaryLine}
-                                    </button>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      {syncSingleCourierStatus && canSync && (
-                                        <button
-                                          type="button"
-                                          disabled={syncingOrderId === order.id}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            syncSingleCourierStatus(order.id);
-                                          }}
-                                          className="text-sky-600 hover:text-sky-800 cursor-pointer"
-                                          title="Live Courier Status সিঙ্ক করুন"
-                                        >
-                                          <RefreshCcw
-                                            size={11}
-                                            className={syncingOrderId === order.id ? 'animate-spin' : ''}
-                                          />
-                                        </button>
-                                      )}
-                                      {portalUrl && (
-                                        <a
-                                          href={portalUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="text-gray-400 hover:text-sky-600"
-                                          title="কুরিয়ার ওয়েবসাইটে লাইভ ট্র্যাকিং দেখুন"
-                                        >
-                                          <ExternalLink size={11} />
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedOrderForDetails(order)}
-                                    title={tooltip || 'কুরিয়ার ট্র্যাকিং টাইমলাইন দেখুন'}
-                                    className={`inline-flex items-center justify-center gap-1 border rounded-md px-2 py-0.5 max-w-full shadow-2xs transition-colors hover:brightness-95 cursor-pointer ${badgeCls}`}
-                                  >
-                                    {isShowingHub && <MapPin size={9.5} className="shrink-0" />}
-                                    <span className="text-[9.5px] font-bold tracking-wide uppercase truncate">
-                                      {badgeText.toUpperCase()}
-                                    </span>
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedOrderForDetails(order)}
-                                  className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100/90 hover:bg-slate-200/70 text-slate-400 hover:text-slate-600 border border-slate-200/80 text-[11px] font-semibold transition-colors cursor-pointer"
-                                  title="অর্ডার ও কুরিয়ার বিস্তারিত দেখুন (পাঠাতে ডানদিকের ⋮ মেনু ব্যবহার করুন)"
-                                >
-                                  Not Booked
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-3 py-4 align-middle w-[152px]" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-3 py-4 align-middle w-[216px]" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2 ml-auto">
-                          <div className="flex flex-col gap-2 w-fit shrink-0 h-[68px] justify-center">
+                          <div className="grid grid-cols-2 gap-1.5 w-[174px] shrink-0 h-[68px] items-center">
                             <div className="relative w-full">
                               <button
                                 onClick={(e) => {
@@ -1468,11 +1497,11 @@ export default function AdminOrdersTab({
                                   const defaultMessage = `${startPart}\nProducts:\n${productDetails}\nOrder No: #${orderId}\nTotal Bill: ৳${order.total}\n${endPart}`;
                                   setIndividualSmsMessage(defaultMessage);
                                 }}
-                                className="flex items-center justify-center gap-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200/60 rounded-full px-3 h-8 w-[100px] shadow-sm text-sky-600 transition-colors"
+                                className="flex items-center justify-center gap-1 bg-sky-50 hover:bg-sky-100 border border-sky-200/70 rounded-full px-2.5 h-8 w-[84px] shadow-sm text-sky-600 transition-colors cursor-pointer"
                                 title="Send SMS"
                               >
-                                <MessageSquare size={12} />
-                                <span className="text-[11px] font-bold">SMS</span>
+                                <MessageSquare size={11} />
+                                <span className="text-[10.5px] font-bold">SMS</span>
                               </button>
 
                               <AnimatePresence>
@@ -1525,37 +1554,49 @@ export default function AdminOrdersTab({
                                 )}
                               </AnimatePresence>
                             </div>
-                            {isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone) ? (
-                              <div className="flex items-center justify-center gap-1.5 bg-gray-50 border border-gray-200/70 rounded-lg px-3 h-8 w-[100px] shadow-sm text-gray-500">
-                                <Loader2 size={12} className="animate-spin" />
-                                <span className="text-[11px] font-bold">Checking...</span>
-                              </div>
-                            ) : getCourierReportForPhone(courierReports, order.customerPhone) ? (
-                              <button
-                                onClick={() => {
-                                  setCourierModalPhone(order.customerPhone);
-                                  setIsCourierHistoryModalOpen(true);
-                                }}
-                                className="flex items-center justify-center gap-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200/60 rounded-full px-3 h-8 w-[100px] shadow-sm text-purple-600 transition-colors active:scale-95 cursor-pointer"
-                                title="View Courier History"
-                              >
-                                <Eye size={12} />
-                                <span className="text-[11px] font-bold">History</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setCourierModalPhone(order.customerPhone);
-                                  setIsCourierHistoryModalOpen(true);
-                                  checkCourierReport(order.customerPhone, true);
-                                }}
-                                className="flex items-center justify-center gap-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200/60 rounded-full px-3 h-8 w-[100px] shadow-sm text-orange-600 transition-colors active:scale-95 cursor-pointer"
-                                title="Verify Customer"
-                              >
-                                <UserCheck size={12} />
-                                <span className="text-[11px] font-bold">Verify</span>
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => setCompletedOrderReceipt(order)}
+                              className="flex items-center justify-center gap-1 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200/70 rounded-full px-2.5 h-8 w-[84px] shadow-sm text-cyan-700 transition-colors active:scale-95 cursor-pointer"
+                              title="View Receipt"
+                            >
+                              <Receipt size={11} />
+                              <span className="text-[10.5px] font-bold">Receipt</span>
+                            </button>
+                            {(() => {
+                              const waHref = formatWhatsAppUrl(order.customerPhone);
+                              if (!waHref) {
+                                return (
+                                  <span className="flex items-center justify-center gap-1 bg-gray-50 border border-gray-200/70 rounded-full px-2 h-8 w-[84px] text-gray-400 text-[10px] font-bold">
+                                    No Phone
+                                  </span>
+                                );
+                              }
+                              return (
+                                <a
+                                  href={waHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 rounded-full px-2 h-8 w-[84px] shadow-sm text-emerald-700 transition-colors active:scale-95 cursor-pointer"
+                                  title="Chat on WhatsApp"
+                                >
+                                  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" className="shrink-0">
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                                  </svg>
+                                  <span className="text-[10.5px] font-bold">WhatsApp</span>
+                                </a>
+                              );
+                            })()}
+                            <button
+                              type="button"
+                              onClick={() => handlePrintInvoice(order)}
+                              className="flex items-center justify-center gap-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/70 rounded-full px-2.5 h-8 w-[84px] shadow-sm text-indigo-700 transition-colors active:scale-95 cursor-pointer"
+                              title="Print Invoice"
+                            >
+                              <Printer size={11} />
+                              <span className="text-[10.5px] font-bold">Print</span>
+                            </button>
                           </div>
 
                           <div className="relative group w-fit shrink-0">
@@ -1579,44 +1620,6 @@ export default function AdminOrdersTab({
                               </svg>
                             </button>
                             <div className="absolute top-1/2 right-full -translate-y-1/2 mr-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex items-center gap-1.5 bg-white p-2 rounded-xl border border-gray-100 shadow-xl z-50">
-                              <button
-                                onClick={() => setCompletedOrderReceipt(order)}
-                                className="hidden md:flex bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-600 w-8 h-8 rounded-lg items-center justify-center transition-all shadow-sm active:scale-90 shrink-0"
-                                title="View Receipt"
-                              >
-                                <Receipt size={14} />
-                              </button>
-                              <button
-                                onClick={() => sendToCourier(order)}
-                                className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 w-8 h-8 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-90 shrink-0"
-                                title="Send to Courier"
-                              >
-                                <Truck size={14} />
-                              </button>
-                              <button
-                                onClick={() => handlePrintInvoice(order)}
-                                className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 w-8 h-8 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-90 shrink-0"
-                                title="Print Invoice"
-                              >
-                                <Printer size={14} />
-                              </button>
-                              {order.customerPhone && (
-                                <a
-                                  href={`https://wa.me/880${
-                                    order.customerPhone.startsWith('0')
-                                      ? order.customerPhone.substring(1)
-                                      : order.customerPhone
-                                  }`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="bg-green-50 hover:bg-green-100 border border-green-200 text-green-600 w-8 h-8 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-90 shrink-0"
-                                  title="Chat on WhatsApp"
-                                >
-                                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-                                  </svg>
-                                </a>
-                              )}
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();

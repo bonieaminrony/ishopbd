@@ -297,22 +297,51 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
       />
     );
 
-    // Score-only Steadfast response displays compact inline pill beside customer name + Delivery Rate column
-    expect(screen.getByText('SF 97%')).toBeInTheDocument();
-    expect(screen.getByText('97%')).toBeInTheDocument();
-    expect(screen.getAllByText(/97%/).length).toBeGreaterThanOrEqual(2);
+    // Exact balanced desktop column order: Product Info -> Total Price -> Customer Info -> Courier History -> Courier -> Status & Payment -> SMS & VERIFY
+    expect(screen.queryByText('Delivery Rate')).not.toBeInTheDocument();
+    const headerTexts = screen.getAllByRole('columnheader').map((th) => th.textContent?.trim() || '');
+    expect(headerTexts).toEqual([
+      '',
+      'Product Info',
+      'Total Price',
+      'Customer Info',
+      'Courier History',
+      'Courier',
+      'Status & Payment',
+      'ACTIONS',
+    ]);
+
+    // SMS, Receipt, WhatsApp, Print pills render cleanly in 2x2 action grid; Send to Courier & courier History pill are removed
+    const desktopWhatsAppLinks = screen
+      .getAllByRole('link', { name: /WhatsApp/i })
+      .filter((el) => el.closest('tr'));
+    expect(desktopWhatsAppLinks.length).toBeGreaterThanOrEqual(1);
+    expect(desktopWhatsAppLinks[0]).toHaveAttribute('href', 'https://wa.me/8801738364268');
+    expect(screen.getAllByText('Receipt').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByText('Print').length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText('History')).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByTitle('Send to Courier').filter((el) => el.closest('tr')).length
+    ).toBe(0);
+
+    // Score-only Steadfast response displays dedicated Courier History card (zero truncation on name)
+    const desktopName = screen.getAllByText('Score Customer').find((el) => el.closest('tr'));
+    expect(desktopName).toBeTruthy();
+    expect(desktopName).not.toHaveClass('truncate');
+
+    expect(screen.getAllByText('97%').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('2%')).toBeInTheDocument();
-    expect(screen.getByText('Total: 25+')).toBeInTheDocument();
+    expect(screen.getByText('25+')).toBeInTheDocument();
 
     // Parcel-count response displays delivered/cancelled counts + FRAUD badge
     expect(screen.getAllByText('18').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('FRAUD (3)').length).toBeGreaterThanOrEqual(1);
 
-    // Unchecked customer falls back cleanly to website customer stats
+    // Unchecked customer falls back cleanly to website stats on both mobile and desktop right card
     expect(screen.getByText('Total: 4')).toBeInTheDocument();
     expect(screen.getByText('SCS: 3')).toBeInTheDocument();
 
-    // Clicking Desktop Delivery Rate button opens CourierHistoryModal without opening OrderDetailsModal
+    // Clicking Desktop Steadfast History card beside Customer Info opens CourierHistoryModal without opening OrderDetailsModal
     const scoreRateBtns = screen.getAllByTitle(/Steadfast: 97% delivery/i);
     const desktopScoreRateBtn = scoreRateBtns.find((el) => el.closest('tr'));
     expect(desktopScoreRateBtn).toBeTruthy();

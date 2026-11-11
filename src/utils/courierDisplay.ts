@@ -35,6 +35,14 @@ export function normalizeBdPhone(rawPhone?: unknown): string {
   return digits;
 }
 
+export function formatWhatsAppUrl(rawPhone?: unknown): string {
+  const normalized = normalizeBdPhone(rawPhone);
+  if (!normalized) return '';
+  if (normalized.startsWith('0')) return `https://wa.me/88${normalized}`;
+  if (normalized.startsWith('88')) return `https://wa.me/${normalized}`;
+  return `https://wa.me/880${normalized}`;
+}
+
 function getPhoneLookupCandidates(rawPhone?: unknown): string[] {
   const rawStr = typeof rawPhone === 'string' ? rawPhone.trim() : String(rawPhone ?? '').trim();
   const digits = String(rawPhone ?? '').replace(/[^0-9]/g, '');
