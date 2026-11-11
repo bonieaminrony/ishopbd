@@ -102,8 +102,11 @@ describe('MarketingSettings Pixel & Token Isolation', () => {
     )) as HTMLInputElement;
     expect(metaTokenInput).toHaveAttribute('id', 'meta_capi_access_token');
     expect(metaTokenInput).toHaveAttribute('name', 'meta_capi_access_token');
-    expect(metaTokenInput).toHaveAttribute('autocomplete', 'new-password');
+    expect(metaTokenInput).toHaveAttribute('type', 'text');
+    expect(metaTokenInput).toHaveAttribute('autocomplete', 'off');
+    expect(metaTokenInput).toHaveAttribute('data-form-type', 'other');
     expect(metaTokenInput).toHaveAttribute('data-lpignore', 'true');
+    expect((metaTokenInput.style as any).WebkitTextSecurity || metaTokenInput.getAttribute('style')).toContain('disc');
 
     // Type Meta CAPI Access Token
     fireEvent.change(metaTokenInput, { target: { value: 'EAAG-META-ONLY-TOKEN-123' } });
@@ -117,7 +120,9 @@ describe('MarketingSettings Pixel & Token Isolation', () => {
     ) as HTMLInputElement;
     expect(tiktokTokenInput).toHaveAttribute('id', 'tiktok_events_access_token');
     expect(tiktokTokenInput).toHaveAttribute('name', 'tiktok_events_access_token');
-    expect(tiktokTokenInput).toHaveAttribute('autocomplete', 'new-password');
+    expect(tiktokTokenInput).toHaveAttribute('type', 'text');
+    expect(tiktokTokenInput).toHaveAttribute('autocomplete', 'off');
+    expect(tiktokTokenInput).toHaveAttribute('data-form-type', 'other');
     // Crucial: switching tabs must NEVER leak Meta's token into TikTok's input
     expect(tiktokTokenInput.value).toBe('');
 

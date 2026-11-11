@@ -452,6 +452,10 @@ export const MarketingSettings: React.FC = () => {
                 placeholder="e.g. 1358996272808579"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
                 autoComplete="off"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 Facebook Events Manager থেকে প্রাপ্ত Pixel ID বা Dataset ID।
@@ -472,6 +476,10 @@ export const MarketingSettings: React.FC = () => {
                 placeholder="e.g. TEST12345"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary font-mono"
                 autoComplete="off"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 Events Manager &gt; Test Events ট্যাবের কোড। লাইভ রান করার সময় খালি রাখা যাবে।
@@ -613,6 +621,10 @@ export const MarketingSettings: React.FC = () => {
                 placeholder="e.g. C1234567890ABCDEFG"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
                 autoComplete="off"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 TikTok Ads Manager &gt; Assets &gt; Events &gt; Web Events থেকে Pixel ID।
@@ -632,6 +644,10 @@ export const MarketingSettings: React.FC = () => {
                 placeholder="e.g. TESTXXXXX"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary font-mono"
                 autoComplete="off"
+                data-form-type="other"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
               />
               <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
                 TikTok Test Events ডায়াগনস্টিকের জন্য টেস্ট কোড।

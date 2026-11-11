@@ -83,7 +83,7 @@ export default function SecretTokenField({
           key={fieldId}
           id={fieldId}
           name={fieldId}
-          type={visible ? 'text' : 'password'}
+          type="text"
           value={value}
           onChange={(e) => {
             if (isMarkedForClear) onToggleClear(false);
@@ -91,7 +91,11 @@ export default function SecretTokenField({
           }}
           placeholder={hasSavedToken && !isMarkedForClear ? placeholderSaved : placeholderNew}
           className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-12 text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-primary"
-          autoComplete="new-password"
+          style={!visible ? ({ WebkitTextSecurity: 'disc' } as React.CSSProperties) : undefined}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          data-form-type="other"
           data-lpignore="true"
           data-1p-ignore="true"
           data-bwignore="true"
