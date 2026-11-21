@@ -1,5 +1,5 @@
 
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, Ban, Bell, Calendar, Camera, Check, CheckCircle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleDot, Clock, Copy, Download, Edit, Edit2, Edit3, Eye, Gift, Headset, Heart, History, ImageIcon, Landmark, LayoutGrid, LayoutTemplate, List, Loader2, MessageSquare, MessageCircle, MapPin, Mic, MoreVertical, Phone, Plus, PlusCircle, Printer, Receipt, RefreshCcw, Search, Send, Share2, ShieldCheck, ShoppingBag, ShoppingCart, Square, Star, Tag, ThumbsUp, Trash2, TrendingUp, Truck, Upload, User, UserCheck, Users, Wallet, X, XCircle, Settings, Package, RotateCcw, Activity, DollarSign, ArrowUpRight, Percent, Filter, Layers, BarChart2, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import { collection, doc, getDocs, updateDoc, deleteDoc, query, limit, arrayUnio
 import { getProductSlug, getProductPath, formatEnglishDateTime } from '../utils/helpers';
 import AdminOrdersTab from './admin/AdminOrdersTab';
 import AdminReviewsTab from './admin/AdminReviewsTab';
+import AdminAnalyticsTab from './admin/AdminAnalyticsTab';
 
 const POS = lazy(() => import('./POS'));
 const ProfitAnalysis = lazy(() => import('./ProfitAnalysis'));
@@ -414,7 +415,56 @@ export default function AdminPanel(props: AdminPanelProps) {
     permanentDeleteOrder,
   } = props;
 
+  const activeIncompleteOrdersCount = useMemo(() => {
+    return (incompleteOrders || []).filter((inc: any) => {
+      const rawPhone = String(inc.phone || inc.customerPhone || '').trim();
+      const cleanDigits = rawPhone.replace(/\D/g, '');
+      const hasRealPhone = Boolean(
+        rawPhone &&
+        !rawPhone.includes('কার্টে') &&
+        !rawPhone.includes('Cart') &&
+        cleanDigits.length >= 6
+      );
+      if (!hasRealPhone) return false;
+
+      const hasSame = (orderHistory || []).some((o: any) => {
+        if (!o || o.deleted || o.status === 'cancelled') return false;
+        const oPhone = String(o.customerPhone || o.phone || '').replace(/\D/g, '');
+        if (!oPhone || (oPhone !== cleanDigits && !oPhone.endsWith(cleanDigits) && !cleanDigits.endsWith(oPhone))) return false;
+        const incItemIds = (inc.items || []).map((it: any) => String(it.id || it.product?.id || '')).filter(Boolean);
+        const incItemNames = (inc.items || []).map((it: any) => String(it.name || it.product?.name || '').toLowerCase().trim()).filter(Boolean);
+        return (o.items || []).some((it: any) => {
+          const pId = String(it.product?.id || it.id || '');
+          const pName = String(it.product?.name || it.name || '').toLowerCase().trim();
+          return (pId && incItemIds.includes(pId)) || (pName && incItemNames.some((n: string) => n && (pName.includes(n) || n.includes(pName))));
+        });
+      });
+      return !hasSame;
+    }).length;
+  }, [incompleteOrders, orderHistory]);
+
   const [settingsTab, setSettingsTab] = React.useState("general");
+  const [smsBalance, setSmsBalance] = React.useState<string | null>(null);
+  const [checkingSmsBalance, setCheckingSmsBalance] = React.useState(false);
+
+  const handleCheckSmsBalance = async () => {
+    setCheckingSmsBalance(true);
+    try {
+      const apiKey = adminKeys?.smsApiKey || "";
+      const res = await fetch(`/api/send-sms?action=balance&apiKey=${encodeURIComponent(apiKey)}`);
+      const data = await res.json().catch(() => ({}));
+      if (data.success && data.balance !== undefined) {
+        setSmsBalance(String(data.balance));
+        toast.success(`এসএমএস ব্যালেন্স: ৳${data.balance}`);
+      } else {
+        toast.error(data.message || "ব্যালেন্স চেক করতে ব্যর্থ হয়েছে");
+      }
+    } catch (e: any) {
+      toast.error("ব্যালেন্স চেক ব্যর্থ: " + (e?.message || "নেটওয়ার্ক সমস্যা"));
+    } finally {
+      setCheckingSmsBalance(false);
+    }
+  };
 
   const getEffectiveStock = React.useCallback((p: any): number => {
     if (!p) return 0;
@@ -466,6 +516,15 @@ export default function AdminPanel(props: AdminPanelProps) {
                   <div className="flex flex-col gap-1.5 w-full">
                     <button
                       onClick={() => {
+                        setAdminTab("analytics");
+                        setShowOnlyPreOrders(false);
+                      }}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "analytics" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                    >
+                      <Activity size={18} /> Analytics & Traffic
+                    </button>
+                    <button
+                      onClick={() => {
                         setAdminTab("orders");
                         setShowOnlyPreOrders(false);
                         setAdminOrdersLimit(50);
@@ -500,7 +559,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       }}
                       className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "incomplete_orders" ? "bg-red-500 text-white shadow-md shadow-red-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
-                      <ShoppingCart size={18} /> Incomplete ({incompleteOrders.length})
+                      <ShoppingCart size={18} /> Incomplete ({activeIncompleteOrdersCount})
                     </button>
                     <button
                       onClick={() => {
@@ -625,9 +684,10 @@ export default function AdminPanel(props: AdminPanelProps) {
               <div className="md:hidden border-b bg-white overflow-x-auto scroll-smooth pb-1 shrink-0">
                 <div className="flex p-2 gap-2 min-w-max">
                   {([
+                        { id: "analytics", icon: Activity, label: "Analytics" },
                         { id: "orders", icon: History, label: `Orders (${orderHistory.filter(o => !o.deleted && !((o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending")).length})` },
                         { id: "preorder", icon: CircleDot, label: `Pre Order (${orderHistory.filter(o => !o.deleted && (o.isPreOrder || o.items?.some((i: any) => i.product?.isComingSoon)) && o.status === "pending").length})` },
-                        { id: "incomplete_orders", icon: ShoppingCart, label: `Incomplete (${incompleteOrders.length})` },
+                        { id: "incomplete_orders", icon: ShoppingCart, label: `Incomplete (${activeIncompleteOrdersCount})` },
                         { id: "support", icon: Headset, label: "Support" },
                         { id: "pos", icon: ShoppingBag, label: "POS (Outlet)" },
                         { id: "deleted_orders", icon: Trash2, label: `Recycle Bin (${deletedOrders?.length || 0})` },
@@ -678,6 +738,18 @@ export default function AdminPanel(props: AdminPanelProps) {
                     <Loader2 size={18} className="animate-spin text-primary" /> লোড হচ্ছে...
                   </div>
                 }>
+                {adminTab === "analytics" && (
+                  <AdminAnalyticsTab
+                    orderHistory={orderHistory}
+                    products={products}
+                    adminViewMode={adminViewMode}
+                    onNavigateToOrders={() => {
+                      setAdminTab("orders");
+                      setShowOnlyPreOrders(false);
+                      setAdminOrdersLimit(50);
+                    }}
+                  />
+                )}
                 {adminTab === "orders" && (
                   <AdminOrdersTab
                     orderHistory={orderHistory}
@@ -743,6 +815,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                 {adminTab === "incomplete_orders" && (
                   <AdminIncompleteOrdersTab
                     incompleteOrders={incompleteOrders}
+                    orderHistory={orderHistory}
                     getCustomerStats={getCustomerStats}
                     individualSmsOrder={individualSmsOrder}
                     setIndividualSmsOrder={setIndividualSmsOrder}
@@ -1168,6 +1241,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                       products={products}
                       categories={categories}
                       siteConfig={siteConfig}
+                      adminKeys={adminKeys}
                       orderHistory={orderHistory}
                       handlePrintInvoice={handlePrintInvoice}
                       smsTemplateStart={siteConfig?.smsTemplateStart}
@@ -1591,6 +1665,67 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 placeholder="0"
                               />
                            </div>
+                            {/* SMS Gateway Settings (BulkSMSBD) */}
+                            <div className="md:col-span-2 bg-gradient-to-r from-blue-50 to-indigo-50/40 border border-blue-200/80 rounded-2xl p-5 space-y-4 shadow-sm">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-blue-100 pb-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                                    SMS
+                                  </div>
+                                  <div>
+                                    <h4 className="font-bold text-gray-900 text-sm">SMS Gateway API Settings (BulkSMSBD)</h4>
+                                    <p className="text-xs text-gray-500">অর্ডার কনফার্মেশন ও পস (POS) চালানের এসএমএস পাঠানোর এপিআই সেটিংস</p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleCheckSmsBalance}
+                                  disabled={checkingSmsBalance}
+                                  className="self-start sm:self-auto text-xs font-bold px-3.5 py-2 rounded-xl bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-2 shadow-xs transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                                >
+                                  {checkingSmsBalance ? (
+                                    <>
+                                      <Loader2 size={13} className="animate-spin text-blue-600" />
+                                      <span>ব্যালেন্স চেক হচ্ছে...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Receipt size={13} className="text-blue-600" />
+                                      <span>{smsBalance !== null ? `ব্যালেন্স: ৳${smsBalance}` : "ব্যালেন্স চেক করুন"}</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-2 tracking-widest">
+                                    BulkSMSBD API Key
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={adminKeys?.smsApiKey ?? ""}
+                                    onChange={(e) => setAdminKeys((prev: any) => prev ? {...prev, smsApiKey: e.target.value} : {smsApiKey: e.target.value})}
+                                    className="w-full bg-white border border-blue-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold font-mono text-gray-800"
+                                    placeholder="BulkSMSBD API Key..."
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider mb-2 tracking-widest">
+                                    SMS Sender ID
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={adminKeys?.smsSenderId ?? ""}
+                                    onChange={(e) => setAdminKeys((prev: any) => prev ? {...prev, smsSenderId: e.target.value} : {smsSenderId: e.target.value})}
+                                    className="w-full bg-white border border-blue-200 rounded-xl py-2.5 px-3.5 outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold font-mono text-gray-800"
+                                    placeholder="8809648908219"
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                                <span>💡 BulkSMSBD থেকে পাওয়া এপিআই কী ও সেন্ডার আইডি দিয়ে নিচে <strong>'Save Settings / সেভ করুন'</strong> বাটনে ক্লিক করুন।</span>
+                              </p>
+                            </div>
                             {/* SMS Template */}
                             <div className="md:col-span-2 bg-blue-50 border border-blue-200 rounded-2xl p-4">
                               <p className="text-xs font-bold text-blue-700 mb-3">Confirmation SMS Template</p>

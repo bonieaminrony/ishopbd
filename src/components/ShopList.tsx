@@ -355,7 +355,7 @@ export default function ShopList(props: ShopListProps) {
                         ? selectedBrand
                         : searchQuery
                           ? t("সার্চ রেজাল্ট", "Search Results")
-                          : t("সকল গ্যাজেট", "All Gadgets")}
+                          : t("সকল প্রোডাক্ট", "All Products")}
               </h3>
               {(isTrendingFilterActive || selectedCategory !== "all" || searchQuery || selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
                 <button 

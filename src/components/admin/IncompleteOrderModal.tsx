@@ -119,11 +119,9 @@ export function computeSuggestedDeliveryCharge(
   );
   const ceilWeight = Math.ceil(totalWeight);
   if (area === 'inside') {
-    return totalWeight <= 1 ? 80 : 80 + (ceilWeight - 1) * 20;
+    return totalWeight <= 1 ? 70 : 70 + (ceilWeight - 1) * 20;
   }
-  if (totalWeight < 1) return 120;
-  if (totalWeight === 1) return 130;
-  return 130 + (ceilWeight - 1) * 20;
+  return totalWeight <= 1 ? 130 : 130 + (ceilWeight - 1) * 20;
 }
 
 function extractProductOptions(matchedProduct: any, rawItem: any) {
@@ -298,12 +296,8 @@ export default function IncompleteOrderModal({
     isLoadingCourier,
   );
 
-  useEffect(() => {
-    if (!order || !hasValidCourierPhone || !checkCourierReport) return;
-    if (!courierReport && !isLoadingCourier) {
-      checkCourierReport(customerPhone.trim());
-    }
-  }, [order?.id, normalizedPhone]);
+  // Auto-checking courier report disabled to avoid exhausting daily API quota (10/day).
+  // Checks are performed only when clicking the 'Steadfast চেক' button.
 
   const subtotal = useMemo(
     () =>

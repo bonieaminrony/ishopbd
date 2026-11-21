@@ -57,7 +57,7 @@ export interface BulkStickerOptions {
   shopName?: string;
   logoUrl?: string;
   baseUrl?: string;
-  layout?: 'a4-4' | 'a4-6' | 'thermal';
+  layout?: 'a4-4' | 'a4-6' | 'thermal' | '75x100';
   showPrice?: boolean;
 }
 
@@ -77,7 +77,7 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
       ? rawLogo
       : `${baseUrl}${rawLogo.startsWith('/') ? '' : '/'}${rawLogo}`;
 
-  const defaultLayout = options.layout || 'thermal';
+  const defaultLayout = options.layout || '75x100';
   const showPriceClass = options.showPrice ? ' show-prices' : '';
 
   const stickerCardsHtml = safeOrders
@@ -185,7 +185,7 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
           </div>
 
           <div class="customer-box">
-            <div class="box-label">TO / গ্রাহকের তথ্য</div>
+            <div class="box-label">গ্রাহকের তথ্য</div>
             <div class="customer-top">
               <span class="customer-name">${escapeHtml(order.customerName || 'Customer')}</span>
               <span class="customer-phone">${escapeHtml(order.customerPhone || '')}</span>
@@ -194,7 +194,7 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
           </div>
 
           <div class="items-box">
-            <div class="box-label">PRODUCTS / পণ্যের তালিকা (${items.length})</div>
+            <div class="box-label">পণ্যের তালিকা (${items.length})</div>
             <div class="items-list">${itemsHtml}</div>
           </div>
 
@@ -212,10 +212,16 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
 <head>
   <meta charset="UTF-8" />
   <title>Shipping Stickers (${safeOrders.length}) - ${escapeHtml(shopName)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-family: 'Hind Siliguri', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
       background: #f1f5f9;
       color: #0f172a;
       padding: 16px;
@@ -248,8 +254,27 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
     .print-btn {
       background: #e11d48; color: #fff; border: none; border-radius: 10px;
       padding: 8px 16px; font-size: 13px; font-weight: 800; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.2s, transform 0.1s;
     }
     .print-btn:hover { background: #be123c; }
+    .print-btn:active { transform: scale(0.98); }
+    .btn-download-pdf {
+      background: #0284c7; color: #fff; border: none; border-radius: 10px;
+      padding: 8px 14px; font-size: 13px; font-weight: 800; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-download-pdf:hover { background: #0369a1; }
+    .btn-download-pdf:active { transform: scale(0.98); }
+    .btn-download-html {
+      background: #059669; color: #fff; border: none; border-radius: 10px;
+      padding: 8px 14px; font-size: 13px; font-weight: 800; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-download-html:hover { background: #047857; }
+    .btn-download-html:active { transform: scale(0.98); }
 
     .stickers-sheet {
       max-width: 960px;
@@ -257,6 +282,7 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
       display: grid;
       gap: 12px;
     }
+    .stickers-sheet.layout-75x100 { max-width: 75mm; grid-template-columns: 75mm; justify-content: center; gap: 10px; margin: 0 auto; }
     .stickers-sheet.layout-a4-4 { grid-template-columns: repeat(2, 95mm); justify-content: center; gap: 6mm; }
     .stickers-sheet.layout-a4-6 { grid-template-columns: repeat(2, 95mm); justify-content: center; gap: 4mm; }
     .stickers-sheet.layout-thermal { max-width: 100mm; grid-template-columns: 96mm; justify-content: center; gap: 14px; }
@@ -282,6 +308,43 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
       page-break-after: always;
       break-after: page;
     }
+    .layout-75x100 .sticker-card {
+      width: 75mm;
+      min-height: 98mm;
+      max-height: 100mm;
+      box-sizing: border-box;
+      border: 1.5px solid #0f172a;
+      padding: 5px 6px;
+      gap: 3px;
+      page-break-after: always;
+      break-after: page;
+      overflow: hidden;
+    }
+    .layout-75x100 .shop-logo { height: 20px; width: auto; max-width: 90px; }
+    .layout-75x100 .shop-name-fallback { font-size: 11px; }
+    .layout-75x100 .shop-sub { font-size: 7px; }
+    .layout-75x100 .order-id { font-size: 9.5px; padding: 1px 4px; }
+    .layout-75x100 .order-date { font-size: 8px; }
+    .layout-75x100 .courier-box { padding: 3px 5px; gap: 2px; }
+    .layout-75x100 .courier-name { font-size: 10px; }
+    .layout-75x100 .courier-status { font-size: 8px; padding: 0 4px; }
+    .layout-75x100 .area-pill { font-size: 8px; padding: 1px 4px; }
+    .layout-75x100 .tracking-grid { font-size: 8.5px; gap: 4px; }
+    .layout-75x100 .track-line strong { font-size: 9px; }
+    .layout-75x100 .barcode-wrap { margin-top: 1px; }
+    .layout-75x100 .barcode-wrap svg { max-width: 150px; height: 18px; }
+    .layout-75x100 .customer-box { padding: 3px 5px; }
+    .layout-75x100 .box-label { font-size: 7.5px; margin-bottom: 1px; }
+    .layout-75x100 .customer-name { font-size: 11px; }
+    .layout-75x100 .customer-phone { font-size: 10px; }
+    .layout-75x100 .customer-addr { font-size: 9px; line-height: 1.15; margin-top: 1px; }
+    .layout-75x100 .items-box { padding-top: 2px; }
+    .layout-75x100 .items-list { gap: 2px; }
+    .layout-75x100 .item-row { font-size: 9px; line-height: 1.15; padding: 1px 0; }
+    .layout-75x100 .item-name { font-size: 9px; }
+    .layout-75x100 .attr-pill { font-size: 7.5px; padding: 0 3px; }
+    .layout-75x100 .item-qty { font-size: 8px; padding: 0 3px; }
+    .layout-75x100 .sticker-price-block { font-size: 9.5px; padding-top: 2px; }
 
     .sticker-header {
       display: flex; justify-content: space-between; align-items: center;
@@ -359,12 +422,13 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
     @media print {
       body { background: #ffffff; padding: 0; }
       .no-print { display: none !important; }
-      .stickers-sheet { max-width: 100%; }
-      .layout-thermal { max-width: 100%; }
+      .stickers-sheet { max-width: 100% !important; margin: 0 auto !important; }
+      .layout-75x100 { max-width: 100% !important; }
+      .layout-thermal { max-width: 100% !important; }
     }
   </style>
   <style id="page-size-style">
-    ${defaultLayout === 'thermal' ? '@page { size: 4in 6in; margin: 2mm; }' : '@page { size: A4 portrait; margin: 6mm; }'}
+    ${defaultLayout === 'thermal' ? '@page { size: 4in 6in; margin: 2mm; }' : defaultLayout === '75x100' ? '@page { size: 75mm 100mm; margin: 0; }' : '@page { size: A4 portrait; margin: 6mm; }'}
   </style>
 </head>
 <body class="${showPriceClass}">
@@ -374,8 +438,9 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
       <span style="font-size:12px;color:#64748b;font-weight:600;">শপ লোগো, কাস্টমার তথ্য, কুরিয়ার ট্র্যাকিং ও পণ্যের সাইজ/কালারসহ</span>
     </div>
     <div class="toolbar-right">
-      <select id="layout-select" class="select-layout" onchange="const s=document.getElementById('sheet'); s.className='stickers-sheet layout-'+this.value; document.getElementById('page-size-style').textContent = this.value === 'thermal' ? '@page { size: 4in 6in; margin: 2mm; }' : '@page { size: A4 portrait; margin: 6mm; }';">
-        <option value="thermal"${defaultLayout === 'thermal' ? ' selected' : ''}>স্টিকার রোল (১টি করে সিরিয়াল · 4×6 in)</option>
+      <select id="layout-select" class="select-layout" onchange="updateStickerLayout(this.value)">
+        <option value="75x100"${defaultLayout === '75x100' ? ' selected' : ''}>স্টিকার রোল (75×100 mm)</option>
+        <option value="thermal"${defaultLayout === 'thermal' ? ' selected' : ''}>স্টিকার রোল (4×6 in · 100×150mm)</option>
         <option value="a4-4"${defaultLayout === 'a4-4' ? ' selected' : ''}>A4 স্টিকার (৪টি/পৃষ্ঠা · 95×132mm)</option>
         <option value="a4-6"${defaultLayout === 'a4-6' ? ' selected' : ''}>A4 কমপ্যাক্ট (৬টি/পৃষ্ঠা · 95×88mm)</option>
       </select>
@@ -383,17 +448,100 @@ export function buildBulkOrderStickersHtml(orders: any[], options: BulkStickerOp
         <input type="checkbox" id="toggle-price" ${options.showPrice ? 'checked' : ''} onchange="document.body.classList.toggle('show-prices', this.checked)" />
         প্রাইস/COD দেখান
       </label>
-      <button type="button" class="print-btn" onclick="window.print()">🖨️ প্রিন্ট করুন (${safeOrders.length})</button>
+      <button type="button" class="print-btn" onclick="window.print()">🖨️ স্পষ্ট PDF সেভ বা প্রিন্ট (${safeOrders.length})</button>
+      <button type="button" id="btn-download-pdf" class="btn-download-pdf" onclick="downloadStickerPdf()">📥 ১-ক্লিক PDF ডাউনলোড</button>
+      <button type="button" id="btn-download-html" class="btn-download-html" onclick="downloadStickerHtml()">💾 ফাইল সেভ (HTML)</button>
     </div>
   </div>
   <main id="sheet" class="stickers-sheet layout-${escapeHtml(defaultLayout)}">
     ${stickerCardsHtml}
   </main>
+  <script>
+    function updateStickerLayout(val) {
+      var s = document.getElementById('sheet');
+      if (s) s.className = 'stickers-sheet layout-' + val;
+      var style = document.getElementById('page-size-style');
+      if (style) {
+        if (val === '75x100') {
+          style.textContent = '@page { size: 75mm 100mm; margin: 0; }';
+        } else if (val === 'thermal') {
+          style.textContent = '@page { size: 4in 6in; margin: 2mm; }';
+        } else {
+          style.textContent = '@page { size: A4 portrait; margin: 6mm; }';
+        }
+      }
+    }
+
+    function downloadStickerHtml() {
+      try {
+        var clone = document.documentElement.cloneNode(true);
+        var blob = new Blob(['<!DOCTYPE html>\\n' + clone.outerHTML], { type: 'text/html;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        var sel = document.getElementById('layout-select');
+        var layout = sel ? sel.value : '75x100';
+        var dateStr = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = 'parcel-stickers-' + layout + '-' + dateStr + '.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+      } catch (err) {
+        alert('ফাইল তৈরিতে সমস্যা হয়েছে: ' + err.message);
+      }
+    }
+
+    async function downloadStickerPdf() {
+      var btn = document.getElementById('btn-download-pdf');
+      var sel = document.getElementById('layout-select');
+      var layout = sel ? sel.value : '75x100';
+      var dateStr = new Date().toISOString().slice(0, 10);
+      var filename = 'parcel-stickers-' + layout + '-' + dateStr + '.pdf';
+
+      if (typeof html2pdf !== 'undefined') {
+        if (btn) { btn.innerText = '⏳ হাই-রেজুলেশন PDF তৈরি হচ্ছে...'; btn.disabled = true; }
+        try {
+          if (document.fonts && document.fonts.ready) {
+            await document.fonts.ready;
+          }
+        } catch (e) {}
+        var element = document.getElementById('sheet');
+        var is75 = layout === '75x100';
+        var isThermal = layout === 'thermal';
+        var pdfFormat = is75 ? [75, 100] : (isThermal ? [101.6, 152.4] : 'a4');
+        var margin = is75 ? 0 : (isThermal ? 2 : 4);
+
+        var opt = {
+          margin: margin,
+          filename: filename,
+          image: { type: 'jpeg', quality: 1.0 },
+          html2canvas: { scale: 4, useCORS: true, logging: false, scrollY: 0 },
+          jsPDF: { unit: 'mm', format: pdfFormat, orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save().then(function() {
+          if (btn) { btn.innerText = '📥 ১-ক্লিক PDF ডাউনলোড'; btn.disabled = false; }
+        }).catch(function(err) {
+          console.error(err);
+          if (btn) { btn.innerText = '📥 ১-ক্লিক PDF ডাউনলোড'; btn.disabled = false; }
+          alert('১০০% স্পষ্ট ভেক্টর PDF পেতে প্রিন্ট ডায়ালগ থেকে Destination এ "Save as PDF" দিন।');
+          window.print();
+        });
+      } else {
+        window.print();
+      }
+    }
+  </script>
 </body>
 </html>`;
 }
 
-export function printBulkOrderStickers(orders: any[], siteConfig?: any): void {
+export function printBulkOrderStickers(
+  orders: any[],
+  siteConfig?: any,
+  preferredLayout: 'a4-4' | 'a4-6' | 'thermal' | '75x100' = '75x100'
+): void {
   const safeOrders = Array.isArray(orders) ? orders.filter(Boolean) : [];
   if (safeOrders.length === 0) {
     toast.error('প্রিন্ট করার জন্য অন্তত একটি অর্ডার সিলেক্ট করুন!');
@@ -410,7 +558,7 @@ export function printBulkOrderStickers(orders: any[], siteConfig?: any): void {
     shopName: siteConfig?.siteName || 'i SHOP BD',
     logoUrl: siteConfig?.logo || '/logo.png',
     baseUrl: typeof window !== 'undefined' ? window.location.origin : '',
-    layout: 'thermal',
+    layout: preferredLayout,
     showPrice: false,
   });
 

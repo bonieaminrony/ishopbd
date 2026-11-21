@@ -19,8 +19,8 @@ if (in_array($origin, $allowedOrigins)) {
 } else {
     header("Access-Control-Allow-Origin: https://ishopbd.com");
 }
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Content-Type: application/json; charset=UTF-8");
 header("X-Content-Type-Options: nosniff");
 header("X-Frame-Options: DENY");
@@ -28,6 +28,55 @@ header("X-Frame-Options: DENY");
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit(0);
+}
+
+require_once __DIR__ . '/_marketing_lib.php';
+
+// --- BALANCE CHECK ACTION ---
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && (isset($_GET['action']) || isset($_GET['apiKey']) || isset($_GET['balance']))) {
+    $apiKey = trim($_GET['apiKey'] ?? '');
+    if (empty($apiKey)) {
+        $sa = marketingGetServiceAccount();
+        $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
+        $dsToken = marketingGetDatastoreToken($sa);
+        if ($dsToken) {
+            $kCh = curl_init("https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/admin_config/keys");
+            curl_setopt_array($kCh, [
+                CURLOPT_HTTPHEADER => ["Authorization: Bearer $dsToken"],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 8
+            ]);
+            $kResp = json_decode(curl_exec($kCh) ?: '', true);
+            curl_close($kCh);
+            if (isset($kResp['fields'])) {
+                $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
+                if (!empty($kData['smsApiKey'])) $apiKey = trim((string)$kData['smsApiKey']);
+            }
+        }
+    }
+    if (empty($apiKey)) {
+        $apiKey = trim((string)marketingGetEnvVar('SMS_API_KEY')) ?: getEnvVar('SMS_API_KEY');
+    }
+    if (empty($apiKey)) {
+        $apiKey = 'ZmxsvZfckGDXn7Pa2Tjj';
+    }
+
+    $ch = curl_init("https://bulksmsbd.net/api/getBalanceApi?api_key=" . urlencode($apiKey));
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true
+    ]);
+    $resp = curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($resp ?: '', true);
+    if (isset($data['response_code']) && $data['response_code'] == 202 && isset($data['balance'])) {
+        echo json_encode(["success" => true, "balance" => $data['balance']]);
+    } else {
+        echo json_encode(["success" => false, "message" => $data['error_message'] ?? "ব্যালেন্স চেক করা যায়নি"]);
+    }
+    exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -98,7 +147,7 @@ if (!is_array($data)) {
 
 // Sanitize inputs
 $phone   = preg_replace('/[^0-9+]/', '', trim($data['phone'] ?? ''));
-$message = strip_tags(substr(trim($data['message'] ?? ''), 0, 500));  // Max 500 chars
+$message = strip_tags(substr(trim($data['message'] ?? ''), 0, 800));  // Max 800 chars
 
 if (empty($phone) || empty($message)) {
     http_response_code(400);
@@ -113,14 +162,50 @@ if (!preg_match('/^(\+?88)?01[3-9]\d{8}$/', $phone)) {
     exit;
 }
 
-// --- LOAD CREDENTIALS ---
-$smsApiKey  = getEnvVar('SMS_API_KEY');
-$smsSenderId = getEnvVar('SMS_SENDER_ID', '8809648908219');
+require_once __DIR__ . '/_marketing_lib.php';
+
+// --- LOAD CREDENTIALS (Input -> Firestore admin_config/keys -> Env -> Fallback) ---
+$smsApiKey   = trim((string)($data['apiKey'] ?? ''));
+$smsSenderId = trim((string)($data['senderId'] ?? ''));
+
+if (empty($smsApiKey) || empty($smsSenderId)) {
+    $sa = marketingGetServiceAccount();
+    $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
+    $dsToken = marketingGetDatastoreToken($sa);
+    if ($dsToken) {
+        $kCh = curl_init("https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/admin_config/keys");
+        curl_setopt_array($kCh, [
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer $dsToken"],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 8
+        ]);
+        $kResp = json_decode(curl_exec($kCh) ?: '', true);
+        curl_close($kCh);
+        if (isset($kResp['fields'])) {
+            $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
+            if (empty($smsApiKey) && !empty($kData['smsApiKey'])) {
+                $smsApiKey = trim((string)$kData['smsApiKey']);
+            }
+            if (empty($smsSenderId) && !empty($kData['smsSenderId'])) {
+                $smsSenderId = trim((string)$kData['smsSenderId']);
+            }
+        }
+    }
+}
 
 if (empty($smsApiKey)) {
-    http_response_code(500);
-    echo json_encode(["success" => false, "message" => "SMS service not configured"]);
-    exit;
+    $smsApiKey = trim((string)marketingGetEnvVar('SMS_API_KEY')) ?: getEnvVar('SMS_API_KEY');
+}
+if (empty($smsSenderId)) {
+    $smsSenderId = trim((string)marketingGetEnvVar('SMS_SENDER_ID')) ?: getEnvVar('SMS_SENDER_ID');
+}
+
+// Fallback to active verified credentials
+if (empty($smsApiKey)) {
+    $smsApiKey = 'ZmxsvZfckGDXn7Pa2Tjj';
+}
+if (empty($smsSenderId)) {
+    $smsSenderId = '8809648908219';
 }
 
 // --- FORMAT PHONE ---

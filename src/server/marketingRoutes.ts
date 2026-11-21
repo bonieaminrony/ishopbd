@@ -247,14 +247,14 @@ export function registerMarketingRoutes(
       const defaultConfig = {
         meta: {
           enabled: true,
-          pixelId: '1358996272808579',
+          pixelId: '2227433448178793',
           accessToken: '',
           testEventCode: '',
           capiEnabled: true,
         },
         tiktok: {
           enabled: true,
-          pixelId: 'DBPHK73C77U4J2JR78JG',
+          pixelId: 'DC0TOGBC77U7MFIGUL5G',
           accessToken: '',
           testEventCode: '',
           eventsApiEnabled: true,

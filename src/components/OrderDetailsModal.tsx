@@ -61,12 +61,8 @@ export default function OrderDetailsModal({
   const modalCourierReport = getCourierReportForPhone(courierReports, modalPhone);
   const isModalCourierLoading = isPhoneLoadingInRecord(loadingCourierReports, modalPhone);
 
-  useEffect(() => {
-    if (!modalPhone || !checkCourierReport || modalCourierReport || isModalCourierLoading) return;
-    if (autoRequestedPhonesRef.current.has(modalPhone)) return;
-    autoRequestedPhonesRef.current.add(modalPhone);
-    checkCourierReport(modalPhone);
-  }, [modalPhone, modalCourierReport, isModalCourierLoading, checkCourierReport]);
+  // Auto-requesting courier report on modal open is disabled to avoid exhausting daily API limit (10/day).
+  // Admin checks report on-demand by clicking the "চেক করুন" button.
 
   useEffect(() => {
     return () => {
@@ -85,6 +81,54 @@ export default function OrderDetailsModal({
     ? getOrderItemsSafe(editingOrderData)
     : getOrderItemsSafe(selectedOrderForDetails);
 
+  const orderSubtotal = Number(
+    selectedOrderForDetails.subtotal !== undefined && selectedOrderForDetails.subtotal !== null
+      ? selectedOrderForDetails.subtotal
+      : (Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0) + (Number(selectedOrderForDetails.discount) || 0)
+  );
+  const orderDiscount = Number(selectedOrderForDetails.discount || 0);
+  const orderDelivery = Number(selectedOrderForDetails.deliveryCharge || 0);
+  const orderWeight = selectedOrderForDetails.totalWeight !== undefined && selectedOrderForDetails.totalWeight !== null
+    ? Number(selectedOrderForDetails.totalWeight)
+    : 0.5;
+
+  const handleFinancialChange = async (updates: {
+    subtotal?: number;
+    discount?: number;
+    deliveryCharge?: number;
+    totalWeight?: number;
+  }) => {
+    const newSubtotal = updates.subtotal !== undefined ? updates.subtotal : orderSubtotal;
+    const newDiscount = updates.discount !== undefined ? updates.discount : orderDiscount;
+    const newDelivery = updates.deliveryCharge !== undefined ? updates.deliveryCharge : orderDelivery;
+    const newWeight = updates.totalWeight !== undefined ? updates.totalWeight : orderWeight;
+    const newTotal = Math.max(0, newSubtotal - newDiscount + newDelivery);
+
+    const currentCod = selectedOrderForDetails.codAmount;
+    const newCod = (currentCod === undefined || currentCod === selectedOrderForDetails.total)
+      ? newTotal
+      : currentCod;
+
+    const patch = {
+      subtotal: newSubtotal,
+      discount: newDiscount,
+      deliveryCharge: newDelivery,
+      totalWeight: newWeight,
+      total: newTotal,
+      codAmount: newCod
+    };
+
+    setSelectedOrderForDetails((prev: any) => prev ? { ...prev, ...patch } : null);
+    setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? { ...o, ...patch } : o));
+
+    try {
+      const orderRef = doc(db, "orders", selectedOrderForDetails.id);
+      await updateDoc(orderRef, patch);
+    } catch (err) {
+      console.error("Failed to update financials in Firestore", err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
       <motion.div
@@ -98,16 +142,16 @@ export default function OrderDetailsModal({
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="relative bg-white w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-[2.5rem] shadow-2xl flex flex-col"
+        className="relative bg-white w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[2.5rem] shadow-2xl flex flex-col"
       >
         {/* Modal Header */}
-        <div className="p-4 sm:p-6 border-b flex justify-between items-center bg-gray-50/50 shrink-0">
+        <div className="p-5 sm:p-7 border-b flex justify-between items-center bg-gray-50/70 shrink-0">
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl">
-              <History size={22} />
+              <History size={24} />
             </div>
             <div>
-              <h3 className="text-lg sm:text-xl font-bold text-secondary">অর্ডার ডিটেইলস</h3>
+              <h3 className="text-xl sm:text-2xl font-bold text-secondary">অর্ডার ডিটেইলস</h3>
               <p className="text-xs text-gray-400 font-bold tracking-wider uppercase">
                 Order ID: #{String(selectedOrderForDetails.displayId || selectedOrderForDetails.id).slice(-6).toUpperCase()}
               </p>
@@ -121,9 +165,9 @@ export default function OrderDetailsModal({
           </button>
         </div>
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6 sm:space-y-7 no-scrollbar">
           {/* Customer Section */}
-          <div className="bg-gray-50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-gray-100">
+          <div className="bg-gray-50 rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                 <User size={12} /> কাস্টমার ইনফরমেশন
@@ -138,7 +182,11 @@ export default function OrderDetailsModal({
                         customerName: selectedOrderForDetails.customerName || "",
                         customerPhone: selectedOrderForDetails.customerPhone || "",
                         address: selectedOrderForDetails.address || "",
-                        items: JSON.parse(JSON.stringify(getOrderItemsSafe(selectedOrderForDetails)))
+                        items: JSON.parse(JSON.stringify(getOrderItemsSafe(selectedOrderForDetails))),
+                        subtotal: orderSubtotal,
+                        discount: orderDiscount,
+                        deliveryCharge: orderDelivery,
+                        totalWeight: orderWeight
                       });
                       setIsEditingOrder(true);
                     }
@@ -261,7 +309,7 @@ export default function OrderDetailsModal({
                             className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
                           >
                             {isModalCourierLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCcw size={10} />}
-                            {isModalCourierLoading ? "চেক হচ্ছে..." : "রিফ্রেশ"}
+                            {isModalCourierLoading ? "চেক হচ্ছে..." : (hasCourierStats ? "রিফ্রেশ" : "চেক করুন")}
                           </button>
                         )}
                       </div>
@@ -284,7 +332,7 @@ export default function OrderDetailsModal({
                       </div>
                     ) : (
                       <p className="text-xs font-bold text-slate-500 text-center py-2">
-                        {isModalCourierLoading ? "Steadfast থেকে কাস্টমার হিস্ট্রি লোড হচ্ছে..." : "এখনো কুরিয়ার রেশিও পাওয়া যায়নি (রিফ্রেশ চাপুন)"}
+                        {isModalCourierLoading ? "Steadfast থেকে কাস্টমার হিস্ট্রি লোড হচ্ছে..." : "কুরিয়ার ও ফ্রড হিস্ট্রি দেখতে 'চেক করুন' বাটনে চাপুন"}
                       </p>
                     )}
                   </div>
@@ -374,7 +422,10 @@ export default function OrderDetailsModal({
             <div className="space-y-3">
               {displayItems.map((item: any, idx: number) => {
                 const qty = Math.max(1, Number(item?.quantity) || 1);
-                const unitPrice = Number(getProductPrice(item?.product, qty)) || Number(item?.price) || 0;
+                const itemRawPrice = Number(item?.price);
+                const unitPrice = Number.isFinite(itemRawPrice) && itemRawPrice > 0
+                  ? itemRawPrice
+                  : (Number(getProductPrice(item?.product, qty)) || 0);
                 const colors = Array.isArray(item?.product?.colors) ? item.product.colors : [];
                 const sizes = Array.isArray(item?.product?.sizes) ? item.product.sizes : [];
                 return (
@@ -623,79 +674,116 @@ export default function OrderDetailsModal({
           })()}
 
           {/* Totals Section */}
-          <div className="bg-secondary text-white rounded-[2rem] p-8 space-y-4">
-            <div className="flex justify-between items-center text-secondary-foreground opacity-60">
-              <span className="text-xs font-bold">ওজন</span>
-              <span className="font-bold italic">
-                {(() => {
-                  const weight = Number(selectedOrderForDetails.totalWeight);
-                  if (!Number.isFinite(weight) || weight <= 0) return "N/A";
-                  return weight >= 1
-                    ? `${weight.toFixed(2)} কেজি`
-                    : `${(weight * 1000).toFixed(0)} গ্রাম`;
-                })()}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-secondary-foreground opacity-60">
-              <span className="text-xs font-bold">সাব-টোটাল</span>
-              <span className="font-bold italic">৳{Number(selectedOrderForDetails.subtotal ?? ((Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0))) || 0}</span>
-            </div>
-             <div className="flex justify-between items-center text-secondary-foreground pb-4 border-b border-white/10">
-              <span className="text-xs font-bold opacity-60">ডেলিভারি চার্জ</span>
+          <div className="bg-secondary text-white rounded-[2rem] p-6 sm:p-7 space-y-4 shadow-xl border border-slate-700/60">
+            {/* ওজন (Weight) */}
+            <div className="flex justify-between items-center text-white/90">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-white">ওজন (Weight)</span>
+                <span className="text-[10px] text-gray-300">(কেজি)</span>
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  step="0.1"
                   min="0"
-                  value={selectedOrderForDetails.deliveryCharge === undefined || selectedOrderForDetails.deliveryCharge === null ? "" : selectedOrderForDetails.deliveryCharge}
-                  onChange={async (e) => {
-                    const val = e.target.value === "" ? 0 : Number(e.target.value);
-                    const subtotal = Number(selectedOrderForDetails.subtotal) || ((Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0));
-                    const newTotal = subtotal + val;
-                    
-                    setSelectedOrderForDetails((prev: any) => prev ? { ...prev, deliveryCharge: val, total: newTotal } : null);
-                    
-                    try {
-                      const orderRef = doc(db, "orders", selectedOrderForDetails.id);
-                      await updateDoc(orderRef, { deliveryCharge: val, total: newTotal });
-                      setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? { ...o, deliveryCharge: val, total: newTotal } : o));
-                    } catch (err) {
-                      console.error("Failed to update delivery charge", err);
-                    }
+                  value={orderWeight}
+                  onChange={(e) => {
+                    const wt = Math.max(0, parseFloat(e.target.value) || 0);
+                    handleFinancialChange({ totalWeight: wt });
                   }}
-                  className="w-16 text-right bg-white/10 text-white border border-white/20 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-primary text-xs font-bold"
+                  className="w-20 text-right bg-white/10 text-white border border-white/20 rounded-lg px-2.5 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-white/20 transition-all"
+                  placeholder="0.5"
+                />
+                <span className="text-xs font-bold text-gray-300">kg</span>
+              </div>
+            </div>
+
+            {/* সাব-টোটাল (Subtotal) */}
+            <div className="flex justify-between items-center text-white/90">
+              <div>
+                <span className="text-xs font-bold text-white">সাব-টোটাল (পণ্যের দাম)</span>
+                <p className="text-[10px] text-gray-400">প্রয়োজনে ম্যানুয়ালি এডিট করতে পারেন</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-gray-300">৳</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={orderSubtotal}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                    handleFinancialChange({ subtotal: val });
+                  }}
+                  className="w-32 text-right bg-white/10 text-white border border-white/20 rounded-lg px-2.5 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-primary focus:bg-white/20 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* ছাড় / ডিসকাউন্ট (Discount) */}
+            <div className="flex justify-between items-center text-white/90">
+              <div>
+                <span className="text-xs font-bold text-amber-300">ছাড় / ডিসকাউন্ট</span>
+                <p className="text-[10px] text-amber-200/70">কাস্টমারকে দেওয়া ডিসকাউন্ট</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold text-amber-300">-৳</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={orderDiscount}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                    handleFinancialChange({ discount: val });
+                  }}
+                  className="w-32 text-right bg-amber-500/20 text-amber-300 border border-amber-400/40 rounded-lg px-2.5 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-400 focus:bg-amber-500/30 transition-all"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* ডেলিভারি চার্জ */}
+            <div className="flex justify-between items-center text-white/90 pb-4 border-b border-white/10">
+              <span className="text-xs font-bold text-white">ডেলিভারি চার্জ</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-gray-300">৳</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={orderDelivery}
+                  onChange={(e) => {
+                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                    handleFinancialChange({ deliveryCharge: val });
+                  }}
+                  className="w-24 text-right bg-white/10 text-white border border-white/20 rounded-lg px-2.5 py-1 outline-none focus:ring-2 focus:ring-primary focus:bg-white/20 text-xs font-bold transition-all"
                 />
                 <button
                   type="button"
-                  onClick={async () => {
-                    const val = 0;
-                    const subtotal = Number(selectedOrderForDetails.subtotal) || ((Number(selectedOrderForDetails.total) || 0) - (Number(selectedOrderForDetails.deliveryCharge) || 0));
-                    const newTotal = subtotal;
-                    
-                    setSelectedOrderForDetails((prev: any) => prev ? { ...prev, deliveryCharge: val, total: newTotal } : null);
-                    
-                    try {
-                      const orderRef = doc(db, "orders", selectedOrderForDetails.id);
-                      await updateDoc(orderRef, { deliveryCharge: val, total: newTotal });
-                      setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? { ...o, deliveryCharge: val, total: newTotal } : o));
-                    } catch (err) {
-                      console.error("Failed to update delivery charge", err);
-                    }
+                  onClick={() => {
+                    handleFinancialChange({ deliveryCharge: 0 });
                   }}
-                  className="text-[10px] bg-red-600 hover:bg-red-700 text-white font-black px-2 py-1 rounded transition-all active:scale-95 shadow-md"
+                  className="text-[10px] bg-red-600 hover:bg-red-700 text-white font-black px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-md cursor-pointer"
                 >
                   ফ্রি
                 </button>
               </div>
             </div>
+
             {selectedOrderForDetails.pointsUsed > 0 && (
               <div className="flex justify-between items-center text-[#ffeb3b] pb-4 border-b border-white/10">
                 <span className="text-xs font-bold">রিওয়ার্ড পয়েন্ট ব্যবহৃত ({selectedOrderForDetails.pointsUsed} পয়েন্ট)</span>
                 <span className="font-bold italic">-৳{selectedOrderForDetails.pointsDiscount || Math.floor(selectedOrderForDetails.pointsUsed / 10)}</span>
               </div>
             )}
+
+            {/* সর্বমোট (Total) */}
             <div className="flex justify-between items-center pt-2">
-              <span className="text-lg font-bold tracking-tight">সর্বমোট</span>
-              <span className="text-2xl font-bold text-primary italic drop-shadow-lg">৳{Number(selectedOrderForDetails.total) || 0}</span>
+              <div>
+                <span className="text-lg font-black tracking-tight text-white">সর্বমোট</span>
+                <p className="text-[10px] text-gray-300">(সাবটোটাল - ছাড় + ডেলিভারি)</p>
+              </div>
+              <span className="text-2xl font-black text-primary italic drop-shadow-lg">
+                ৳{Math.max(0, orderSubtotal - orderDiscount + orderDelivery)}
+              </span>
             </div>
           </div>
         </div>

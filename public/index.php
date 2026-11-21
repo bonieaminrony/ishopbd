@@ -647,18 +647,23 @@ if ($matchedProduct) {
     $html = str_replace('<div id="root">', '<div id="root">' . $crawlerFallback, $html);
 
 } else {
-    // 2. Detect Category URL
+    // 2. Detect Category & Subcategory URL
     $categorySlug = isset($_GET['category']) ? $_GET['category'] : (isset($_GET['c']) ? $_GET['c'] : null);
+    $subcategorySlug = isset($_GET['subcategory']) ? $_GET['subcategory'] : (isset($_GET['sub']) ? $_GET['sub'] : null);
     if (!$categorySlug) {
         $effectiveUri = getEffectiveRequestUri();
         $path = parse_url($effectiveUri, PHP_URL_PATH) ?: $effectiveUri;
-        if (preg_match('~/(?:category|c)/([^/?#]+)~i', $path, $catMatches)) {
+        if (preg_match('~/(?:category|c)/([^/?#]+)(?:/([^/?#]+))?~i', $path, $catMatches)) {
             $categorySlug = urldecode($catMatches[1]);
+            if (!empty($catMatches[2])) {
+                $subcategorySlug = urldecode($catMatches[2]);
+            }
         }
     }
 
     if ($categorySlug) {
         $categorySlug = strtolower(trim($categorySlug));
+        $subcategorySlug = !empty($subcategorySlug) ? strtolower(trim($subcategorySlug)) : '';
         $catData = [
             "charger-fan" => [
                 "title" => "চার্জার ফ্যান ও মিনি ফ্যান দাম | Rechargeable Charger Fan Price in BD - i SHOP BD",
@@ -693,10 +698,18 @@ if ($matchedProduct) {
         ];
 
         $formattedName = ucwords(str_replace('-', ' ', $categorySlug));
-        $catTitle = isset($catData[$categorySlug]['title']) ? $catData[$categorySlug]['title'] : "{$formattedName} Price in Bangladesh - i SHOP BD";
-        $catDesc = isset($catData[$categorySlug]['desc']) ? $catData[$categorySlug]['desc'] : "Buy authentic {$formattedName} online at the best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!";
-        $catKw = isset($catData[$categorySlug]['kw']) ? $catData[$categorySlug]['kw'] : "{$categorySlug}, buy {$categorySlug} bd, ishopbd";
-        $catUrl = "$baseUrl/category/$categorySlug";
+        $formattedSubName = !empty($subcategorySlug) ? ucwords(str_replace('-', ' ', $subcategorySlug)) : '';
+        if (!empty($subcategorySlug)) {
+            $catTitle = "{$formattedSubName} - {$formattedName} Price in Bangladesh - i SHOP BD";
+            $catDesc = "Buy authentic {$formattedSubName} from {$formattedName} category online at best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!";
+            $catKw = "{$subcategorySlug}, {$categorySlug}, buy {$subcategorySlug} bd, ishopbd";
+            $catUrl = "$baseUrl/category/$categorySlug/$subcategorySlug";
+        } else {
+            $catTitle = isset($catData[$categorySlug]['title']) ? $catData[$categorySlug]['title'] : "{$formattedName} Price in Bangladesh - i SHOP BD";
+            $catDesc = isset($catData[$categorySlug]['desc']) ? $catData[$categorySlug]['desc'] : "Buy authentic {$formattedName} online at the best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!";
+            $catKw = isset($catData[$categorySlug]['kw']) ? $catData[$categorySlug]['kw'] : "{$categorySlug}, buy {$categorySlug} bd, ishopbd";
+            $catUrl = "$baseUrl/category/$categorySlug";
+        }
 
         $titleEscaped = htmlspecialchars($catTitle, ENT_QUOTES, 'UTF-8');
         $descEscaped = htmlspecialchars($catDesc, ENT_QUOTES, 'UTF-8');
@@ -727,13 +740,21 @@ if ($matchedProduct) {
         $html = preg_replace('/<meta (?:name|property)="twitter:description" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:description\" content=\"{$descEscaped}\" />", $html);
         $html = preg_replace('/<meta (?:name|property)="twitter:image" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:image\" content=\"{$imgEscaped}\" />", $html);
 
-        // Filter Category Products
+        // Filter Category & Subcategory Products
         $categoryProducts = [];
         foreach ($allProducts as $prod) {
             if (!empty($prod['deleted']) || (isset($prod['isPublished']) && $prod['isPublished'] === false)) continue;
             $pCat = strtolower(getCategorySlug($prod['category'] ?? ''));
-            if ($pCat === $categorySlug || strpos($pCat, $categorySlug) !== false || strpos($categorySlug, $pCat) !== false) {
-                $categoryProducts[] = $prod;
+            $pSub = strtolower(getCategorySlug($prod['subcategory'] ?? ''));
+            $catMatches = ($pCat === $categorySlug || strpos($pCat, $categorySlug) !== false || strpos($categorySlug, $pCat) !== false);
+            if ($catMatches) {
+                if (!empty($subcategorySlug)) {
+                    if ($pSub === $subcategorySlug || strpos($pSub, $subcategorySlug) !== false || strpos($subcategorySlug, $pSub) !== false) {
+                        $categoryProducts[] = $prod;
+                    }
+                } else {
+                    $categoryProducts[] = $prod;
+                }
             }
         }
 
@@ -860,7 +881,45 @@ if (!empty($allBanners)) {
 }
 // Inject Initial Cached Products for Instant Client-side Hydration
 if (!empty($allProducts)) {
-    $cleanJson = json_encode($allProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $lightProducts = array_map(function($p) {
+        $clean = $p;
+        $pid = isset($clean['id']) ? $clean['id'] : '';
+        if ($pid && !empty($clean['image']) && strpos($clean['image'], 'data:image') === 0) {
+            foreach (['webp', 'jpg', 'png'] as $ext) {
+                if (file_exists(__DIR__ . "/api/img_cache/{$pid}.{$ext}")) {
+                    $clean['image'] = "/api/img_cache/{$pid}.{$ext}";
+                    break;
+                }
+            }
+        }
+        if (!empty($clean['images']) && is_array($clean['images'])) {
+            $cleanedImages = [];
+            foreach ($clean['images'] as $idx => $img) {
+                if (is_string($img) && strpos($img, 'data:image') === 0 && $pid) {
+                    $found = false;
+                    foreach (['webp', 'jpg', 'png'] as $ext) {
+                        if (file_exists(__DIR__ . "/api/img_cache/{$pid}_idx{$idx}.{$ext}")) {
+                            $cleanedImages[] = "/api/img_cache/{$pid}_idx{$idx}.{$ext}";
+                            $found = true;
+                            break;
+                        }
+                    }
+                    if (!$found && $idx === 0) {
+                        $cleanedImages[] = $clean['image'];
+                    }
+                } else {
+                    $cleanedImages[] = $img;
+                }
+            }
+            $clean['images'] = $cleanedImages;
+        }
+        if (isset($clean['description']) && strlen($clean['description']) > 1000) {
+            $clean['description'] = mb_substr(strip_tags($clean['description']), 0, 500, 'UTF-8');
+        }
+        return $clean;
+    }, $allProducts);
+
+    $cleanJson = json_encode($lightProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $html = str_replace('</head>', "<script>window.__INITIAL_PRODUCTS__ = {$cleanJson};</script></head>", $html);
 }
 

@@ -29,6 +29,12 @@ export const ProductCard = React.memo(({
 
   const productPath = getProductPath(product);
 
+  const isClothing = Boolean(
+    product.showSizeGuide ||
+    (product.category && /jacket|clothing|পোশাক|জ্যাকেট|winter|হুডি|hoodie|shirt|শার্ট|panjabi|পাঞ্জাবি/i.test(product.category)) ||
+    (product.name && /jacket|জ্যাকেট|হুডি|hoodie|ব্লেজার|সোয়েটার|শার্ট|shirt/i.test(product.name))
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -37,7 +43,9 @@ export const ProductCard = React.memo(({
     >
       <a
         href={productPath}
-        className="relative aspect-square overflow-hidden cursor-pointer flex items-center justify-center bg-cream block"
+        className={`relative aspect-square overflow-hidden cursor-pointer flex items-center justify-center block transition-colors ${
+          isClothing ? "bg-gradient-to-b from-gray-50/90 via-slate-50/40 to-gray-100/60 p-2" : "bg-cream"
+        }`}
         onClick={(e) => { e.preventDefault(); openProductDetails(product); }}
       >
         <img
@@ -45,7 +53,9 @@ export const ProductCard = React.memo(({
           alt={product.name}
           width="300"
           height="300"
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          className={`w-full h-full transition-transform duration-500 ${
+            isClothing ? "object-contain drop-shadow-xs group-hover:scale-105" : "object-cover group-hover:scale-110"
+          }`}
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"

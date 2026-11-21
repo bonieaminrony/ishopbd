@@ -528,7 +528,7 @@ if (($action === 'get-keys' || $action === 'keys') && $method === 'GET') {
 if (($action === 'save-keys' || $action === 'keys') && $method === 'POST') {
     $incoming = json_decode(file_get_contents('php://input'), true) ?: [];
     $fields = [];
-    foreach (['steadfastApiKey', 'steadfastSecretKey', 'steadfastWebhookSecret', 'geminiApiKey', 'pathaoClientId', 'pathaoClientSecret', 'pathaoUsername', 'pathaoPassword'] as $k) {
+    foreach (['steadfastApiKey', 'steadfastSecretKey', 'steadfastWebhookSecret', 'geminiApiKey', 'pathaoClientId', 'pathaoClientSecret', 'pathaoUsername', 'pathaoPassword', 'smsApiKey', 'smsSenderId'] as $k) {
         $fields[$k] = firestoreEncodeValue((string)($incoming[$k] ?? ''));
     }
     $fields['updatedAt'] = firestoreEncodeValue(gmdate('c'));

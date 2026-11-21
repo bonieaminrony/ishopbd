@@ -113,14 +113,49 @@ if (!is_array($data)) {
 }
 
 $phones  = $data['phones'] ?? [];
-$message = strip_tags(substr(trim($data['message'] ?? ''), 0, 500));
-$senderId = $data['senderId'] ?? getEnvVar('SMS_SENDER_ID', '8809648908219');
-$smsApiKey = getEnvVar('SMS_API_KEY');
+$message = strip_tags(substr(trim($data['message'] ?? ''), 0, 800));
+$senderId = trim((string)($data['senderId'] ?? ''));
+$smsApiKey = trim((string)($data['apiKey'] ?? ''));
+
+require_once __DIR__ . '/_marketing_lib.php';
+
+if (empty($smsApiKey) || empty($senderId)) {
+    $sa = marketingGetServiceAccount();
+    $projectId = $sa['project_id'] ?? (marketingGetEnvVar('FIREBASE_PROJECT_ID') ?: 'i-shop-bd');
+    $dsToken = marketingGetDatastoreToken($sa);
+    if ($dsToken) {
+        $kCh = curl_init("https://firestore.googleapis.com/v1/projects/{$projectId}/databases/(default)/documents/admin_config/keys");
+        curl_setopt_array($kCh, [
+            CURLOPT_HTTPHEADER => ["Authorization: Bearer $dsToken"],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 8
+        ]);
+        $kResp = json_decode(curl_exec($kCh) ?: '', true);
+        curl_close($kCh);
+        if (isset($kResp['fields'])) {
+            $kData = firestoreDecodeValue(['mapValue' => ['fields' => $kResp['fields']]]);
+            if (empty($smsApiKey) && !empty($kData['smsApiKey'])) {
+                $smsApiKey = trim((string)$kData['smsApiKey']);
+            }
+            if (empty($senderId) && !empty($kData['smsSenderId'])) {
+                $senderId = trim((string)$kData['smsSenderId']);
+            }
+        }
+    }
+}
 
 if (empty($smsApiKey)) {
-    http_response_code(400);
-    echo json_encode(["success" => false, "message" => "এসএমএস এপিআই কী কনফিগার করা নেই"]);
-    exit;
+    $smsApiKey = trim((string)marketingGetEnvVar('SMS_API_KEY')) ?: getEnvVar('SMS_API_KEY');
+}
+if (empty($senderId)) {
+    $senderId = trim((string)marketingGetEnvVar('SMS_SENDER_ID')) ?: getEnvVar('SMS_SENDER_ID', '8809648908219');
+}
+
+if (empty($smsApiKey)) {
+    $smsApiKey = 'ZmxsvZfckGDXn7Pa2Tjj';
+}
+if (empty($senderId)) {
+    $senderId = '8809648908219';
 }
 
 if (!is_array($phones) || count($phones) === 0) {

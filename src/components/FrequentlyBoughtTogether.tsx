@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ShoppingCart, Check, Plus, AlertCircle, Sparkles, Tag, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Check, Plus, AlertCircle, Tag, CheckCircle2 } from 'lucide-react';
 import { Product } from '../types';
 
 export interface FrequentlyBoughtTogetherProps {
@@ -19,7 +19,6 @@ export default function FrequentlyBoughtTogether({
   tempSelectedColor,
   tempSelectedSize,
   openProductDetails,
-  t
 }: FrequentlyBoughtTogetherProps) {
   // 1. Resolve available bundle products from allProducts (excluding self, deleted, unpublished)
   const bundleProducts = useMemo(() => {
@@ -41,8 +40,7 @@ export default function FrequentlyBoughtTogether({
     ...bundleProducts.map(p => ({ item: p, isMain: false }))
   ];
 
-  // 2. Selection states
-  // By default, select main product and in-stock complementary products
+  // 2. Selection states: By default, select main product and in-stock complementary products
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = { [mainProduct.id]: true };
     bundleProducts.forEach(p => {
@@ -114,29 +112,28 @@ export default function FrequentlyBoughtTogether({
 
   const finalBundlePrice = Math.max(0, originalCombinedPrice - discountAmount);
 
-  // 4. Add All Selected Items to Cart
+  // 4. Add All Selected Items to Cart (With Interactive Combo Variant Selection & Bundle Discount)
   const handleAddBundleToCart = () => {
     if (selectedCount === 0) return;
 
-    // Check if any selected item requires a variant selection that is missing
-    for (const { item, isMain } of checkedItems) {
-      if (!isMain && item.variants && item.variants.length > 1) {
-        const chosen = selectedVariants[item.id];
-        if (!chosen || (!chosen.color && !chosen.size)) {
-          setVariantPromptId(item.id);
-          return;
-        }
-      }
-    }
+    let discountApplied = false;
 
-    // Add each selected product to cart
     checkedItems.forEach(({ item, isMain }) => {
       if (isMain) {
-        // Use main product's currently selected variant on page
         addToCartInternal(item, tempSelectedColor || undefined, tempSelectedSize || undefined, 1);
       } else {
         const chosen = selectedVariants[item.id] || {};
-        addToCartInternal(item, chosen.color, chosen.size, 1);
+        let finalItem = item;
+        if (!discountApplied && discountAmount > 0 && selectedCount >= 2) {
+          finalItem = {
+            ...item,
+            price: Math.max(0, Number(item.price || 0) - discountAmount),
+            originalPrice: item.price || item.originalPrice
+          };
+          discountApplied = true;
+        }
+        const addonSize = chosen.size || tempSelectedSize || undefined;
+        addToCartInternal(finalItem, chosen.color, addonSize, 1);
       }
     });
 
@@ -145,39 +142,36 @@ export default function FrequentlyBoughtTogether({
   };
 
   return (
-    <div className="w-full my-8 bg-gradient-to-br from-purple-50/40 via-white to-indigo-50/30 rounded-3xl border border-purple-100/80 p-5 md:p-7 shadow-sm overflow-hidden">
-      {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-6 pb-4 border-b border-purple-100/60">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20">
-            <Sparkles size={18} />
+    <div className="w-full my-8 bg-white rounded-3xl border border-gray-200 p-5 md:p-7 shadow-sm overflow-hidden">
+      {/* Header Banner - Clean, Navy & Red theme, no AI sparkles icon */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-gray-100">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base md:text-lg font-black text-gray-900 tracking-tight">
+              কম্বো অফার
+            </h3>
+            <span className="text-[10px] font-black bg-red-50 text-primary border border-red-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              Special Bundle
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base md:text-lg font-black text-gray-900">
-                Frequently Bought Together
-              </h3>
-              <span className="text-[10px] font-extrabold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Combo Offer
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 font-medium">
-              একত্রে কিনুন এবং স্পেশাল বান্ডেল অফার উপভোগ করুন
-            </p>
-          </div>
+          <p className="text-xs text-gray-600 font-medium mt-0.5">
+            একত্রে কিনুন এবং স্পেশাল বান্ডেল অফার উপভোগ করুন
+          </p>
         </div>
 
-        {discountAmount > 0 && (
-          <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 text-emerald-800 px-3 py-1.5 rounded-full text-xs font-black shadow-xs">
-            <Tag size={13} className="text-emerald-600 shrink-0" />
+        {bundleDiscount > 0 && (
+          <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-primary px-3.5 py-1.5 rounded-full text-xs font-black shadow-2xs">
+            <Tag size={13} className="text-primary shrink-0" />
             <span>
-              Save ৳{discountAmount.toLocaleString()} ({bundleDiscount}{discountType === 'percentage' ? '%' : '৳'} Off)
+              {discountType === 'fixed'
+                ? `৳${bundleDiscount.toLocaleString()} ফ্ল্যাট ছাড়`
+                : `${bundleDiscount}% স্পেশাল ছাড়`}
             </span>
           </div>
         )}
       </div>
 
-      {/* Main Container: Products Grid + Action Sidebar */}
+      {/* Main Container: Products Visual Chain + Summary Sidebar */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Products Visual Chain (Left Side - 8 cols) */}
@@ -185,143 +179,153 @@ export default function FrequentlyBoughtTogether({
           {allBundleItems.map(({ item, isMain }, index) => {
             const isSelected = !!selectedIds[item.id];
             const isOutOfStock = (item.stock !== undefined && item.stock <= 0) || (item.variants && item.variants.length > 0 && item.variants.every(v => v.stock <= 0));
-            const hasMultipleVariants = !isMain && item.variants && item.variants.length > 1;
             const currentVariant = selectedVariants[item.id];
-            const isPrompted = variantPromptId === item.id;
+            const hasVariants = item.variants && item.variants.length > 0;
 
             return (
               <React.Fragment key={item.id}>
                 {index > 0 && (
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-black text-sm shrink-0 shadow-xs">
-                    <Plus size={16} />
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-primary font-black text-sm shrink-0 border border-red-200 shadow-2xs my-auto">
+                    <Plus size={16} strokeWidth={3} />
                   </div>
                 )}
 
                 <div 
-                  className={`relative flex-1 min-w-[160px] max-w-full md:max-w-[210px] bg-white rounded-2xl border p-3.5 flex flex-col justify-between transition-all ${
+                  className={`relative w-full md:w-[220px] md:min-w-[220px] max-w-[240px] flex-1 self-stretch bg-white rounded-2xl border p-4 flex flex-col justify-between transition-all ${
                     isSelected 
-                      ? 'border-purple-300 shadow-md ring-2 ring-purple-400/20' 
+                      ? isMain 
+                        ? 'border-emerald-300 shadow-md ring-2 ring-emerald-500/20' 
+                        : 'border-primary/40 shadow-md ring-2 ring-primary/20'
                       : 'border-gray-200 opacity-60 bg-gray-50/50'
-                  } ${isPrompted ? 'ring-2 ring-rose-500 border-rose-400 animate-bounce' : ''}`}
+                  }`}
                 >
-                  {/* Top Badge: Main Item vs Add-on */}
-                  <div className="flex items-center justify-between mb-2">
+                  {/* Top Badge: Main (Green) vs Combo (Red) */}
+                  <div className="flex items-center justify-between mb-3">
                     <button
                       type="button"
                       onClick={() => toggleSelect(item.id, isOutOfStock)}
                       disabled={isOutOfStock}
-                      className={`w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
                         isSelected 
-                          ? 'bg-purple-600 text-white' 
-                          : 'border-2 border-gray-300 bg-white hover:border-purple-400'
+                          ? isMain 
+                            ? 'bg-emerald-600 text-white shadow-xs' 
+                            : 'bg-primary text-white shadow-xs'
+                          : 'border-2 border-gray-300 bg-white hover:border-slate-500'
                       } ${isOutOfStock ? 'opacity-30 cursor-not-allowed' : ''}`}
-                      title={isSelected ? 'Deselect item' : 'Select item'}
+                      title={isSelected ? 'আইটেম বাদ দিন' : 'আইটেম যোগ করুন'}
                     >
-                      {isSelected && <Check size={13} strokeWidth={3} />}
+                      {isSelected && <Check size={14} strokeWidth={3} />}
                     </button>
 
                     {isMain ? (
-                      <span className="text-[9px] font-black bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-md">
-                        This Item
+                      <span className="text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                        মূল প্রোডাক্ট
                       </span>
                     ) : isOutOfStock ? (
-                      <span className="text-[9px] font-black bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded-md">
-                        Out of Stock
+                      <span className="text-[10px] font-black bg-rose-50 text-rose-600 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                        স্টক শেষ
                       </span>
                     ) : (
-                      <span className="text-[9px] font-bold text-gray-400">
-                        Add-on
+                      <span className="text-[10px] font-black bg-red-50 text-primary border border-red-200 px-2.5 py-0.5 rounded-full">
+                        কম্বো আইটেম
                       </span>
                     )}
                   </div>
 
-                  {/* Thumbnail Image */}
+                  {/* Thumbnail Image - Equal square aspect-ratio */}
                   <div 
                     onClick={() => openProductDetails && !isMain && openProductDetails(item)}
-                    className="relative w-full aspect-square bg-gray-50 rounded-xl overflow-hidden mb-2.5 flex items-center justify-center cursor-pointer group"
+                    className="relative w-full aspect-square bg-gray-50 rounded-xl overflow-hidden mb-3 flex items-center justify-center cursor-pointer group border border-gray-100"
                   >
                     <img
                       src={item.image || item.images?.[0] || '/logo.png'}
                       alt={item.name}
-                      className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
 
                   {/* Product Info */}
-                  <div className="space-y-1">
-                    <p 
-                      onClick={() => openProductDetails && !isMain && openProductDetails(item)}
-                      className="text-xs font-bold text-gray-800 line-clamp-2 hover:text-purple-700 transition-colors cursor-pointer"
-                      title={item.name}
-                    >
-                      {item.name}
-                    </p>
+                  <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <p 
+                        onClick={() => openProductDetails && !isMain && openProductDetails(item)}
+                        className="text-xs font-bold text-gray-900 line-clamp-2 hover:text-primary transition-colors cursor-pointer leading-snug"
+                        title={item.name}
+                      >
+                        {item.name}
+                      </p>
 
-                    {/* Price */}
-                    <div className="flex items-baseline gap-1.5 pt-0.5">
-                      <span className="text-sm font-black text-primary">
-                        ৳{Number(item.price || 0).toLocaleString()}
-                      </span>
-                      {item.originalPrice && item.originalPrice > item.price && (
-                        <span className="text-[10px] text-gray-400 line-through">
-                          ৳{Number(item.originalPrice).toLocaleString()}
+                      {/* Price */}
+                      <div className="flex items-baseline gap-1.5 pt-1">
+                        <span className="text-sm font-black text-primary">
+                          ৳{Number(item.price || 0).toLocaleString()}
                         </span>
-                      )}
+                        {item.originalPrice && item.originalPrice > item.price && (
+                          <span className="text-[10px] text-gray-400 line-through">
+                            ৳{Number(item.originalPrice).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Main item selected variant info */}
-                    {isMain && (tempSelectedColor || tempSelectedSize) && (
-                      <div className="text-[10px] font-bold text-purple-700 bg-purple-50/70 px-2 py-0.5 rounded-md truncate">
-                        Selected: {[tempSelectedColor, tempSelectedSize].filter(Boolean).join(' / ')}
-                      </div>
-                    )}
-
-                    {/* Complementary item Variant Selector */}
-                    {hasMultipleVariants && isSelected && (
-                      <div className="pt-1.5 border-t border-gray-100 mt-2">
-                        <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">
-                          Option / Variant:
-                        </label>
-                        <select
-                          value={currentVariant?.color || currentVariant?.size || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const matchedVar = item.variants?.find(v => (v.name === val || v.size === val));
-                            if (matchedVar) {
-                              handleVariantChange(
-                                item.id,
-                                matchedVar.name !== 'Default' ? matchedVar.name : undefined,
-                                matchedVar.size !== 'N/A' ? matchedVar.size : undefined
+                    {/* Variant / Size Control Area */}
+                    <div className="pt-2 border-t border-gray-100 mt-2">
+                      {isMain ? (
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 bg-emerald-50/60 border border-emerald-100 rounded-lg px-2 py-1.5">
+                          <span className="text-gray-500 text-[10px]">সাইজ:</span>
+                          <span className="font-bold text-emerald-800">{tempSelectedSize || 'M'}</span>
+                        </div>
+                      ) : hasVariants && isSelected ? (
+                        <div>
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">
+                            সাইজ / ভ্যারিয়েন্ট বাছাই:
+                          </label>
+                          <select
+                            value={currentVariant?.size || currentVariant?.color || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const matchedVar = item.variants?.find(v => (v.size === val || v.name === val || `${v.name} - ${v.size}` === val));
+                              if (matchedVar) {
+                                handleVariantChange(
+                                  item.id,
+                                  matchedVar.name !== 'Default' ? matchedVar.name : undefined,
+                                  matchedVar.size !== 'N/A' ? matchedVar.size : undefined
+                                );
+                              }
+                            }}
+                            className="w-full bg-white border border-gray-200 rounded-lg py-1.5 px-2 text-[11px] font-bold text-gray-800 outline-none focus:ring-1 focus:ring-primary focus:border-primary cursor-pointer shadow-2xs"
+                          >
+                            {item.variants?.map((v, vIdx) => {
+                              const label = [v.size && v.size !== 'N/A' ? `সাইজ: ${v.size}` : '', v.name && v.name !== 'Default' ? v.name : ''].filter(Boolean).join(' - ') || `Option ${vIdx + 1}`;
+                              const optVal = v.size && v.size !== 'N/A' ? v.size : (v.name || `opt-${vIdx}`);
+                              return (
+                                <option key={v.id || vIdx} value={optVal}>
+                                  {label} {v.stock !== undefined && v.stock <= 0 ? '(স্টক শেষ)' : ''}
+                                </option>
                               );
-                            }
-                          }}
-                          className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1 px-1.5 text-[11px] font-bold text-gray-700 outline-none focus:ring-1 focus:ring-purple-400"
-                        >
-                          {item.variants?.map((v, vIdx) => {
-                            const label = [v.name !== 'Default' ? v.name : '', v.size !== 'N/A' ? v.size : ''].filter(Boolean).join(' - ') || `Option ${vIdx + 1}`;
-                            return (
-                              <option key={v.id || vIdx} value={v.name !== 'Default' ? v.name : (v.size || '')}>
-                                {label} {v.stock <= 0 ? '(Stock Out)' : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-                    )}
+                            })}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5">
+                          <span className="text-gray-500 text-[10px]">সাইজ:</span>
+                          <span className="font-bold text-slate-800">{tempSelectedSize || 'স্ট্যান্ডার্ড'}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </React.Fragment>
             );
-          })}
-        </div>
+          })}</div>
 
-        {/* Action & Pricing Summary Box (Right Side - 4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-purple-200/80 p-5 shadow-md flex flex-col justify-between gap-4">
+        {/* Action & Pricing Summary Box (Right Side - 4 cols) - Clean Navy/Slate/Red */}
+        <div className="lg:col-span-4 bg-slate-50/80 rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between gap-4">
           <div>
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 text-xs font-bold text-gray-500">
-              <span>Selected Bundle:</span>
-              <span className="text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full font-black">
-                {selectedCount} of {allBundleItems.length} items
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 text-xs font-bold text-gray-600">
+              <span>সিলেক্টেড প্রোডাক্টস:</span>
+              <span className="text-slate-900 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full font-black">
+                {selectedCount} / {allBundleItems.length} টি
               </span>
             </div>
 
@@ -342,28 +346,37 @@ export default function FrequentlyBoughtTogether({
               })}
             </div>
 
-            {/* Price Calculations */}
-            <div className="pt-3 border-t border-gray-100 space-y-1">
-              {discountAmount > 0 ? (
+            {/* Price Calculations & Explicit Discount Display */}
+            <div className="pt-3 border-t border-slate-200 space-y-1.5">
+              {bundleDiscount > 0 && selectedCount >= 2 ? (
                 <>
                   <div className="flex items-center justify-between text-xs text-gray-500 font-bold">
-                    <span>Regular Total:</span>
+                    <span>নিয়মিত মোট মূল্য:</span>
                     <span className="line-through text-gray-400">৳{originalCombinedPrice.toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between text-xs font-extrabold text-emerald-600">
-                    <span>Bundle Savings:</span>
+                  <div className="flex items-center justify-between text-xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-1.5 rounded-lg">
+                    <span>
+                      স্পেশাল কম্বো ছাড় ({discountType === 'fixed' ? `৳${bundleDiscount.toLocaleString()} ফ্ল্যাট ছাড়` : `${bundleDiscount}% ছাড়`}):
+                    </span>
                     <span>-৳{discountAmount.toLocaleString()}</span>
                   </div>
-                  <div className="flex items-center justify-between pt-2 text-sm font-black text-gray-900 border-t border-dashed border-gray-200 mt-2">
-                    <span>Bundle Price:</span>
+                  <div className="flex items-center justify-between pt-2 text-sm font-black text-gray-900 border-t border-dashed border-slate-300 mt-2">
+                    <span>কম্বো অফার মূল্য:</span>
                     <span className="text-xl font-black text-primary">৳{finalBundlePrice.toLocaleString()}</span>
                   </div>
                 </>
               ) : (
-                <div className="flex items-center justify-between pt-1 text-sm font-black text-gray-900">
-                  <span>Total Combined Price:</span>
-                  <span className="text-xl font-black text-primary">৳{originalCombinedPrice.toLocaleString()}</span>
-                </div>
+                <>
+                  <div className="flex items-center justify-between pt-1 text-sm font-black text-gray-900">
+                    <span>মোট মূল্য:</span>
+                    <span className="text-xl font-black text-primary">৳{originalCombinedPrice.toLocaleString()}</span>
+                  </div>
+                  {bundleDiscount > 0 && selectedCount < 2 && (
+                    <div className="text-[11px] font-bold text-primary bg-red-50 border border-red-200 rounded-lg p-2 mt-2">
+                      💡 আর ১টি আইটেম যোগ করলেই পাচ্ছেন {discountType === 'fixed' ? `৳${bundleDiscount.toLocaleString()} ফ্ল্যাট` : `${bundleDiscount}%`} স্পেশাল কম্বো ছাড়!
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -374,7 +387,7 @@ export default function FrequentlyBoughtTogether({
               type="button"
               onClick={handleAddBundleToCart}
               disabled={selectedCount === 0 || addedSuccess}
-              className={`w-full py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 cursor-pointer ${
+              className={`w-full py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer ${
                 addedSuccess
                   ? 'bg-emerald-600 text-white shadow-emerald-500/20'
                   : selectedCount > 0
@@ -385,17 +398,17 @@ export default function FrequentlyBoughtTogether({
               {addedSuccess ? (
                 <>
                   <CheckCircle2 size={18} />
-                  <span>কার্টে যোগ হয়েছে! (Added!)</span>
+                  <span>কার্টে যোগ হয়েছে!</span>
                 </>
               ) : (
                 <>
                   <ShoppingCart size={18} />
                   <span>
                     {selectedCount > 1 
-                      ? `Add ${selectedCount} Items to Cart` 
+                      ? `সবগুলো (${selectedCount}টি) কার্টে যোগ করুন` 
                       : selectedCount === 1 
-                      ? 'Add Selected to Cart' 
-                      : 'Select Items to Buy'}
+                      ? 'সিলেক্টেড আইটেম কার্টে যোগ করুন' 
+                      : 'প্রোডাক্ট সিলেক্ট করুন'}
                   </span>
                 </>
               )}

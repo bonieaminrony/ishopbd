@@ -92,7 +92,7 @@ describe('Frequently Bought Together (Combo / Bundle) Feature', () => {
       />
     );
 
-    expect(screen.getByText('Frequently Bought Together')).toBeInTheDocument();
+    expect(screen.getByText('কম্বো অফার')).toBeInTheDocument();
     expect(screen.getByText('Wireless Gaming Mouse')).toBeInTheDocument();
     expect(screen.getByText('RGB Gaming Mousepad')).toBeInTheDocument();
     expect(screen.getByText('Bungee Cord Holder')).toBeInTheDocument();
@@ -112,11 +112,11 @@ describe('Frequently Bought Together (Combo / Bundle) Feature', () => {
     // Regular Total: 1500 + 500 + 300 = 2300
     // Bundle Discount: 10% of 2300 = 230
     // Final Bundle Price: 2300 - 230 = 2070
-    expect(screen.getByText('Regular Total:')).toBeInTheDocument();
+    expect(screen.getByText('নিয়মিত মোট মূল্য:')).toBeInTheDocument();
     expect(screen.getByText('৳2,300')).toBeInTheDocument();
     expect(screen.getByText('-৳230')).toBeInTheDocument();
     expect(screen.getByText('৳2,070')).toBeInTheDocument();
-    expect(screen.getByText(/Save ৳230/)).toBeInTheDocument();
+    expect(screen.getByText(/স্পেশাল কম্বো ছাড়/)).toBeInTheDocument();
   });
 
   it('handles fixed discount amount correctly', () => {
@@ -153,8 +153,8 @@ describe('Frequently Bought Together (Combo / Bundle) Feature', () => {
       />
     );
 
-    expect(screen.queryByText('Bundle Savings:')).not.toBeInTheDocument();
-    expect(screen.getByText('Total Combined Price:')).toBeInTheDocument();
+    expect(screen.queryByText(/স্পেশাল কম্বো ছাড়/)).not.toBeInTheDocument();
+    expect(screen.getByText('মোট মূল্য:')).toBeInTheDocument();
     expect(screen.getByText('৳2,300')).toBeInTheDocument();
   });
 
@@ -170,7 +170,7 @@ describe('Frequently Bought Together (Combo / Bundle) Feature', () => {
     );
 
     // Deselect Addon 2 (Bungee Cord Holder ৳300)
-    const deselectButtons = screen.getAllByTitle('Deselect item');
+    const deselectButtons = screen.getAllByTitle('আইটেম বাদ দিন');
     expect(deselectButtons.length).toBe(3);
 
     fireEvent.click(deselectButtons[2]); // Deselect Addon 2
@@ -195,14 +195,14 @@ describe('Frequently Bought Together (Combo / Bundle) Feature', () => {
       />
     );
 
-    const addBtn = screen.getByRole('button', { name: /Add 3 Items to Cart/i });
+    const addBtn = screen.getByRole('button', { name: /কার্টে যোগ করুন/i });
     fireEvent.click(addBtn);
 
     expect(addToCartMock).toHaveBeenCalledTimes(3);
     // Main product added with its selected color
     expect(addToCartMock).toHaveBeenCalledWith(mockMainProduct, 'Matte Black', undefined, 1);
-    expect(addToCartMock).toHaveBeenCalledWith(mockAddon1, undefined, undefined, 1);
-    expect(addToCartMock).toHaveBeenCalledWith(mockAddon2, undefined, undefined, 1);
+    expect(addToCartMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'prod-addon-1' }), undefined, undefined, 1);
+    expect(addToCartMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'prod-addon-2' }), undefined, undefined, 1);
   });
 
   it('does not render bundle section if product has no bundle configured', () => {
@@ -255,6 +255,6 @@ describe('Frequently Bought Together (Combo / Bundle) Feature', () => {
     );
 
     expect(screen.getByText('Mouse Skates (Out of Stock)')).toBeInTheDocument();
-    expect(screen.getByText('Out of Stock')).toBeInTheDocument();
+    expect(screen.getByText('স্টক শেষ')).toBeInTheDocument();
   });
 });

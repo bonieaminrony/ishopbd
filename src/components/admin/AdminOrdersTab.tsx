@@ -209,11 +209,13 @@ function OrderCourierBadge({
   compact = false,
   syncSingleCourierStatus,
   syncingOrderId,
+  onOpenDetails,
 }: {
   order: any;
   compact?: boolean;
   syncSingleCourierStatus?: (orderId: string) => void;
   syncingOrderId?: string | null;
+  onOpenDetails?: () => void;
 }) {
   const {
     cConsignment,
@@ -241,6 +243,28 @@ function OrderCourierBadge({
   }
 
   const mobileTrackText = cTrackCode || (cConsignment ? '' : cTrack);
+
+  const courierHistoryList: any[] = Array.isArray(order.courierHistory)
+    ? order.courierHistory.filter((item: any) => item && typeof item === 'object')
+    : [];
+  const latestHistoryNote = [...courierHistoryList].reverse().find(
+    (entry: any) => typeof entry?.message === 'string' && entry.message.trim()
+  )?.message?.trim();
+  const latestCourierNote =
+    trackingMsgText ||
+    latestHistoryNote ||
+    (typeof order.courierStatusDetail === 'string' && order.courierStatusDetail.trim()) ||
+    '';
+  const allNotesWithMessages = courierHistoryList.filter(
+    (entry: any) => typeof entry?.message === 'string' && entry.message.trim()
+  );
+  const hasMultipleNotes = allNotesWithMessages.length > 1;
+  const pastNotesCount = Math.max(0, allNotesWithMessages.length - 1);
+  const isAlertNote =
+    Boolean(latestCourierNote) &&
+    /not\s*(answer|pick|reach|contact|receive)|ফোন\s*(ধরে\s*না|বন্ধ|রিসিভ)|ব্যস্ত|হোল্ড|hold|fail|cancel|reject|return|address/i.test(
+      latestCourierNote
+    );
 
   return (
     <div
@@ -308,10 +332,29 @@ function OrderCourierBadge({
           )}
         </div>
       </div>
-      {hasDistinctDetail && trackingMsgText && (
-        <p className="text-[10px] text-slate-500 font-medium truncate max-w-[260px]" title={trackingMsgText}>
-          {trackingMsgText}
-        </p>
+
+      {/* Prominent Latest Courier / Rider Note */}
+      {latestCourierNote && (
+        <button
+          type="button"
+          onClick={() => onOpenDetails?.()}
+          className={`w-full text-left flex items-start gap-1.5 p-1.5 rounded-lg border text-[10px] font-bold transition-all hover:brightness-95 active:scale-[0.99] cursor-pointer ${
+            isAlertNote
+              ? 'bg-amber-50/90 text-amber-900 border-amber-300 shadow-2xs'
+              : 'bg-slate-50 text-slate-700 border-slate-200'
+          }`}
+          title="ক্লিক করে সকল কুরিয়ার মুভমেন্ট ও পূর্বের নোট দেখুন"
+        >
+          <span className="shrink-0 text-xs">📝</span>
+          <div className="flex-1 min-w-0">
+            <p className="truncate leading-tight font-black">{latestCourierNote}</p>
+            {hasMultipleNotes && (
+              <span className="text-[9px] text-sky-700 font-bold block mt-0.5">
+                +{pastNotesCount}টি পূর্বের নোট দেখুন ↗
+              </span>
+            )}
+          </div>
+        </button>
       )}
     </div>
   );
@@ -912,6 +955,7 @@ export default function AdminOrdersTab({
                     compact
                     syncSingleCourierStatus={syncSingleCourierStatus}
                     syncingOrderId={syncingOrderId}
+                    onOpenDetails={() => setSelectedOrderForDetails(order)}
                   />
                 </div>
               </React.Fragment>
@@ -1304,6 +1348,7 @@ export default function AdminOrdersTab({
                             badgeCls,
                             portalUrl,
                             tooltip,
+                            trackingMsgText,
                           } = getCourierDisplayMeta(order);
                           const secondaryLine =
                             cTrackCode || (cConsignment ? serviceName : cTrack || serviceName);
@@ -1379,6 +1424,51 @@ export default function AdminOrdersTab({
                                       {badgeText.toUpperCase()}
                                     </span>
                                   </button>
+
+                                  {/* Prominent Latest Delivery Note in Courier Column */}
+                                  {(() => {
+                                    const courierHistoryList: any[] = Array.isArray(order.courierHistory)
+                                      ? order.courierHistory.filter((item: any) => item && typeof item === 'object')
+                                      : [];
+                                    const latestHistoryNote = [...courierHistoryList].reverse().find(
+                                      (entry: any) => typeof entry?.message === 'string' && entry.message.trim()
+                                    )?.message?.trim();
+                                    const latestCourierNote =
+                                      trackingMsgText ||
+                                      latestHistoryNote ||
+                                      (typeof order.courierStatusDetail === 'string' && order.courierStatusDetail.trim()) ||
+                                      '';
+                                    if (!latestCourierNote) return null;
+                                    const allNotesWithMessages = courierHistoryList.filter(
+                                      (entry: any) => typeof entry?.message === 'string' && entry.message.trim()
+                                    );
+                                    const hasMultipleNotes = allNotesWithMessages.length > 1;
+                                    const pastNotesCount = Math.max(0, allNotesWithMessages.length - 1);
+                                    const isAlertNote = /not\s*(answer|pick|reach|contact|receive)|ফোন\s*(ধরে\s*না|বন্ধ|রিসিভ)|ব্যস্ত|হোল্ড|hold|fail|cancel|reject|return|address/i.test(latestCourierNote);
+
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedOrderForDetails(order)}
+                                        className={`mt-1 w-full flex items-start gap-1 p-1 rounded-md border text-[9px] font-bold transition-all hover:brightness-95 active:scale-[0.98] cursor-pointer text-left ${
+                                          isAlertNote
+                                            ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs'
+                                            : 'bg-slate-50 text-slate-700 border-slate-200'
+                                        }`}
+                                        title={`সর্বশেষ কুরিয়ার নোট: ${latestCourierNote}\n(ক্লিক করে সকল নোট ও হিস্ট্রি দেখুন)`}
+                                      >
+                                        <span className="shrink-0 text-[10px]">📝</span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="truncate block font-semibold leading-tight">{latestCourierNote}</span>
+                                          {hasMultipleNotes && (
+                                            <span className="text-[8px] text-sky-700 font-bold block mt-0.5">
+                                              +{pastNotesCount}টি পূর্বের নোট
+                                            </span>
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })()}
                                 </>
                               ) : (
                                 <button

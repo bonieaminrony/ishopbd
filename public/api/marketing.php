@@ -25,7 +25,7 @@ if ($action === 'public-config' && $method === 'GET') {
     $publicConfig = [
         'meta' => [
             'enabled' => $data['meta']['enabled'] ?? true,
-            'pixelId' => !empty($data['meta']['pixelId']) ? $data['meta']['pixelId'] : '1358996272808579',
+            'pixelId' => !empty($data['meta']['pixelId']) ? $data['meta']['pixelId'] : '2227433448178793',
         ],
         'tiktok' => [
             'enabled' => $data['tiktok']['enabled'] ?? true,

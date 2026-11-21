@@ -130,7 +130,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
       const allFree = items.every((i: any) => i.product?.freeDelivery);
       if (allFree) return 0;
     }
-    return area === "inside" ? 60 : 120;
+    return (area === "inside" || area === "dhaka") ? 70 : 130;
   };
 
   const [activePromoTab, setActivePromoTab] = React.useState<"coupon" | "voucher">("coupon");
@@ -166,11 +166,17 @@ export default function CheckoutModal(props: CheckoutModalProps) {
   }, [ALL_DISTRICTS, distSearchQuery]);
 
   const filteredThanas = React.useMemo(() => {
-    const list = (districtThanaMap && checkoutDistrict ? (districtThanaMap[checkoutDistrict] || []) : []);
-    if (!thanaSearchQuery) return list;
+    let list: string[] = [];
+    if (districtThanaMap && checkoutDistrict) {
+      list = districtThanaMap[checkoutDistrict] || [];
+    } else if (districtThanaMap) {
+      list = Object.values(districtThanaMap).flat() as string[];
+      list = Array.from(new Set(list));
+    }
+    if (!thanaSearchQuery) return list.slice(0, 50);
     return list.filter((thana: string) =>
       thana.toLowerCase().includes(thanaSearchQuery.toLowerCase())
-    );
+    ).slice(0, 50);
   }, [districtThanaMap, checkoutDistrict, thanaSearchQuery]);
 
   // Render payment method selector card helper
@@ -501,17 +507,62 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     />
                   </div>
 
+                  {/* Delivery Location / Area */}
+                  <div>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">Delivery Area (ডেলিভারি এরিয়া)</label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeliveryArea("inside");
+                          if (checkoutDistrict && !checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "Dhaka") {
+                            setCheckoutDistrict("");
+                            setCheckoutThana("");
+                          }
+                        }}
+                        className={`py-2.5 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          deliveryArea === "inside"
+                            ? "bg-red-50 border-primary text-primary shadow-sm"
+                            : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${deliveryArea === "inside" ? "bg-primary" : "bg-gray-300"}`} />
+                        ঢাকার ভেতরে {appliedCoupon ? "(Free)" : `(৳${safeGetDeliveryCharge(checkoutItems, "inside", appliedCoupon)})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeliveryArea("outside");
+                          if (checkoutDistrict && (checkoutDistrict.includes("ঢাকা") || checkoutDistrict === "Dhaka")) {
+                            setCheckoutDistrict("");
+                            setCheckoutThana("");
+                          }
+                        }}
+                        className={`py-2.5 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          deliveryArea === "outside"
+                            ? "bg-red-50 border-primary text-primary shadow-sm"
+                            : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${deliveryArea === "outside" ? "bg-primary" : "bg-gray-300"}`} />
+                        ঢাকার বাইরে {appliedCoupon ? "(Free)" : `(৳${safeGetDeliveryCharge(checkoutItems, "outside", appliedCoupon)})`}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* District & Upazila/Thana (Searchable custom combo-boxes) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div ref={distRef} className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">District</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">District (Optional)</label>
                       <div className="relative">
                         <input
                           type="text"
-                          required
-                          placeholder="Select District"
+                          placeholder="Select District (Optional)"
                           value={isDistDropdownOpen ? distSearchQuery : (checkoutDistrict || "")}
-                          onChange={(e) => setDistSearchQuery(e.target.value)}
+                          onChange={(e) => {
+                            setDistSearchQuery(e.target.value);
+                            setCheckoutDistrict(e.target.value);
+                          }}
                           onFocus={() => {
                             setIsDistDropdownOpen(true);
                             setDistSearchQuery("");
@@ -551,29 +602,28 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     </div>
 
                     <div ref={thanaRef} className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Upazila / Thana</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">Upazila / Thana (Optional)</label>
                       <div className="relative">
                         <input
                           type="text"
-                          required
-                          disabled={!checkoutDistrict}
-                          placeholder={checkoutDistrict ? "Select Upazila/Thana" : "Select District First"}
+                          placeholder="Select or Type Upazila/Thana (Optional)"
                           value={isThanaDropdownOpen ? thanaSearchQuery : (checkoutThana || "")}
-                          onChange={(e) => setThanaSearchQuery(e.target.value)}
-                          onFocus={() => {
-                            if (checkoutDistrict) {
-                              setIsThanaDropdownOpen(true);
-                              setThanaSearchQuery("");
-                            }
+                          onChange={(e) => {
+                            setThanaSearchQuery(e.target.value);
+                            setCheckoutThana(e.target.value);
                           }}
-                          className="w-full bg-white border border-gray-200 rounded-lg pl-3.5 pr-10 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all cursor-pointer text-gray-700 disabled:bg-gray-50 disabled:text-gray-400 font-sans"
+                          onFocus={() => {
+                            setIsThanaDropdownOpen(true);
+                            setThanaSearchQuery("");
+                          }}
+                          className="w-full bg-white border border-gray-200 rounded-lg pl-3.5 pr-10 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all cursor-pointer text-gray-700 font-sans"
                         />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                           <ChevronDown size={14} />
                         </span>
                       </div>
                       
-                      {isThanaDropdownOpen && checkoutDistrict && (
+                      {isThanaDropdownOpen && (
                         <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-48 overflow-y-auto font-sans">
                           {filteredThanas.length > 0 ? (
                             filteredThanas.map((thana: string, idx: number) => (
@@ -814,7 +864,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                       {appliedCoupon ? (
                          "৳0 (Free)"
                       ) : (
-                         `৳${checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon) : 0}`
+                         `৳${safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon)}`
                       )}
                     </span>
                   </div>
@@ -827,13 +877,13 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   {appliedCoupon && (
                     <div className="flex justify-between text-xs md:text-sm font-medium text-green-600">
                       <span>Coupon Discount</span>
-                      <span>-৳{checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, null) : 0}</span>
+                      <span>-৳{safeGetDeliveryCharge(checkoutItems, deliveryArea, null)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-xs md:text-sm font-bold text-secondary pt-2.5 border-t border-gray-100">
                     <span>Total Amount</span>
                     <span className="text-primary text-base font-extrabold">
-                      ৳{checkoutItems.reduce((acc: number, curr: any) => acc + (getProductPrice(curr.product, curr.quantity) || 0) * curr.quantity, 0) + (appliedCoupon ? 0 : (checkoutDistrict ? safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon) : 0)) - (isApplyingRewardPoints ? Math.floor(availableRewardPoints / 10) : 0)}
+                      ৳{checkoutItems.reduce((acc: number, curr: any) => acc + (getProductPrice(curr.product, curr.quantity) || 0) * curr.quantity, 0) + (appliedCoupon ? 0 : safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon)) - (isApplyingRewardPoints ? Math.floor(availableRewardPoints / 10) : 0)}
                     </span>
                   </div>
                 </div>

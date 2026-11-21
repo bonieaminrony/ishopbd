@@ -342,9 +342,74 @@ export const getCategorySlug = (category: any): string => {
   return slugify(name);
 };
 
-export const getCategoryPath = (category: any): string => {
+export const getSubcategorySlug = (subcategory: string): string => {
+  return slugify(subcategory || '');
+};
+
+export const getCategoryPath = (category: any, subcategory?: string | null): string => {
   const slug = getCategorySlug(category);
-  return slug ? `/category/${slug}` : '/';
+  if (!slug) return '/';
+  if (subcategory && subcategory.toLowerCase() !== 'all') {
+    const subSlug = slugify(subcategory);
+    if (subSlug) {
+      return `/category/${slug}/${subSlug}`;
+    }
+  }
+  return `/category/${slug}`;
+};
+
+export const findSubcategoryBySlug = (category: any, subSlug: string): string | null => {
+  if (!category || !subSlug) return null;
+  const subcats: string[] = Array.isArray(category.subcategories) ? category.subcategories : [];
+  const decoded = decodeURIComponent(subSlug).trim().toLowerCase();
+  
+  // 1. Direct name match
+  let found = subcats.find(s => (s || '').trim().toLowerCase() === decoded);
+  if (found) return found;
+
+  // 2. Slugified match
+  found = subcats.find(s => slugify(s || '').toLowerCase() === decoded);
+  if (found) return found;
+
+  // 3. Fallback partial/includes match
+  found = subcats.find(s => {
+    const sl = slugify(s || '').toLowerCase();
+    return sl.includes(decoded) || decoded.includes(sl);
+  });
+  if (found) return found;
+
+  return null;
+};
+
+export const findSubcategoryFromProductsOrCategory = (
+  category: any,
+  subSlug: string,
+  products?: any[]
+): string | null => {
+  if (!subSlug) return null;
+  const fromCat = findSubcategoryBySlug(category, subSlug);
+  if (fromCat) return fromCat;
+
+  const decoded = decodeURIComponent(subSlug).trim().toLowerCase();
+
+  // Check products subcategory field if available
+  if (products && Array.isArray(products)) {
+    const catName = typeof category === 'string' ? category : (category?.name || '');
+    const prods = catName 
+      ? products.filter(p => (p.category || '').toLowerCase() === catName.toLowerCase())
+      : products;
+    
+    for (const p of prods) {
+      const sub = (p.subcategory || '').trim();
+      if (!sub) continue;
+      if (sub.toLowerCase() === decoded || slugify(sub).toLowerCase() === decoded) {
+        return sub;
+      }
+    }
+  }
+
+  // Fallback: convert slug to human-readable title (e.g. "wireless-mic" -> "Wireless Mic")
+  return decoded.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
 export const findCategoryBySlug = (categories: any[], slug: string): any => {

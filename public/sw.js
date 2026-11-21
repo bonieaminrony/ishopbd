@@ -38,7 +38,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   // Skip API requests and external third-party origins
-  if (url.pathname.startsWith('/api/') || url.origin !== self.location.origin) {
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.pathname.includes('/@vite/') || url.pathname.includes('/@fs/') || url.pathname.includes('/src/') || url.pathname.startsWith('/api/') || url.origin !== self.location.origin) {
     return;
   }
 

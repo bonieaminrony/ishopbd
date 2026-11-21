@@ -26,6 +26,12 @@ const ProductCard = React.memo(({
       ? product.variants.every((v) => (Number(v.stock) || 0) <= 0)
       : (product.stock !== undefined && product.stock !== null ? Number(product.stock) <= 0 : false));
 
+  const isClothing = Boolean(
+    product.showSizeGuide ||
+    (product.category && /jacket|clothing|পোশাক|জ্যাকেট|winter|হুডি|hoodie|shirt|শার্ট|panjabi|পাঞ্জাবি/i.test(product.category)) ||
+    (product.name && /jacket|জ্যাকেট|হুডি|hoodie|ব্লেজার|সোয়েটার|শার্ট|shirt/i.test(product.name))
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -33,13 +39,17 @@ const ProductCard = React.memo(({
       className="bg-white rounded-md shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col h-full group"
     >
       <div
-        className="relative aspect-square overflow-hidden cursor-pointer flex items-center justify-center bg-cream"
+        className={`relative aspect-square overflow-hidden cursor-pointer flex items-center justify-center transition-colors ${
+          isClothing ? "bg-gradient-to-b from-gray-50/90 via-slate-50/40 to-gray-100/60 p-2" : "bg-cream"
+        }`}
         onClick={() => openProductDetails(product)}
       >
         <img
           src={product.image || "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop"}
           alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          className={`w-full h-full transition-transform duration-500 ${
+            isClothing ? "object-contain drop-shadow-xs group-hover:scale-105" : "object-cover group-hover:scale-110"
+          }`}
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"

@@ -83,11 +83,11 @@ export interface OrderTrackingSignals {
 const FALLBACK_PUBLIC_CONFIG: PublicMarketingConfig = {
   meta: {
     enabled: true,
-    pixelId: "1358996272808579",
+    pixelId: "2190527024893219",
   },
   tiktok: {
     enabled: true,
-    pixelId: "DBPHK73C77U4J2JR78JG",
+    pixelId: "DC0TOGBC77U7MFIGUL5G",
   },
   google: {
     enabled: true,
@@ -507,7 +507,12 @@ function firePageView(cfg: PublicMarketingConfig): void {
   const w = window as any;
 
   if (cfg.meta?.enabled && cfg.meta?.pixelId && w.fbq) {
-    w.fbq("track", "PageView", {}, { eventID: eventId });
+    const headPixel = String(w.__ishopbdMetaHeadPagePixel || "").trim();
+    if (headPixel && headPixel === cfg.meta.pixelId.trim()) {
+      delete w.__ishopbdMetaHeadPagePixel;
+    } else {
+      w.fbq("track", "PageView", {}, { eventID: eventId });
+    }
   }
   if (cfg.tiktok?.enabled && cfg.tiktok?.pixelId && w.ttq) {
     const headPixel = String(w.__ishopbdTtqHeadPagePixel || "").trim();
@@ -1140,4 +1145,174 @@ export function resetTrackingForTests(): void {
   if (typeof window !== "undefined") {
     delete (window as any).__ishopbdTtqHeadPagePixel;
   }
+}
+
+export type TrafficPlatform = "youtube" | "tiktok" | "facebook" | "google" | "direct" | "other";
+
+export function detectTrafficSource(): TrafficPlatform {
+  if (typeof window === "undefined") return "direct";
+  
+  const attr = getStoredAttribution();
+  const searchParams = new URLSearchParams(window.location.search);
+  const utmSource = (searchParams.get("utm_source") || attr.utm_source || "").toLowerCase().trim();
+  const referrer = (document.referrer || attr.referrer || "").toLowerCase().trim();
+  const inApp = detectInAppBrowser() || attr.inAppBrowser;
+  
+  // 1. YouTube
+  if (
+    utmSource.includes("youtube") ||
+    utmSource.includes("yt") ||
+    referrer.includes("youtube.com") ||
+    referrer.includes("youtu.be")
+  ) {
+    return "youtube";
+  }
+  
+  // 2. TikTok
+  if (
+    utmSource.includes("tiktok") ||
+    referrer.includes("tiktok.com") ||
+    inApp === "tiktok"
+  ) {
+    return "tiktok";
+  }
+  
+  // 3. Facebook / Meta
+  if (
+    utmSource.includes("facebook") ||
+    utmSource.includes("fb") ||
+    utmSource.includes("meta") ||
+    utmSource.includes("instagram") ||
+    utmSource.includes("ig") ||
+    searchParams.has("fbclid") ||
+    Boolean(attr.fbclid) ||
+    referrer.includes("facebook.com") ||
+    referrer.includes("fb.me") ||
+    referrer.includes("l.facebook.com") ||
+    referrer.includes("instagram.com") ||
+    inApp === "facebook" ||
+    inApp === "instagram"
+  ) {
+    return "facebook";
+  }
+  
+  // 4. Google Search / Organic
+  if (
+    utmSource.includes("google") ||
+    searchParams.has("gclid") ||
+    Boolean(attr.gclid) ||
+    referrer.includes("google.com") ||
+    referrer.includes("google.com.bd") ||
+    referrer.includes("google.")
+  ) {
+    return "google";
+  }
+  
+  // 5. Direct or Same Host
+  if (!referrer || referrer.includes(window.location.host) || referrer.includes("localhost")) {
+    return "direct";
+  }
+  
+  return "other";
+}
+
+export function resolveOrderTrafficSource(order: any): TrafficPlatform {
+  if (!order) return "direct";
+  if (order.trafficSource && ["youtube", "tiktok", "facebook", "google", "direct"].includes(order.trafficSource)) {
+    return order.trafficSource as TrafficPlatform;
+  }
+  const signals = order.trackingSignals || {};
+  const utmSource = (signals.utm_source || order.utm_source || "").toLowerCase().trim();
+  const referrer = (signals.referrer || order.referrer || "").toLowerCase().trim();
+  const inApp = signals.inAppBrowser || order.inAppBrowser;
+  const utmCampaign = (signals.utm_campaign || "").toLowerCase();
+
+  // 1. YouTube
+  if (
+    utmSource.includes("youtube") ||
+    utmSource.includes("yt") ||
+    referrer.includes("youtube.com") ||
+    referrer.includes("youtu.be") ||
+    utmCampaign.includes("youtube")
+  ) {
+    return "youtube";
+  }
+
+  // 2. TikTok
+  if (
+    utmSource.includes("tiktok") ||
+    referrer.includes("tiktok.com") ||
+    inApp === "tiktok" ||
+    Boolean(signals.ttclid)
+  ) {
+    return "tiktok";
+  }
+
+  // 3. Facebook
+  if (
+    utmSource.includes("facebook") ||
+    utmSource.includes("fb") ||
+    utmSource.includes("meta") ||
+    utmSource.includes("instagram") ||
+    Boolean(signals.fbclid) ||
+    Boolean(signals.fbc) ||
+    referrer.includes("facebook.com") ||
+    referrer.includes("fb.me") ||
+    inApp === "facebook" ||
+    inApp === "instagram"
+  ) {
+    return "facebook";
+  }
+
+  // 4. Google
+  if (
+    utmSource.includes("google") ||
+    Boolean(signals.gclid) ||
+    referrer.includes("google.com") ||
+    referrer.includes("google.")
+  ) {
+    return "google";
+  }
+
+  // 5. Direct / Others
+  if (!referrer || referrer.includes("ishopbd.com") || referrer.includes("localhost")) {
+    return "direct";
+  }
+
+  return "other";
+}
+
+let lastTrackedPath = "";
+export function trackPlatformVisit(): void {
+  if (typeof window === "undefined") return;
+  const currentPath = window.location.pathname + window.location.search;
+  if (lastTrackedPath === currentPath) return;
+  lastTrackedPath = currentPath;
+
+  const source = detectTrafficSource();
+  const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  const sessionKey = "ishopbd_tracked_session";
+  let isUnique = false;
+  try {
+    if (!sessionStorage.getItem(sessionKey)) {
+      isUnique = true;
+      sessionStorage.setItem(sessionKey, "1");
+    }
+  } catch {}
+
+  const payload = {
+    source,
+    path: window.location.pathname,
+    device: isMobile ? "mobile" : "desktop",
+    inAppBrowser: detectInAppBrowser(),
+    isUnique,
+    referrer: document.referrer || ""
+  };
+
+  fetch("/api/track-visit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true
+  }).catch(() => {});
 }

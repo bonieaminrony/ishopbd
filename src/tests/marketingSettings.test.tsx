@@ -138,7 +138,7 @@ describe('MarketingSettings Pixel & Token Isolation', () => {
     // Switch back to Meta tab -> Meta token & Pixel must still be intact and untouched
     fireEvent.click(screen.getByRole('button', { name: /Meta \(FB & IG\)/i }));
     const metaTokenAfterReturn = screen.getByPlaceholderText(/EAAG\.\.\./i) as HTMLInputElement;
-    const metaPixelAfterReturn = screen.getByPlaceholderText(/1358996272808579/i) as HTMLInputElement;
+    const metaPixelAfterReturn = screen.getByPlaceholderText(/2227433448178793/i) as HTMLInputElement;
     expect(metaTokenAfterReturn.value).toBe('EAAG-META-ONLY-TOKEN-123');
     expect(metaPixelAfterReturn.value).toBe('111222333444');
 

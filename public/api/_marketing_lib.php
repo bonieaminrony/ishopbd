@@ -209,7 +209,7 @@ function marketingGetDefaultConfig() {
     return [
         'meta' => [
             'enabled' => true,
-            'pixelId' => '1358996272808579',
+            'pixelId' => '2227433448178793',
             'accessToken' => '',
             'testEventCode' => '',
             'capiEnabled' => true,

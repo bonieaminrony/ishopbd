@@ -23,6 +23,8 @@ import {
   trackContact,
   getStoredAttribution,
   getOrderTrackingSignals,
+  trackPlatformVisit,
+  detectTrafficSource,
 } from './utils/tracking';
 import { getAdminAuthHeaders } from './utils/adminAuth';
 import { findMatchingAdminRecord, resolveAdminAccess } from './utils/adminRole';
@@ -164,6 +166,8 @@ import {
   googleProvider,
   facebookProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -200,7 +204,7 @@ import { ProductSkeleton } from './components/ProductSkeleton';
 import { ProductCard } from './components/ProductCard';
 import ZoomableImage from './components/ui/ZoomableImage';
 import toast, { Toaster } from 'react-hot-toast';
-import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, getProductIdFromUrl, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug, saveProductsToCache, safeSetLocalStorage, safeGetLocalStorage } from './utils/helpers';
+import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, getProductIdFromUrl, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug, findSubcategoryBySlug, findSubcategoryFromProductsOrCategory, saveProductsToCache, safeSetLocalStorage, safeGetLocalStorage } from './utils/helpers';
 import { FlashSaleCountdown } from './components/FlashSaleCountdown';
 import { useUIContext } from './context/UIContext';
 import { useAuthContext } from './context/AuthContext';
@@ -396,12 +400,23 @@ function App() {
                 }
               }
 
-              // 2e. Check courier tracking ID
+              // 2e. Check courier tracking ID & consignment ID across fields
               if (!foundOrder) {
-                const qCourier = query(ordersRef, where("couriers.trackingId", "==", searchVal));
-                const snapCourier = await getDocs(qCourier);
-                if (!snapCourier.empty) {
-                  foundOrder = { id: snapCourier.docs[0].id, ...snapCourier.docs[0].data() };
+                const courierQueries = [
+                  query(ordersRef, where("couriers.trackingId", "==", searchVal)),
+                  query(ordersRef, where("couriers.consignmentId", "==", searchVal)),
+                  query(ordersRef, where("courierTrackingId", "==", searchVal)),
+                  query(ordersRef, where("courierConsignmentId", "==", searchVal)),
+                  query(ordersRef, where("trackingId", "==", searchVal))
+                ];
+                for (const cq of courierQueries) {
+                  try {
+                    const snapC = await getDocs(cq);
+                    if (!snapC.empty) {
+                      foundOrder = { id: snapC.docs[0].id, ...snapC.docs[0].data() };
+                      break;
+                    }
+                  } catch (e) {}
                 }
               }
 
@@ -438,11 +453,45 @@ function App() {
                   console.warn("Tracking fallback scan error:", errFallback);
                 }
               }
+
+              // 2g. Direct Steadfast Live Tracking Fallback: Check Steadfast API directly by Consignment ID or Tracking Code
+              if (!foundOrder && searchVal.length >= 4) {
+                try {
+                  const directSfRes = await fetch(`/api/steadfast-status?id=${encodeURIComponent(searchVal)}`);
+                  const directSfData = await directSfRes.json();
+                  if (directSfData.success && directSfData.data && directSfData.data.delivery_status) {
+                    const sfRaw = directSfData.data;
+                    foundOrder = {
+                      id: sfRaw.consignment_id ? String(sfRaw.consignment_id) : searchVal,
+                      orderId: sfRaw.invoice || sfRaw.consignment_id || searchVal,
+                      shortId: String(searchVal).slice(-6).toUpperCase(),
+                      status: sfRaw.delivery_status,
+                      steadfastStatus: sfRaw.delivery_status,
+                      courierStatus: sfRaw.delivery_status,
+                      courierHubName: sfRaw.hub_name,
+                      couriers: {
+                        service: "Steadfast",
+                        trackingId: sfRaw.tracking_code || searchVal,
+                        consignmentId: sfRaw.consignment_id ? String(sfRaw.consignment_id) : searchVal,
+                      },
+                      customerName: sfRaw.recipient_name || "সম্মানিত গ্রাহক",
+                      customerPhone: sfRaw.recipient_phone || "",
+                      address: sfRaw.recipient_address || "বাংলাদেশ",
+                      total: sfRaw.cod_amount || 0,
+                      paymentMethod: "COD",
+                      createdAt: new Date(),
+                      items: []
+                    };
+                  }
+                } catch (errDirectSf) {
+                  console.warn("Direct Steadfast status fallback error:", errDirectSf);
+                }
+              }
             }
           }
 
           if (!foundOrder) {
-            setTrackingError("অর্ডারটি খুঁজে পাওয়া যায়নি। সঠিক ফোন নাম্বার বা অর্ডার আইডি দিন।");
+            setTrackingError("অর্ডার বা ট্র্যাকিং তথ্য পাওয়া যায়নি। সঠিক ফোন নম্বর, অর্ডার আইডি বা কুরিয়ার ট্র্যাকিং কোড দিন।");
             setIsTrackingLoading(false);
             return;
           }
@@ -456,6 +505,7 @@ function App() {
             order.couriers?.trackingId ||
             order.courierTrackingId ||
             order.trackingId ||
+            order.couriers?.consignmentId ||
             order.courierConsignmentId;
           const resolvedCourierSvc = (
             order.couriers?.service ||
@@ -469,7 +519,12 @@ function App() {
               const response = await fetch(`/api/steadfast-status?id=${encodeURIComponent(resolvedCourierTrackId)}`);
               const data = await response.json();
               if (data.success && data.data && data.data.delivery_status) {
-                 setTrackingResult({ ...order, steadfastStatus: data.data.delivery_status });
+                 setTrackingResult({
+                   ...order,
+                   steadfastStatus: data.data.delivery_status,
+                   courierHubName: data.data.hub_name || order.courierHubName,
+                   steadfastTrackingMessage: data.data.tracking_message || data.data.note
+                 });
               } else {
                  setTrackingResult({ ...order, steadfastStatus: order.steadfastStatus || order.courierStatus || "Steadfast এ খোঁজ পাওয়া যায়নি" });
               }
@@ -548,14 +603,6 @@ function App() {
           toast.error("Address is required!");
           return;
         }
-        if (!thana) {
-          toast.error("Upazila/Thana is required!");
-          return;
-        }
-        if (!checkoutDistrict) {
-          toast.error("District is required!");
-          return;
-        }
         if (!customerPhone || customerPhone.length < 11) {
           toast.error("Please enter a valid mobile number (at least 11 digits)!");
           return;
@@ -565,8 +612,11 @@ function App() {
         setIsOrderProcessing(true);
 
         const customerName = firstName;
-        const checkoutArea = ((checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "ঢাকা জেলা (বাইরে)") || checkoutDistrict === "Dhaka") ? "inside" : "outside";
-        const finalAddress = `${address}, ${thana}, ${checkoutDistrict}${checkoutNote ? ` (নোট: ${checkoutNote})` : ""}`;
+        const checkoutArea = checkoutDistrict
+          ? (((checkoutDistrict.includes("ঢাকা") && checkoutDistrict !== "ঢাকা জেলা (বাইরে)")) || checkoutDistrict === "Dhaka") ? "inside" : "outside"
+          : (deliveryArea || "inside");
+        const addressParts = [address, thana, checkoutDistrict].filter(Boolean);
+        const finalAddress = `${addressParts.join(", ")}${checkoutNote ? ` (নোট: ${checkoutNote})` : ""}`;
         const paymentMethod = "cod";
         const orderId = Date.now().toString();
         const deliveryCharge = getDeliveryCharge(checkoutItems, checkoutArea, appliedCoupon);
@@ -622,7 +672,8 @@ function App() {
           status: "pending",
           createdAt: serverTimestamp(),
           customerEmail: checkoutEmail || user?.email || "",
-          district: checkoutDistrict,
+          district: checkoutDistrict || (checkoutArea === "inside" ? "Dhaka" : "Outside Dhaka"),
+          thana: thana || "",
           userId: user?.uid || "guest",
           attribution: getStoredAttribution(),
           trackingSignals: getOrderTrackingSignals(),
@@ -704,14 +755,20 @@ function App() {
             }).catch(err => console.warn("Auto SMS failed:", err));
           } catch(e) {}
           try {
-            const sessionId = localStorage.getItem("ishopbd_session_id");
-            if (sessionId) {
-              deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
-              localStorage.removeItem("ishopbd_session_id");
-            }
-            if (newOrder.customerPhone) {
-              deleteDoc(doc(db, "incomplete_orders", newOrder.customerPhone)).catch(() => {});
-            }
+            const s1 = localStorage.getItem("ishopbd_session_id");
+            const s2 = localStorage.getItem("ishopbd_inline_session_id");
+            const s3 = localStorage.getItem("ishopbd_landing_session_id");
+            if (s1) { deleteDoc(doc(db, "incomplete_orders", s1)).catch(() => {}); localStorage.removeItem("ishopbd_session_id"); }
+            if (s2) { deleteDoc(doc(db, "incomplete_orders", s2)).catch(() => {}); localStorage.removeItem("ishopbd_inline_session_id"); }
+            if (s3) { deleteDoc(doc(db, "incomplete_orders", s3)).catch(() => {}); localStorage.removeItem("ishopbd_landing_session_id"); }
+            axios.post("/api/confirm-order", {
+              customerName: newOrder.customerName,
+              customerPhone: newOrder.customerPhone,
+              address: newOrder.address,
+              items: newOrder.items,
+              total: newOrder.total,
+              sessionId: s1 || s2 || s3,
+            }).catch(() => {});
           } catch(e) {}
 
           // Purchase conversion is intentionally deferred until admin confirms the order.
@@ -878,14 +935,12 @@ function App() {
             }).catch(err => console.warn("Auto SMS failed:", err));
           } catch(e) {}
           try {
-            const sessionId = localStorage.getItem("ishopbd_session_id");
-            if (sessionId) {
-              deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
-              localStorage.removeItem("ishopbd_session_id");
-            }
-            if (orderData.customerPhone) {
-              deleteDoc(doc(db, "incomplete_orders", orderData.customerPhone)).catch(() => {});
-            }
+            const s1 = localStorage.getItem("ishopbd_session_id");
+            const s2 = localStorage.getItem("ishopbd_inline_session_id");
+            const s3 = localStorage.getItem("ishopbd_landing_session_id");
+            if (s1) { deleteDoc(doc(db, "incomplete_orders", s1)).catch(() => {}); localStorage.removeItem("ishopbd_session_id"); }
+            if (s2) { deleteDoc(doc(db, "incomplete_orders", s2)).catch(() => {}); localStorage.removeItem("ishopbd_inline_session_id"); }
+            if (s3) { deleteDoc(doc(db, "incomplete_orders", s3)).catch(() => {}); localStorage.removeItem("ishopbd_landing_session_id"); }
           } catch(e) {}
 
           // Track Purchase (Browser + Server-Side CAPI/Events API with Event ID Deduplication)
@@ -989,32 +1044,52 @@ function App() {
     if (!selectedOrderForDetails || !editingOrderData.customerName || !editingOrderData.customerPhone || !editingOrderData.address) return;
     try {
       const updatedItems = editingOrderData.items || selectedOrderForDetails.items || [];
-      const subtotal = updatedItems.reduce((acc: number, curr: any) => acc + getProductPrice(curr.product, curr.quantity) * curr.quantity, 0);
       
-      const deliveryCharge = Number(selectedOrderForDetails.deliveryCharge || 0);
-      const discount = Number(selectedOrderForDetails.discount || 0);
-      const total = subtotal + deliveryCharge - discount;
-      await updateDoc(doc(db, "orders", selectedOrderForDetails.id), {
+      let subtotal = editingOrderData.subtotal !== undefined
+        ? Number(editingOrderData.subtotal)
+        : Number(selectedOrderForDetails.subtotal);
+      
+      if (!Number.isFinite(subtotal) || subtotal <= 0) {
+        subtotal = updatedItems.reduce((acc: number, curr: any) => {
+          const uPrice = Number(curr?.price) > 0 ? Number(curr.price) : (Number(getProductPrice(curr.product, curr.quantity)) || 0);
+          return acc + (uPrice * (Number(curr.quantity) || 1));
+        }, 0);
+      }
+      
+      const deliveryCharge = Number(editingOrderData.deliveryCharge !== undefined ? editingOrderData.deliveryCharge : (selectedOrderForDetails.deliveryCharge || 0));
+      const discount = Number(editingOrderData.discount !== undefined ? editingOrderData.discount : (selectedOrderForDetails.discount || 0));
+      const totalWeight = Number(editingOrderData.totalWeight !== undefined ? editingOrderData.totalWeight : (selectedOrderForDetails.totalWeight || 0.5));
+      const total = Math.max(0, subtotal - discount + deliveryCharge);
+      const codAmount = (selectedOrderForDetails.codAmount === undefined || selectedOrderForDetails.codAmount === selectedOrderForDetails.total)
+        ? total
+        : selectedOrderForDetails.codAmount;
+
+      const patch = {
         customerName: editingOrderData.customerName,
         customerPhone: editingOrderData.customerPhone,
         address: editingOrderData.address,
         items: updatedItems,
-        subtotal: subtotal,
-        total: total
-      });
+        subtotal,
+        discount,
+        deliveryCharge,
+        totalWeight,
+        total,
+        codAmount
+      };
+
+      await updateDoc(doc(db, "orders", selectedOrderForDetails.id), patch);
       
       const newOrderData = {
         ...selectedOrderForDetails,
-        ...editingOrderData,
-        subtotal: subtotal,
-        total: total,
-        items: updatedItems
+        ...patch
       };
       
       setSelectedOrderForDetails(newOrderData);
       setOrderHistory(prev => prev.map(o => o.id === selectedOrderForDetails.id ? newOrderData : o));
       setIsEditingOrder(false);
+      toast.success("অর্ডার সফলভাবে আপডেট হয়েছে!");
     } catch (e) {
+      console.error("Failed to update order details", e);
       alert("অর্ডার আপডেট করতে সমস্যা হয়েছে।");
     }
   };
@@ -1075,7 +1150,7 @@ function App() {
   }, [searchInput]);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const productsPerPage = 12;
+  const productsPerPage = 15;
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -1084,12 +1159,14 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const categoryParam = params.get("category");
+    const subcategoryParam = params.get("subcategory") || params.get("sub");
     const campaignSlug = params.get("campaign");
     if (campaignSlug && campaigns.length > 0) {
       const found = campaigns.find((c) => c.slug === campaignSlug && c.isActive);
       if (found) {
         setActiveCampaign(found);
         setSelectedCategory("all");
+        setSelectedSubcategory("all");
         setSearchInput("");
       } else {
         const url = new URL(window.location.href);
@@ -1099,6 +1176,9 @@ function App() {
     }
     if (categoryParam) {
       setSelectedCategory(categoryParam);
+      if (subcategoryParam) {
+        setSelectedSubcategory(subcategoryParam);
+      }
       setTimeout(() => {
         const productsSection = document.getElementById("product-display-section");
         if (productsSection) {
@@ -1107,14 +1187,15 @@ function App() {
       }, 500);
     }
   }, [campaigns]);
-  const copyCategoryLink = (categoryName: string) => {
-    const baseUrl = window.location.origin + window.location.pathname;
-    const shareUrl = `${baseUrl}?category=${encodeURIComponent(categoryName)}`;
+  const copyCategoryLink = (categoryName: string, subcategoryName?: string) => {
+    const path = getCategoryPath(categoryName, subcategoryName);
+    const shareUrl = `${window.location.origin}${path}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
-      alert(`"${categoryName}" ক্যাটাগরির লিঙ্ক কপি হয়েছে! আপনি এখন এটি যে কোনো জায়গায় শেয়ার করতে পারেন।`);
+      const label = subcategoryName && subcategoryName !== 'all' ? `${categoryName} > ${subcategoryName}` : categoryName;
+      toast.success(`"${label}" লিঙ্ক কপি হয়েছে!`);
     }).catch(err => {
       console.error("Copy failed", err);
-      alert("লিঙ্ক কপি করা সম্ভব হয়নি।");
+      toast.error("লিঙ্ক কপি করা সম্ভব হয়নি।");
     });
   };
   const copyLandingPageLink = (productId: string) => {
@@ -1290,6 +1371,7 @@ function App() {
 
   useEffect(() => {
     void initTracking();
+    void trackPlatformVisit();
   }, []);
 
   useEffect(() => {
@@ -1415,30 +1497,35 @@ function App() {
 
         const resolvedDistrict = checkoutDistrict || userProfile?.district || savedProfiles?.[0]?.district || "";
         const resolvedThana = checkoutThana || userProfile?.thana || savedProfiles?.[0]?.thana || "";
-        const hasPhone = resolvedPhone.length >= 6;
+        const cleanDigits = resolvedPhone.replace(/\D/g, '');
+        const hasPhone = cleanDigits.length >= 6;
 
-        setDoc(doc(db, "incomplete_orders", sessionId), {
-          phone: hasPhone ? resolvedPhone : (resolvedPhone || "কার্টে পণ্য আছে (ফোন নম্বর দেয়নি)"),
-          name: resolvedName || "অজ্ঞাত ক্রেতা",
-          address: resolvedAddress,
-          district: resolvedDistrict,
-          thana: resolvedThana,
-          items: cartItems.map((item: any) => ({
-            id: item.product.id,
-            name: item.product.name,
-            price: getProductPrice(item.product, item.quantity),
-            quantity: item.quantity,
-            color: item.color || null,
-            size: item.size || null,
-            image: item.product.image || item.product.images?.[0] || ""
-          })),
-          totalAmount: totalAmt,
-          updatedAt: serverTimestamp(),
-          date: new Date().toLocaleString("bn-BD"),
-          type: "cart_checkout",
-          sessionId: sessionId,
-          smsSent: false
-        }, { merge: true }).catch(console.error);
+        if (hasPhone) {
+          setDoc(doc(db, "incomplete_orders", sessionId), {
+            phone: resolvedPhone,
+            name: resolvedName || "অজ্ঞাত ক্রেতা",
+            address: resolvedAddress,
+            district: resolvedDistrict,
+            thana: resolvedThana,
+            items: cartItems.map((item: any) => ({
+              id: item.product.id,
+              name: item.product.name,
+              price: getProductPrice(item.product, item.quantity),
+              quantity: item.quantity,
+              color: item.color || null,
+              size: item.size || null,
+              image: item.product.image || item.product.images?.[0] || ""
+            })),
+            totalAmount: totalAmt,
+            updatedAt: serverTimestamp(),
+            date: new Date().toLocaleString("bn-BD"),
+            type: "cart_checkout",
+            sessionId: sessionId,
+            smsSent: false
+          }, { merge: true }).catch(console.error);
+        } else {
+          deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
+        }
       } else {
         deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
       }
@@ -1914,16 +2001,27 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     try {
       const payloadOrders = selectedOrderIds.map(id => {
         const order = orderHistory.find(o => o.id === id);
+        if (!order) return null;
+        const items = Array.isArray(order?.items) ? order.items : [];
+        const itemSummary = items.map((it: any) => {
+          const name = it?.product?.name || it?.name || "Item";
+          const color = it?.color && it.color !== 'N/A' ? it.color : '';
+          const size = it?.size && it.size !== 'N/A' ? it.size : '';
+          const variantParts = [color, size].filter(Boolean).join('/');
+          const variantStr = variantParts ? ` (${variantParts})` : '';
+          return `${name}${variantStr} x${it.quantity || 1}`;
+        }).join(", ");
+        const note = itemSummary ? `${itemSummary} | #${String(order?.displayId || order?.id || '').slice(-6)}` : `Invoice: #${order?.id}`;
         return {
-          id: order?.id,
-          invoice: order?.id,
-          recipient_name: order?.customerName,
-          recipient_phone: order?.customerPhone,
-          recipient_address: order?.address,
-          cod_amount: order?.codAmount !== undefined ? order.codAmount : order?.total,
-          note: `Invoice: ${order?.id}`
+          id: order.id,
+          invoice: order.id,
+          recipient_name: order.customerName,
+          recipient_phone: order.customerPhone,
+          recipient_address: order.address,
+          cod_amount: order.codAmount !== undefined ? order.codAmount : order.total,
+          note: note
         };
-      }).filter(o => o.id);
+      }).filter(Boolean);
       const headers = await getAdminAuthHeaders(true);
       const response = await fetch("/api/courier/steadfast/bulk", {
         method: "POST",
@@ -2142,7 +2240,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         const resolvedDistrict = inlineOrderDistrict || userProfile?.district || savedProfiles?.[0]?.district || "";
         const resolvedThana = inlineOrderThana || userProfile?.thana || savedProfiles?.[0]?.thana || "";
 
-        if (resolvedPhone.length >= 4) {
+        const cleanInlinePhone = resolvedPhone.replace(/\D/g, '');
+        if (cleanInlinePhone.length >= 6) {
           const itemPrice = getProductPrice(selectedProduct, tempSelectedQty);
           setDoc(doc(db, "incomplete_orders", inlineSessionId), {
             phone: resolvedPhone,
@@ -2166,6 +2265,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             sessionId: inlineSessionId,
             smsSent: false
           }, { merge: true }).catch(console.error);
+        } else {
+          deleteDoc(doc(db, "incomplete_orders", inlineSessionId)).catch(() => {});
         }
       }
     }, 400);
@@ -2175,12 +2276,11 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   // Landing Page Order Tracker
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (landingProduct && landingPhone && landingPhone.trim().length >= 4) {
-        let landingSessionId = localStorage.getItem("ishopbd_landing_session_id");
-        if (!landingSessionId) {
-          landingSessionId = "landing_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
-          localStorage.setItem("ishopbd_landing_session_id", landingSessionId);
-        }
+      const cleanLandingPhone = (landingPhone || '').replace(/\D/g, '');
+      const landingSessionId = localStorage.getItem("ishopbd_landing_session_id") || ("landing_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9));
+      localStorage.setItem("ishopbd_landing_session_id", landingSessionId);
+
+      if (landingProduct && cleanLandingPhone.length >= 6) {
         setDoc(doc(db, "incomplete_orders", landingSessionId), {
           phone: landingPhone.trim(),
           name: landingName && landingName.trim().length > 0 ? landingName.trim() : "অজ্ঞাত ক্রেতা",
@@ -2201,6 +2301,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           sessionId: landingSessionId,
           smsSent: false
         }, { merge: true }).catch(console.error);
+      } else {
+        deleteDoc(doc(db, "incomplete_orders", landingSessionId)).catch(() => {});
       }
     }, 800);
     return () => clearTimeout(timeoutId);
@@ -2459,6 +2561,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     pathaoClientSecret?: string;
     pathaoUsername?: string;
     pathaoPassword?: string;
+    smsApiKey?: string;
+    smsSenderId?: string;
   } | null>(null);
   useEffect(() => {
     if (!isAdminVerified) return;
@@ -2467,7 +2571,12 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       try {
         const keysDoc = await getDoc(doc(db, "admin_config", "keys"));
         if (keysDoc.exists() && isMounted) {
-          setAdminKeys(keysDoc.data() as any);
+          const kData = keysDoc.data() as any;
+          setAdminKeys({
+            smsApiKey: kData.smsApiKey || "ZmxsvZfckGDXn7Pa2Tjj",
+            smsSenderId: kData.smsSenderId || "8809648908219",
+            ...kData
+          });
           return;
         }
       } catch (err: any) {
@@ -2479,7 +2588,12 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             if (res.ok) {
               const json = await res.json();
               if (json.success && json.keys && isMounted) {
-                setAdminKeys(json.keys);
+                const kData = json.keys;
+                setAdminKeys({
+                  smsApiKey: kData.smsApiKey || "ZmxsvZfckGDXn7Pa2Tjj",
+                  smsSenderId: kData.smsSenderId || "8809648908219",
+                  ...kData
+                });
                 return;
               }
             }
@@ -2489,6 +2603,13 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         } else {
           console.error("Failed to fetch admin keys:", err);
         }
+      }
+      if (isMounted) {
+        setAdminKeys(prev => ({
+          smsApiKey: "ZmxsvZfckGDXn7Pa2Tjj",
+          smsSenderId: "8809648908219",
+          ...prev
+        }));
       }
     };
     fetchKeys();
@@ -2736,16 +2857,24 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       });
 
     } else if (selectedCategory && selectedCategory.toLowerCase() !== 'all') {
-      // === CATEGORY PAGE ===
+      // === CATEGORY & SUBCATEGORY PAGE ===
       const catSlug = getCategorySlug(selectedCategory);
-      const categoryUrl = `${SITE_URL}/category/${catSlug}`;
+      const isSub = selectedSubcategory && selectedSubcategory.toLowerCase() !== 'all';
+      const targetPath = getCategoryPath(selectedCategory, selectedSubcategory);
+      const categoryUrl = `${SITE_URL}${targetPath}`;
+      const pageTitle = isSub 
+        ? `${selectedSubcategory} - ${selectedCategory} Price in Bangladesh | ${SITE_NAME}`
+        : `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
+      const pageDesc = isSub
+        ? `Buy authentic ${selectedSubcategory} (${selectedCategory}) at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`
+        : `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`;
 
-      document.title = `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
-      setMeta('meta[name="description"]', 'content', `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`);
-      setMeta('meta[name="keywords"]', 'content', `${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy ${selectedCategory} online Bangladesh, i SHOP BD`);
+      document.title = pageTitle;
+      setMeta('meta[name="description"]', 'content', pageDesc);
+      setMeta('meta[name="keywords"]', 'content', `${isSub ? selectedSubcategory + ', ' : ''}${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy online Bangladesh, i SHOP BD`);
       setMeta('meta[property="og:type"]', 'content', 'website');
-      setMeta('meta[property="og:title"]', 'content', `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`);
-      setMeta('meta[property="og:description"]', 'content', `Shop the best ${selectedCategory} at lowest prices in Bangladesh.`);
+      setMeta('meta[property="og:title"]', 'content', pageTitle);
+      setMeta('meta[property="og:description"]', 'content', pageDesc);
       setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
       setMeta('meta[property="og:url"]', 'content', categoryUrl);
       setLink('canonical', categoryUrl);
@@ -2755,7 +2884,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         "@type": "BreadcrumbList",
         "itemListElement": [
           { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
-          { "@type": "ListItem", "position": 2, "name": selectedCategory, "item": categoryUrl }
+          { "@type": "ListItem", "position": 2, "name": selectedCategory, "item": `${SITE_URL}/category/${catSlug}` },
+          ...(isSub ? [{ "@type": "ListItem", "position": 3, "name": selectedSubcategory, "item": categoryUrl }] : [])
         ]
       });
 
@@ -2777,8 +2907,22 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       setJsonLd('seo-json-ld', null);
       setJsonLd('seo-breadcrumb-ld', null);
     }
-  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen, selectedCategory]);
+  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen, selectedCategory, selectedSubcategory]);
   useEffect(() => {
+    // Process redirect result for mobile OAuth (Google / Facebook)
+    getRedirectResult(auth)
+      .then((res) => {
+        if (res?.user) {
+          setIsAuthModalOpen(false);
+          toast.success("সফলভাবে লগইন হয়েছে।");
+        }
+      })
+      .catch((err) => {
+        if (err?.code && err.code !== "auth/null-user") {
+          console.warn("OAuth redirect error:", err);
+        }
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -2999,10 +3143,15 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     const urlParams = new URLSearchParams(window.location.search);
     const path = window.location.pathname;
     let categorySlug = urlParams.get('category') || urlParams.get('cat');
+    let subcategorySlug = urlParams.get('subcategory') || urlParams.get('sub');
     if (!categorySlug && path.startsWith('/category/')) {
-      categorySlug = path.replace(/^\/category\//, '').split('/')[0];
+      const parts = path.replace(/^\/category\//, '').split('/');
+      categorySlug = parts[0] || '';
+      if (parts[1]) subcategorySlug = parts[1];
     } else if (!categorySlug && path.startsWith('/c/')) {
-      categorySlug = path.replace(/^\/c\//, '').split('/')[0];
+      const parts = path.replace(/^\/c\//, '').split('/');
+      categorySlug = parts[0] || '';
+      if (parts[1]) subcategorySlug = parts[1];
     }
 
     const isAdminUser = (isMasterAdmin || isAdmin) && !!user;
@@ -3017,7 +3166,13 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           setCategories(parsedCats);
           if (categorySlug) {
             const matched = findCategoryBySlug(parsedCats, categorySlug);
-            if (matched) setSelectedCategory(matched.name);
+            if (matched) {
+              setSelectedCategory(matched.name);
+              if (subcategorySlug) {
+                const matchedSub = findSubcategoryFromProductsOrCategory(matched, subcategorySlug, products);
+                if (matchedSub) setSelectedSubcategory(matchedSub);
+              }
+            }
           }
         }
       } catch(e) {}
@@ -3075,7 +3230,13 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         setCategories(data);
         if (categorySlug) {
           const matched = findCategoryBySlug(data, categorySlug);
-          if (matched) setSelectedCategory(matched.name);
+          if (matched) {
+            setSelectedCategory(matched.name);
+            if (subcategorySlug) {
+              const matchedSub = findSubcategoryFromProductsOrCategory(matched, subcategorySlug, products);
+              if (matchedSub) setSelectedSubcategory(matchedSub);
+            }
+          }
         }
         safeSetLocalStorage(STORAGE_KEYS.CATEGORIES, JSON.stringify(data));
       }).catch(err => console.warn("Categories fetch error:", err));
@@ -3343,9 +3504,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         window.history.pushState({ p: selectedProduct.id }, "", targetPath);
       }
     } else if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "All") {
-      const targetPath = getCategoryPath(selectedCategory);
-      if (path !== targetPath || isCheckoutParam || window.location.search.includes('category=')) {
-        window.history.pushState({ category: selectedCategory }, "", targetPath);
+      const targetPath = getCategoryPath(selectedCategory, selectedSubcategory);
+      if (path !== targetPath || isCheckoutParam || window.location.search.includes('category=') || window.location.search.includes('subcategory=')) {
+        window.history.pushState({ category: selectedCategory, subcategory: selectedSubcategory }, "", targetPath);
       }
     } else {
       // User is on Home page
@@ -3353,7 +3514,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         window.history.pushState({}, "", "/");
       }
     }
-  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, products.length, completedOrderReceipt]);
+  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, selectedSubcategory, products.length, completedOrderReceipt]);
 
   // Handle browser Back / Forward buttons smoothly
   useEffect(() => {
@@ -3363,10 +3524,15 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       const isCheckout = urlParams.get("checkout") === "true";
       const productId = getProductIdFromUrl();
       let categoryParam = urlParams.get("category") || urlParams.get("cat");
+      let subcategoryParam = urlParams.get("subcategory") || urlParams.get("sub");
       if (!categoryParam && path.startsWith("/category/")) {
-        categoryParam = path.replace(/^\/category\//, "").split("/")[0];
+        const parts = path.replace(/^\/category\//, "").split("/");
+        categoryParam = parts[0] || "";
+        if (parts[1]) subcategoryParam = parts[1];
       } else if (!categoryParam && path.startsWith("/c/")) {
-        categoryParam = path.replace(/^\/c\//, "").split("/")[0];
+        const parts = path.replace(/^\/c\//, "").split("/");
+        categoryParam = parts[0] || "";
+        if (parts[1]) subcategoryParam = parts[1];
       }
 
       if (path === "/order-success") {
@@ -3392,26 +3558,36 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         const matchedCat = findCategoryBySlug(categories, categoryParam);
         if (matchedCat) {
           setSelectedCategory(matchedCat.name);
+          if (subcategoryParam) {
+            const matchedSub = findSubcategoryFromProductsOrCategory(matchedCat, subcategoryParam, products);
+            setSelectedSubcategory(matchedSub || "all");
+          } else {
+            setSelectedSubcategory("all");
+          }
           setIsProductDetailsOpen(false);
           setIsCheckoutOpen(false);
         }
       } else {
         setIsProductDetailsOpen(false);
         setIsCheckoutOpen(false);
-        if (path === "/" && selectedCategory !== "all" && selectedCategory !== "All") {
+        if (path === "/" && (selectedCategory !== "all" || selectedSubcategory !== "all")) {
           setSelectedCategory("all");
+          setSelectedSubcategory("all");
         }
       }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [products, categories, selectedCategory, completedOrderReceipt]);
+  }, [products, categories, selectedCategory, selectedSubcategory, completedOrderReceipt]);
   const [adminTab, setAdminTab] = useState<
-    "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
-  >("orders");
+    "analytics" | "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
+  >("analytics");
 
   useEffect(() => {
+    // Automatic background batch courier checking is disabled to preserve daily API quota (10/day limit).
+    // Checks are only executed on-demand when clicking the "Check" button.
+    return;
     if (!isAdminOpen || !isAdminVerified) return;
     if (adminTab !== "orders" && adminTab !== "incomplete_orders") return;
 
@@ -4118,6 +4294,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           pathaoClientSecret: adminKeys.pathaoClientSecret || "",
           pathaoUsername: adminKeys.pathaoUsername || "",
           pathaoPassword: adminKeys.pathaoPassword || "",
+          smsApiKey: adminKeys.smsApiKey || "",
+          smsSenderId: adminKeys.smsSenderId || "",
           updatedAt: new Date().toISOString()
         };
         try {
@@ -4573,6 +4751,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           : Math.max(0, Number(editingProduct.stock || 0)),
         isTrending: !!editingProduct.isTrending,
         isFreeDelivery: !!editingProduct.isFreeDelivery,
+        deliveryCharge: (editingProduct.deliveryCharge !== undefined && editingProduct.deliveryCharge !== null && editingProduct.deliveryCharge !== '' && !isNaN(Number(editingProduct.deliveryCharge)))
+          ? Math.max(0, Number(editingProduct.deliveryCharge))
+          : null,
         isComingSoon: !!editingProduct.isComingSoon,
         isFlashSale: !!editingProduct.isFlashSale,
         isPublished: editingProduct.isPublished !== false,
@@ -5307,34 +5488,65 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     setIsAuthLoading(true);
     setAuthError(null);
     try {
-      let email = authIdentifier.trim().toLowerCase();
+      let rawIdentifier = authIdentifier.trim();
       
-      // If it's a phone number (just digits), convert to a dummy email for Firebase Auth
-      const isPhone = /^\d+$/.test(email);
-      if (isPhone) {
-        if (email.length < 10) {
-          throw new Error("সঠিক ফোন নাম্বার দিন।");
+      // Convert Bengali digits (০-৯) to standard digits (0-9)
+      const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+      let normalized = rawIdentifier;
+      bengaliDigits.forEach((bDigit, idx) => {
+        normalized = normalized.split(bDigit).join(String(idx));
+      });
+
+      let email = normalized.toLowerCase();
+      const digitsOnly = normalized.replace(/\D/g, "");
+
+      // If it contains only digits or phone-like input without '@'
+      if (!email.includes("@")) {
+        let phone = digitsOnly;
+        // Strip BD country code prefix if user entered +880 or 880
+        if (phone.startsWith("880") && phone.length === 13) {
+          phone = phone.slice(2);
+        } else if (phone.startsWith("88") && phone.length === 13) {
+          phone = phone.slice(2);
         }
-        email = `${email}@mobile.user`;
+        if (phone.length < 10 || phone.length > 13) {
+          throw new Error("সঠিক ফোন নাম্বার দিন (যেমনঃ 017XXXXXXXX)।");
+        }
+        email = `${phone}@mobile.user`;
       } else {
-        if (!email.includes("@")) {
+        if (!email.includes(".") || email.indexOf("@") === 0) {
           throw new Error("সঠিক ইমেইল বা ফোন নাম্বার দিন।");
         }
       }
+
       if (authModalType === "signup") {
-        if (!authName) throw new Error("আপনার নাম লিখুন।");
+        if (!authName.trim()) throw new Error("আপনার নাম লিখুন।");
         if (authPassword.length < 6) throw new Error("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।");
         
         const userCred = await createUserWithEmailAndPassword(auth, email, authPassword);
         // On signup, update display name
         await updateProfile(userCred.user, {
-           displayName: authName
+           displayName: authName.trim()
         });
-        
-        // Also ensure user doc is created (though there is a listener in the setup effect, 
-        // sometimes it's good to be explicit or the listener will catch it)
+        toast.success("অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!");
       } else {
-        await signInWithEmailAndPassword(auth, email, authPassword);
+        try {
+          await signInWithEmailAndPassword(auth, email, authPassword);
+        } catch (signInErr: any) {
+          // If login failed for a phone number with auth/user-not-found, try legacy formats if applicable
+          if (signInErr.code === "auth/user-not-found" && email.endsWith("@mobile.user")) {
+            const rawDigits = digitsOnly;
+            const altEmail = rawDigits.startsWith("88") ? `${rawDigits}@mobile.user` : `88${rawDigits}@mobile.user`;
+            if (altEmail !== email) {
+              await signInWithEmailAndPassword(auth, altEmail, authPassword);
+            } else {
+              throw signInErr;
+            }
+          } else {
+            throw signInErr;
+          }
+        }
+        toast.success("সফলভাবে লগইন হয়েছে।");
       }
       
       setIsAuthModalOpen(false);
@@ -5348,11 +5560,12 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       console.error("Auth failed:", err);
       let msg = "অথেন্টিকেশন ব্যর্থ হয়েছে।";
       if (err.code === "auth/user-not-found") msg = "এই একাউন্টটি পাওয়া যায়নি।";
-      else if (err.code === "auth/wrong-password") msg = "ভুল পাসওয়ার্ড।";
+      else if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") msg = "ভুল পাসওয়ার্ড।";
       else if (err.code === "auth/email-already-in-use") msg = "ইমেইল/ফোন ইতিমধ্যে ব্যবহৃত হচ্ছে।";
+      else if (err.code === "auth/invalid-email") msg = "ইমেইল বা ফোন নম্বরের ফরম্যাট সঠিক নয়।";
       else msg = err.message || msg;
       setAuthError(msg);
-      alert(msg);
+      toast.error(msg);
     } finally {
       setIsAuthLoading(false);
     }
@@ -5365,22 +5578,42 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     try {
       const provider =
         providerType === "google" ? googleProvider : facebookProvider;
-      await signInWithPopup(auth, provider);
-      setIsAuthModalOpen(false);
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-        setTimeout(() => setShowPushPrompt(true), 800);
+      
+      const isMobile = typeof navigator !== "undefined" && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // On mobile devices or restricted webviews, popup is often blocked; fallback to redirect smoothly
+      try {
+        await signInWithPopup(auth, provider);
+        setIsAuthModalOpen(false);
+        toast.success("সফলভাবে লগইন হয়েছে।");
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+          setTimeout(() => setShowPushPrompt(true), 800);
+        }
+      } catch (popupErr: any) {
+        if (
+          isMobile ||
+          popupErr.code === "auth/popup-blocked" ||
+          popupErr.code === "auth/cancelled-popup-request" ||
+          popupErr.code === "auth/popup-closed-by-user"
+        ) {
+          console.warn("Popup blocked or failed on mobile, attempting redirect signIn:", popupErr);
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw popupErr;
       }
     } catch (err: any) {
       console.error("Login failed:", err);
       let errorMsg = "লগইন করতে সমস্যা হয়েছে।";
       if (err.code === "auth/popup-blocked") {
-        errorMsg =
-          "পপআপ ব্লক করা হয়েছে! অনুগ্রহ করে ব্রাউজারের পপআপ পারমিশন দিন।";
+        errorMsg = "পপআপ ব্লক করা হয়েছে! অনুগ্রহ করে ব্রাউজারের পপআপ পারমিশন দিন।";
       } else if (err.code === "auth/unauthorized-domain") {
         errorMsg = "এই ডোমেইনটি (Domain) অথরাইজড নয়। Firebase Console -> Authentication -> Settings -> Authorized Domains-এ আপনার ডোমেইনটি যোগ করুন।";
+      } else {
+        errorMsg = err.message || errorMsg;
       }
       setAuthError(errorMsg);
-      alert(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsLoggingIn(false);
     }
@@ -5961,9 +6194,13 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   const handleFacebookLoginForReview = async () => {
     try {
       await signInWithPopup(auth, facebookProvider);
-    } catch (err) {
+    } catch (err: any) {
+      if (err.code === "auth/popup-blocked" || err.code === "auth/cancelled-popup-request") {
+        await signInWithRedirect(auth, facebookProvider);
+        return;
+      }
       console.error("Facebook login failed", err);
-      alert("Failed to log in with Facebook. Please try again.");
+      toast.error("ফেসবুক দিয়ে লগইন করতে সমস্যা হয়েছে।");
     }
   };
   const submitReview = async (productId: string) => {
@@ -6506,6 +6743,22 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
         ...orderData,
         id: docRef.id
       });
+      try {
+        const s1 = localStorage.getItem("ishopbd_session_id");
+        const s2 = localStorage.getItem("ishopbd_inline_session_id");
+        const s3 = localStorage.getItem("ishopbd_landing_session_id");
+        if (s1) { deleteDoc(doc(db, "incomplete_orders", s1)).catch(() => {}); localStorage.removeItem("ishopbd_session_id"); }
+        if (s2) { deleteDoc(doc(db, "incomplete_orders", s2)).catch(() => {}); localStorage.removeItem("ishopbd_inline_session_id"); }
+        if (s3) { deleteDoc(doc(db, "incomplete_orders", s3)).catch(() => {}); localStorage.removeItem("ishopbd_landing_session_id"); }
+        axios.post("/api/confirm-order", {
+          customerName: name,
+          customerPhone: phone,
+          address: finalAddress,
+          items: orderData.items,
+          total: total,
+          sessionId: s3 || s2 || s1,
+        }).catch(() => {});
+      } catch(e) {}
       window.history.pushState({ orderSuccess: true }, "", "/order-success");
       // Save phone profile in local storage for future autofills
       try {
@@ -7210,6 +7463,17 @@ ${productNames}
         }
         toast.loading("Steadfast এ অর্ডার এন্ট্রি করা হচ্ছে...");
         const headers = await getAdminAuthHeaders(true);
+        const items = Array.isArray(order?.items) ? order.items : [];
+        const itemSummary = items.map((it: any) => {
+          const name = it?.product?.name || it?.name || "Item";
+          const color = it?.color && it.color !== 'N/A' ? it.color : '';
+          const size = it?.size && it.size !== 'N/A' ? it.size : '';
+          const variantParts = [color, size].filter(Boolean).join('/');
+          const variantStr = variantParts ? ` (${variantParts})` : '';
+          return `${name}${variantStr} x${it.quantity || 1}`;
+        }).join(", ");
+        const note = itemSummary ? `${itemSummary} | #${String(order?.displayId || order?.id || '').slice(-6)}` : `Invoice: #${order?.id}`;
+
         const response = await fetch("/api/courier/steadfast/bulk", {
           method: "POST",
           headers,
@@ -7223,7 +7487,7 @@ ${productNames}
               recipient_phone: order.customerPhone,
               recipient_address: order.address,
               cod_amount: finalCodAmount,
-              note: `Invoice: ${order.id}`
+              note: note
             }]
           })
         });
@@ -7523,9 +7787,15 @@ ${productNames}
           </div>
           {/* Search Bar - Desktop */}
           <div className="flex-1 max-w-2xl relative hidden md:block">
-            <form onSubmit={(e) => e.preventDefault()} className="relative flex items-center bg-cream border border-gray-200 focus-within:ring-2 focus-within:ring-primary focus-within:border-primary rounded-full overflow-hidden transition-all">
+            <form onSubmit={(e) => e.preventDefault()} autoComplete="off" className="relative flex items-center bg-cream border border-gray-200 focus-within:ring-2 focus-within:ring-primary focus-within:border-primary rounded-full overflow-hidden transition-all">
               <input
                 type="text"
+                name="ishopbd_product_search_query"
+                id="desktop-search-input"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 placeholder={t("আপনার কাঙ্ক্ষিত পণ্য খুঁজুন...", "Search your desired products...")}
                 className="w-full bg-transparent border-none py-2.5 pl-6 pr-24 outline-none text-sm text-secondary font-sans"
                 value={searchInput}
@@ -7594,28 +7864,12 @@ ${productNames}
           </div>
           {/* Icons */}
           <div className="flex items-center gap-3 md:gap-4 text-secondary">
-            <button
-              onClick={() => setIsAppDownloadModalOpen(true)}
-              className="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white rounded-full font-bold shadow-sm transition-all active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
-              title="Download App"
-            >
-              <Download size={16} />
-              <span className="hidden sm:inline">Download App</span>
-            </button>
-            <button
-              onClick={() => setIsTrackingOpen(true)}
-              className="cursor-pointer flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-full font-bold shadow-md shadow-red-600/20 transition-all hover:shadow-red-600/40 hover:-translate-y-0.5 active:scale-95 text-xs md:text-sm ml-2 md:ml-0"
-              title={t("অর্ডার ট্র্যাক করুন", "Track Order")}
-            >
-              <Truck size={18} />
-              <span className="hidden md:inline">{t("ট্র্যাক অর্ডার", "Track Order")}</span>
-            </button>
             {isAdmin && (
               <button
                 onClick={() => {
                   if (isMasterAdmin) {
                     setAdminViewMode("full");
-                    setAdminTab("orders");
+                    setAdminTab("analytics");
                   } else {
                     setAdminViewMode("support_only");
                     setAdminTab("support");
@@ -7721,7 +7975,12 @@ ${productNames}
               </div>
               <input
                 id="mobile-search-input"
+                name="mobile_product_search_query"
                 type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 placeholder={t("আপনার কাঙ্ক্ষিত পণ্য খুঁজুন...", "Search desired products...")}
                 className="w-full bg-transparent py-2.5 pr-20 outline-none text-sm font-medium text-secondary font-sans placeholder:text-gray-400"
                 value={searchInput}
@@ -7843,12 +8102,15 @@ ${productNames}
           return (
             <div className="border-t border-gray-100/50 md:hidden bg-gray-50/50 overflow-hidden">
               <div className="flex overflow-x-auto no-scrollbar py-2 px-4 gap-2 scroll-smooth">
-                <button
-                  onClick={() => {
+                <a
+                  href={getCategoryPath(selectedCategory)}
+                  onClick={(e) => {
+                    e.preventDefault();
                     setSelectedSubcategory("all");
                     setCurrentPage(1);
                     setIsProductDetailsOpen(false);
                     setSelectedProduct(null);
+                    window.history.pushState({ category: selectedCategory, subcategory: "all" }, "", getCategoryPath(selectedCategory));
                   }}
                   className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
                     selectedSubcategory === "all"
@@ -7857,25 +8119,31 @@ ${productNames}
                   }`}
                 >
                   All
-                </button>
-                {subcats.map((sub, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setSelectedSubcategory(sub);
-                      setCurrentPage(1);
-                      setIsProductDetailsOpen(false);
-                      setSelectedProduct(null);
-                    }}
-                    className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
-                      selectedSubcategory === sub
-                        ? "bg-primary text-white shadow-sm"
-                        : "text-gray-500 bg-white border border-gray-100 hover:bg-gray-50"
-                    }`}
-                  >
-                    {sub}
-                  </button>
-                ))}
+                </a>
+                {subcats.map((sub, idx) => {
+                  const subPath = getCategoryPath(selectedCategory, sub);
+                  return (
+                    <a
+                      key={idx}
+                      href={subPath}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setSelectedSubcategory(sub);
+                        setCurrentPage(1);
+                        setIsProductDetailsOpen(false);
+                        setSelectedProduct(null);
+                        window.history.pushState({ category: selectedCategory, subcategory: sub }, "", subPath);
+                      }}
+                      className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
+                        selectedSubcategory === sub
+                          ? "bg-primary text-white shadow-sm"
+                          : "text-gray-500 bg-white border border-gray-100 hover:bg-gray-50"
+                      }`}
+                    >
+                      {sub}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           );
@@ -7890,9 +8158,12 @@ ${productNames}
                 onClick={() => {
                   setSelectedCategory("all");
                   setSelectedSubcategory("all");
+                  setSearchInput("");
+                  setSearchQuery("");
                   setCurrentPage(1);
                   setIsProductDetailsOpen(false);
                   setSelectedProduct(null);
+                  window.history.pushState({}, "", "/");
                 }}
                 className={`flex-1 px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1 ${
                   selectedCategory === "all"
@@ -7912,9 +8183,12 @@ ${productNames}
                         e.preventDefault();
                         setSelectedCategory(cat.name);
                         setSelectedSubcategory("all");
+                        setSearchInput("");
+                        setSearchQuery("");
                         setCurrentPage(1);
                         setIsProductDetailsOpen(false);
                         setSelectedProduct(null);
+                        window.history.pushState({ category: cat.name, subcategory: "all" }, "", getCategoryPath(cat.name));
                       }}
                       className={`cursor-pointer w-full px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
                         selectedCategory === cat.name
@@ -7937,9 +8211,12 @@ ${productNames}
                               e.preventDefault();
                               setSelectedCategory(cat.name);
                               setSelectedSubcategory("all");
+                              setSearchInput("");
+                              setSearchQuery("");
                               setCurrentPage(1);
                               setIsProductDetailsOpen(false);
                               setSelectedProduct(null);
+                              window.history.pushState({ category: cat.name, subcategory: "all" }, "", getCategoryPath(cat.name));
                             }}
                             className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
                               selectedCategory === cat.name && selectedSubcategory === "all"
@@ -7950,25 +8227,33 @@ ${productNames}
                             All {tc(cat.name)}
                           </a>
                           <div className="h-[1px] bg-gray-100 my-1" />
-                          {subcats.map((sub, sIdx) => (
-                            <button
-                              key={sIdx}
-                              onClick={() => {
-                                setSelectedCategory(cat.name);
-                                setSelectedSubcategory(sub);
-                                setCurrentPage(1);
-                                setIsProductDetailsOpen(false);
-                                setSelectedProduct(null);
-                              }}
-                              className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
-                                selectedCategory === cat.name && selectedSubcategory === sub
-                                  ? "bg-primary/5 text-primary"
-                                  : "text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              {sub}
-                            </button>
-                          ))}
+                          {subcats.map((sub, sIdx) => {
+                            const subPath = getCategoryPath(cat.name, sub);
+                            return (
+                              <a
+                                key={sIdx}
+                                href={subPath}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setSelectedCategory(cat.name);
+                                  setSelectedSubcategory(sub);
+                                  setSearchInput("");
+                                  setSearchQuery("");
+                                  setCurrentPage(1);
+                                  setIsProductDetailsOpen(false);
+                                  setSelectedProduct(null);
+                                  window.history.pushState({ category: cat.name, subcategory: sub }, "", subPath);
+                                }}
+                                className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
+                                  selectedCategory === cat.name && selectedSubcategory === sub
+                                    ? "bg-primary/5 text-primary"
+                                    : "text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                {sub}
+                              </a>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -8205,6 +8490,7 @@ ${productNames}
         </section>
       )}
       {(selectedCategory !== "all" ||
+        (selectedSubcategory && selectedSubcategory !== "all") ||
         selectedBrand !== "all" ||
         searchQuery) && (
         <div className="container mx-auto px-4 mt-6">
@@ -8220,8 +8506,27 @@ ${productNames}
               <span className="bg-primary/5 text-primary text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-primary/10 shadow-sm">
                 Category: {selectedCategory}
                 <button
-                  onClick={() => setSelectedCategory("all")}
+                  onClick={() => {
+                    setSelectedCategory("all");
+                    setSelectedSubcategory("all");
+                    window.history.pushState({}, "", "/");
+                  }}
                   className="hover:bg-primary/10 p-0.5 rounded-md transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+            {selectedSubcategory && selectedSubcategory !== "all" && (
+              <span className="bg-primary text-white text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 shadow-sm">
+                Subcategory: {selectedSubcategory}
+                <button
+                  onClick={() => {
+                    setSelectedSubcategory("all");
+                    const targetPath = getCategoryPath(selectedCategory);
+                    window.history.pushState({ category: selectedCategory, subcategory: "all" }, "", targetPath);
+                  }}
+                  className="hover:bg-white/20 p-0.5 rounded-md transition-colors"
                 >
                   <X size={12} />
                 </button>
@@ -8242,7 +8547,10 @@ ${productNames}
               <span className="bg-white text-gray-600 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-gray-200 shadow-sm">
                 Search: {searchQuery}
                 <button
-                  onClick={() => setSearchInput("")}
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                  }}
                   className="hover:bg-gray-100 p-0.5 rounded-md transition-colors"
                 >
                   <X size={12} />
@@ -8252,8 +8560,11 @@ ${productNames}
             <button
               onClick={() => {
                 setSelectedCategory("all");
+                setSelectedSubcategory("all");
                 setSelectedBrand("all");
                 setSearchInput("");
+                setSearchQuery("");
+                window.history.pushState({}, "", "/");
               }}
               className="text-[10px] font-bold text-gray-400 hover:text-primary transition-colors underline decoration-dotted ml-auto"
             >
@@ -8317,7 +8628,7 @@ ${productNames}
           if (catProducts.length === 0) return null;
           
           return (
-            <section key={cat.id} className="mb-8 container mx-auto px-4">
+            <section key={cat.id} className="mb-10 container mx-auto px-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <span className="w-1.5 h-6 rounded-full bg-primary"></span>
@@ -8332,62 +8643,47 @@ ${productNames}
                       document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
                     }, 100);
                   }}
-                  className="text-sm font-bold text-primary hover:text-primary/80"
+                  className="text-xs md:text-sm font-bold text-primary hover:text-primary/80 flex items-center gap-1 group"
                 >
-                  View All
+                  <span>{t("সব দেখুন", "View All")}</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </div>
-              <div className="relative group">
-                {/* Left Arrow Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const container = document.getElementById(`scroll-container-${cat.id}`);
-                    if (container) {
-                      container.scrollBy({ left: -350, behavior: "smooth" });
-                    }
-                  }}
-                  className="absolute -left-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
-                  title="Previous"
-                >
-                  <ChevronLeft size={20} />
-                </button>
 
-                <div 
-                  id={`scroll-container-${cat.id}`}
-                  className="overflow-x-auto no-scrollbar py-2 -my-2 scroll-smooth"
-                >
-                  <div className="flex gap-2 md:gap-4 pb-4">
-                    {catProducts.slice(0, 8).map((product) => (
-                      <div key={product.id} className="w-[calc(50%-4px)] md:w-[calc(20%-12.8px)] shrink-0">
-                        <ProductCard 
-                          product={product}
-                          openProductDetails={openProductDetails}
-                          t={t}
-                          handleBuyNow={handleBuyNow}
-                          handleLikeProduct={handleLikeProduct}
-                          isLiked={likedProducts.includes(product.id)}
-                        />
-                      </div>
-                    ))}
+              {/* Multi-layer Product Grid (2-3 rows / layers on mobile & desktop) */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
+                {catProducts.slice(0, 10).map((product) => (
+                  <div key={product.id} className="w-full">
+                    <ProductCard 
+                      product={product}
+                      openProductDetails={openProductDetails}
+                      t={t}
+                      handleBuyNow={handleBuyNow}
+                      handleLikeProduct={handleLikeProduct}
+                      isLiked={likedProducts.includes(product.id)}
+                    />
                   </div>
-                </div>
-
-                {/* Right Arrow Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const container = document.getElementById(`scroll-container-${cat.id}`);
-                    if (container) {
-                      container.scrollBy({ left: 350, behavior: "smooth" });
-                    }
-                  }}
-                  className="absolute -right-2 top-[32%] -translate-y-1/2 z-10 bg-white/95 hover:bg-white text-secondary hover:text-primary w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-gray-200 cursor-pointer transition-all duration-200 md:flex hidden opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95"
-                  title="Next"
-                >
-                  <ChevronRight size={20} />
-                </button>
+                ))}
               </div>
+
+              {/* View More Pill Button if category has more than 10 products */}
+              {catProducts.length > 10 && (
+                <div className="flex justify-center mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(cat.name);
+                      setTimeout(() => {
+                        document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
+                      }, 100);
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white hover:bg-primary text-secondary hover:text-white border border-gray-200 hover:border-primary font-bold text-xs shadow-xs transition-all duration-200 group active:scale-95 cursor-pointer"
+                  >
+                    <span>{t(`${tc(cat.name)}-এর সব পণ্য দেখুন (${catProducts.length}টি)`, `View All ${catProducts.length} Products in ${tc(cat.name)}`)}</span>
+                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              )}
             </section>
           );
         })}
@@ -8670,7 +8966,7 @@ ${productNames}
             <button
               onClick={() => {
                 setAdminViewMode(isMasterAdmin ? "full" : "support_only");
-                setAdminTab("orders");
+                setAdminTab(isMasterAdmin ? "analytics" : "orders");
                 setIsAdminOpen(true);
               }}
               className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
@@ -8799,12 +9095,15 @@ ${productNames}
             selectedSubcategory={selectedSubcategory}
             onSelectCategory={(catName: string, subName?: string) => {
               setSelectedCategory(catName);
-              setSelectedSubcategory(subName || "all");
+              const sub = subName || "all";
+              setSelectedSubcategory(sub);
               setCurrentPage(1);
               setIsProductDetailsOpen(false);
               setSelectedProduct(null);
               setIsAdminOpen(false);
               setIsCheckoutOpen(false);
+              const targetPath = getCategoryPath(catName, sub);
+              window.history.pushState({ category: catName, subcategory: sub }, "", targetPath);
               document.getElementById("product-display-section")?.scrollIntoView({ behavior: "smooth" });
             }}
             t={t}

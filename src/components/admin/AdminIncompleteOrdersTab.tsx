@@ -22,8 +22,52 @@ export function buildCartReminderMessage(order: any, products: any[] = []): stri
   return `${custName}, আপনি iShop BD-তে "${cleanProdName}" কিনতে চেয়েছিলেন। আপনি কি প্রোডাক্টটি নিতে আগ্রহী? অর্ডারটি সম্পন্ন করতে ভিজিট করুন: ${shortUrl} ধন্যবাদ!`;
 }
 
+export interface IncompleteCustomerOrderStatus {
+  isSameProduct: boolean;
+  matchedOrder: any;
+  totalCustomerOrders: number;
+  activeOrdersCount: number;
+}
+
+export function getIncompleteCustomerOrderStatus(order: any, orderHistory: any[] = []): IncompleteCustomerOrderStatus | null {
+  const rawPhone = (order.phone || order.customerPhone || '').trim();
+  const cleanDigits = rawPhone.replace(/\D/g, '');
+  if (!cleanDigits || cleanDigits.length < 6) return null;
+
+  const customerOrders = orderHistory.filter((o: any) => {
+    if (!o || o.deleted) return false;
+    const oPhone = String(o.customerPhone || o.phone || '').replace(/\D/g, '');
+    return oPhone && (oPhone === cleanDigits || oPhone.endsWith(cleanDigits) || cleanDigits.endsWith(oPhone));
+  });
+
+  if (customerOrders.length === 0) return null;
+
+  const activeOrders = customerOrders.filter((o: any) => o.status !== 'cancelled');
+  if (activeOrders.length === 0) return null;
+
+  const incItemIds = (order.items || []).map((it: any) => String(it.id || it.product?.id || '')).filter(Boolean);
+  const incItemNames = (order.items || []).map((it: any) => String(it.name || it.product?.name || '').toLowerCase().trim()).filter(Boolean);
+
+  const sameProductOrder = activeOrders.find((o: any) => {
+    const oItems = o.items || [];
+    return oItems.some((it: any) => {
+      const pId = String(it.product?.id || it.id || '');
+      const pName = String(it.product?.name || it.name || '').toLowerCase().trim();
+      return (pId && incItemIds.includes(pId)) || (pName && incItemNames.some((incName: string) => incName && (pName.includes(incName) || incName.includes(pName))));
+    });
+  });
+
+  return {
+    isSameProduct: Boolean(sameProductOrder),
+    matchedOrder: sameProductOrder || activeOrders[0],
+    totalCustomerOrders: customerOrders.length,
+    activeOrdersCount: activeOrders.length,
+  };
+}
+
 export interface AdminIncompleteOrdersTabProps {
   incompleteOrders: any[];
+  orderHistory?: any[];
   getCustomerStats: (phone: string) => { total: number; delivered: number };
   individualSmsOrder: any;
   setIndividualSmsOrder: (order: any) => void;
@@ -45,6 +89,7 @@ export interface AdminIncompleteOrdersTabProps {
 
 export default function AdminIncompleteOrdersTab({
   incompleteOrders,
+  orderHistory = [],
   getCustomerStats,
   individualSmsOrder,
   setIndividualSmsOrder,
@@ -61,6 +106,47 @@ export default function AdminIncompleteOrdersTab({
   onCompleteIncompleteOrder,
 }: AdminIncompleteOrdersTabProps) {
   const [verifyingOrder, setVerifyingOrder] = useState<any | null>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
+
+  // Automatically filter out phoneless records and records where customer already ordered this product
+  const activeIncompleteOrders = incompleteOrders.filter(inc => {
+    const rawPhone = (inc.phone || inc.customerPhone || '').trim();
+    const cleanDigits = rawPhone.replace(/\D/g, '');
+    const hasRealPhone = Boolean(
+      rawPhone &&
+      !rawPhone.includes('কার্টে') &&
+      !rawPhone.includes('Cart') &&
+      cleanDigits.length >= 6
+    );
+    if (!hasRealPhone) return false;
+
+    const status = getIncompleteCustomerOrderStatus(inc, orderHistory);
+    return !status?.isSameProduct;
+  });
+
+  // Automatically delete any phoneless junk and already-ordered records in background
+  React.useEffect(() => {
+    const junkOrAlreadyOrdered = incompleteOrders.filter(inc => {
+      const rawPhone = (inc.phone || inc.customerPhone || '').trim();
+      const cleanDigits = rawPhone.replace(/\D/g, '');
+      const hasRealPhone = Boolean(
+        rawPhone &&
+        !rawPhone.includes('কার্টে') &&
+        !rawPhone.includes('Cart') &&
+        cleanDigits.length >= 6
+      );
+      if (!hasRealPhone) return true;
+
+      const status = getIncompleteCustomerOrderStatus(inc, orderHistory);
+      return Boolean(status && status.isSameProduct);
+    });
+
+    if (junkOrAlreadyOrdered.length > 0) {
+      junkOrAlreadyOrdered.forEach((inc) => {
+        deleteDoc(doc(db, 'incomplete_orders', inc.id)).catch(() => {});
+      });
+    }
+  }, [incompleteOrders, orderHistory]);
 
   return (
     <div className="space-y-6">
@@ -75,12 +161,12 @@ export default function AdminIncompleteOrdersTab({
         </div>
         <div className="bg-white px-4 py-2 rounded-xl shadow-xs border border-gray-200 flex items-center gap-2 self-start sm:self-auto">
           <span className="text-xs text-gray-500 font-bold">Total Incomplete:</span>
-          <span className="text-lg font-black text-red-600">{incompleteOrders.length}</span>
+          <span className="text-lg font-black text-red-600">{activeIncompleteOrders.length}</span>
         </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200/80 overflow-hidden">
-        {incompleteOrders.length === 0 ? (
+        {activeIncompleteOrders.length === 0 ? (
           <div className="p-16 text-center text-gray-400">
             <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3">
               <ShoppingCart className="text-gray-300" size={32} />
@@ -94,7 +180,7 @@ export default function AdminIncompleteOrdersTab({
           <>
             {/* Mobile View for Incomplete Orders */}
             <div className="lg:hidden space-y-3 p-3">
-              {incompleteOrders.map((order: any) => {
+              {activeIncompleteOrders.map((order: any) => {
                 const rawPhone = (order.phone || order.customerPhone || '').trim();
                 const hasRealPhone =
                   rawPhone && !rawPhone.includes('কার্টে') && !rawPhone.includes('Cart') && rawPhone.length >= 6;
@@ -198,6 +284,36 @@ export default function AdminIncompleteOrdersTab({
                       </div>
                     </div>
 
+                    {(() => {
+                      const orderStatusInfo = getIncompleteCustomerOrderStatus(order, orderHistory);
+                      if (!orderStatusInfo) return null;
+                      return (
+                        <div className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border ${
+                          orderStatusInfo.isSameProduct
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : 'bg-amber-50 text-amber-800 border-amber-300'
+                        }`}>
+                          <span>
+                            {orderStatusInfo.isSameProduct
+                              ? `✅ এই প্রোডাক্ট ইতোমধ্যে অর্ডার করা হয়েছে (#${String(orderStatusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`
+                              : `⚠️ অন্য অর্ডার রয়েছে (#${String(orderStatusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (window.confirm('এই ইনকমপ্লিট রেকর্ডটি ডিলিট করতে চান?')) {
+                                await deleteDoc(doc(db, 'incomplete_orders', order.id));
+                                toast.success('ইনকমপ্লিট রেকর্ড মুছে ফেলা হয়েছে।');
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-700 font-bold px-1.5 py-0.5 rounded bg-white/90 border border-red-200 cursor-pointer"
+                          >
+                            মুছুন
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex items-center gap-2 w-full pt-0.5">
                       <div
                         className="bg-white flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600 font-medium truncate shadow-2xs"
@@ -247,7 +363,7 @@ export default function AdminIncompleteOrdersTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-medium">
-                  {incompleteOrders.map((order: any) => {
+                  {activeIncompleteOrders.map((order: any) => {
                     const rawPhone = (order.phone || order.customerPhone || '').trim();
                     const hasRealPhone =
                       rawPhone && !rawPhone.includes('কার্টে') && !rawPhone.includes('Cart') && rawPhone.length >= 6;
@@ -299,6 +415,23 @@ export default function AdminIncompleteOrdersTab({
                                 📍 {[order.address, order.thana, order.district].filter(Boolean).join(', ')}
                               </span>
                             )}
+                            {(() => {
+                              const orderStatusInfo = getIncompleteCustomerOrderStatus(order, orderHistory);
+                              if (!orderStatusInfo) return null;
+                              return (
+                                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold mt-1.5 border w-fit ${
+                                  orderStatusInfo.isSameProduct
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                    : 'bg-amber-50 text-amber-800 border-amber-300'
+                                }`}>
+                                  <span>
+                                    {orderStatusInfo.isSameProduct
+                                      ? `✅ অলরেডি এই প্রোডাক্ট অর্ডার করেছেন (#${String(orderStatusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`
+                                      : `⚠️ কাস্টমারের অন্য অর্ডার রয়েছে (#${String(orderStatusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="p-4 max-w-xs">

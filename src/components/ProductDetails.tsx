@@ -2,10 +2,11 @@ import React from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
-import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info, MessageSquare, ArrowRight } from 'lucide-react';
+import { X, Star, Share2, Heart, Truck, Plus, Zap, ChevronDown, Check, ShoppingCart, Tag, Box, ShieldCheck, CheckCircle2, List, LayoutGrid, Camera, CreditCard, Link as LinkIcon, Bookmark, Info, MessageSquare, ArrowRight, Ruler } from 'lucide-react';
 import { getProductPath } from '../utils/helpers';
 import { buildProductStructuredData } from '../utils/productSchema';
 import FrequentlyBoughtTogether from './FrequentlyBoughtTogether';
+import ProductSizeGuideInline from './ProductSizeGuide';
 
 export interface ProductDetailsProps {
   selectedProduct: any;
@@ -183,6 +184,15 @@ export default function ProductDetails(props: ProductDetailsProps) {
   const [activeTab, setActiveTab] = React.useState('specification');
   const [aiRecommendations, setAiRecommendations] = React.useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = React.useState(false);
+  const [isSizeGuideOpen, setIsSizeGuideOpen] = React.useState(false);
+
+  const isClothingProduct = Boolean(
+    selectedProduct?.showSizeGuide || (
+      (selectedProduct?.category && /jacket|clothing|পোশাক|জ্যাকেট|winter|হুডি|hoodie|shirt|শার্ট|panjabi|পাঞ্জাবি|পাঞ্জাবী|t-shirt|টি-শার্ট|polo|পোলো|pant|প্যান্ট|ড্রপ শোল্ডার/i.test(selectedProduct.category)) ||
+      (selectedProduct?.name && /jacket|জ্যাকেট|হুডি|hoodie|ব্লেজার|সোয়েটার|শার্ট|shirt|t-shirt|টি-শার্ট|polo|পোলো|পাঞ্জাবি|panjabi|পাঞ্জাবী|pant|প্যান্ট|ড্রপ শোল্ডার/i.test(selectedProduct.name)) ||
+      (selectedProduct?.variants && selectedProduct.variants.some((v: any) => /^(S|M|L|XL|XXL|2XL|3XL|38|40|42|44)$/i.test(String(v.size || '').trim())))
+    )
+  );
 
   const approvedReviews = React.useMemo(() => {
     if (!Array.isArray(activeReviews)) return [];
@@ -398,22 +408,40 @@ export default function ProductDetails(props: ProductDetailsProps) {
                               <button onClick={() => handleLikeProduct(selectedProduct.id)} className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all touch-manipulation ${likedProducts.includes(selectedProduct.id) ? "bg-primary/10 text-primary shadow-2xs" : "bg-transparent text-gray-600 hover:bg-gray-200/50"}`}><Bookmark size={13} fill={likedProducts.includes(selectedProduct.id) ? "currentColor" : "none"} /> Save</button>
                             </div>
                           </div>
+
+
                         </div>
                       </div>
                     </div>
                   </div>
-                <div className="relative w-full md:w-[85%] mx-auto aspect-square bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center group">
-                  <ZoomableImage
-                    keyId={modalDisplayImage || selectedProduct.image || selectedProduct.images?.[0]}
-                    src={modalDisplayImage || selectedProduct.image || selectedProduct.images?.[0]}
-                    alt={selectedProduct.name}
-                  />
-                  {selectedProduct.isFreeDelivery && (
-                    <div className="absolute top-4 left-4 bg-emerald-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-xl z-10 flex items-center gap-1 border border-emerald-500/20">
-                      <Truck size={12} /> Free Home Delivery
+                {(() => {
+                  const isClothing = Boolean(
+                    selectedProduct.showSizeGuide ||
+                    (selectedProduct.category && /jacket|clothing|পোশাক|জ্যাকেট|winter|হুডি|hoodie|shirt|শার্ট|panjabi|পাঞ্জাবি/i.test(selectedProduct.category)) ||
+                    (selectedProduct.name && /jacket|জ্যাকেট|হুডি|hoodie|ব্লেজার|সোয়েটার|শার্ট|shirt/i.test(selectedProduct.name))
+                  );
+                  return (
+                    <div className={`relative w-full md:w-[85%] mx-auto aspect-square rounded-2xl overflow-hidden flex items-center justify-center group transition-colors ${
+                      isClothing ? "bg-gradient-to-b from-gray-50/90 via-slate-50/40 to-gray-100/60 p-2" : "bg-gray-50"
+                    }`}>
+                      <ZoomableImage
+                        keyId={modalDisplayImage || selectedProduct.image || selectedProduct.images?.[0]}
+                        src={modalDisplayImage || selectedProduct.image || selectedProduct.images?.[0]}
+                        alt={selectedProduct.name}
+                        fit={isClothing ? "contain" : "cover"}
+                      />
+                      {selectedProduct.isFreeDelivery ? (
+                        <div className="absolute top-4 left-4 bg-emerald-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-xl z-10 flex items-center gap-1 border border-emerald-500/20">
+                          <Truck size={12} /> Free Home Delivery
+                        </div>
+                      ) : (selectedProduct.deliveryCharge !== undefined && selectedProduct.deliveryCharge !== null && Number(selectedProduct.deliveryCharge) >= 0) ? (
+                        <div className="absolute top-4 left-4 bg-blue-600 text-white text-[10px] font-black px-3 py-1.5 rounded-xl shadow-xl z-10 flex items-center gap-1 border border-blue-500/20">
+                          <Truck size={12} /> ডেলিভারি চার্জ: ৳{selectedProduct.deliveryCharge} (সারা বাংলাদেশ)
+                        </div>
+                      ) : null}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
                 {/* Thumbnails */}
                 {((selectedProduct.images &&
                   selectedProduct.images.length > 0) ||
@@ -553,88 +581,74 @@ export default function ProductDetails(props: ProductDetailsProps) {
                      </div>
                   </div>
                   
-                  {/* Key Features Overview */}
-                  <div className="mt-5 mb-5 bg-gray-50/50 rounded-2xl p-4 border border-gray-100">
-                     <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
-                        মূল বৈশিষ্ট্যসমূহ (Key Features)
-                     </h3>
-                     <div className="text-xs md:text-sm text-gray-700 flex flex-col gap-2.5">
-                        {(() => {
-                           // 1. If key features exist, render them with bold titles
-                           if (selectedProduct.features) {
-                             const lines = selectedProduct.features.split('\n').filter(l => l.trim().length > 0);
-                             return lines.map((line, idx) => {
-                               const cleanLine = line.replace(/^[-*•]\s*/, '');
-                               const colonIdx = cleanLine.indexOf(':');
-                               const hasColon = colonIdx > 0 && colonIdx < cleanLine.length - 1;
-                               const title = hasColon ? cleanLine.substring(0, colonIdx) : null;
-                               const detail = hasColon ? cleanLine.substring(colonIdx + 1).trim() : cleanLine;
+                  {/* Key Features Overview (Only show when features or specifications actually exist, e.g. for gadgets; hidden for clothing/empty) */}
+                  {Boolean((selectedProduct.features && selectedProduct.features.trim().length > 0) || (selectedProduct.specifications && selectedProduct.specifications.length > 0)) && (
+                    <div className="mt-5 mb-5 bg-gray-50/50 rounded-2xl p-4 border border-gray-100">
+                         <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                            মূল বৈশিষ্ট্যসমূহ (Key Features)
+                         </h3>
+                         <div className="text-xs md:text-sm text-gray-700 flex flex-col gap-2.5">
+                            {(() => {
+                               // 1. If key features exist, render them with bold titles
+                               if (selectedProduct.features && selectedProduct.features.trim().length > 0) {
+                                 const lines = selectedProduct.features.split('\n').filter((l: string) => l.trim().length > 0);
+                                 return lines.map((line: string, idx: number) => {
+                                   const cleanLine = line.replace(/^[-*•]\s*/, '');
+                                   const colonIdx = cleanLine.indexOf(':');
+                                   const hasColon = colonIdx > 0 && colonIdx < cleanLine.length - 1;
+                                   const title = hasColon ? cleanLine.substring(0, colonIdx) : null;
+                                   const detail = hasColon ? cleanLine.substring(colonIdx + 1).trim() : cleanLine;
 
-                               return (
-                                 <div key={idx} className="flex items-start gap-2.5 pb-1 last:pb-0">
-                                   <span className="text-primary mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 bg-primary ring-4 ring-primary/10" />
-                                   <div className="leading-relaxed">
-                                     {title ? (
-                                       <>
-                                         <strong className="text-gray-900 font-bold mr-1">{title}:</strong>
-                                         <span className="text-gray-600 font-medium">{detail}</span>
-                                       </>
-                                     ) : (
-                                       <span className="text-gray-700 font-medium">{cleanLine}</span>
-                                     )}
+                                   return (
+                                     <div key={idx} className="flex items-start gap-2.5 pb-1 last:pb-0">
+                                       <span className="text-primary mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 bg-primary ring-4 ring-primary/10" />
+                                       <div className="leading-relaxed">
+                                         {title ? (
+                                           <>
+                                             <strong className="text-gray-900 font-bold mr-1">{title}:</strong>
+                                             <span className="text-gray-600 font-medium">{detail}</span>
+                                           </>
+                                         ) : (
+                                           <span className="text-gray-700 font-medium">{cleanLine}</span>
+                                         )}
+                                       </div>
+                                     </div>
+                                   );
+                                 });
+                               }
+                               
+                               // 2. Specifications list
+                               const specs = selectedProduct.specifications || [];
+                               if (specs.length > 0) {
+                                 return specs.slice(0, 5).map((spec: any, idx: number) => (
+                                   <div key={idx} className="flex gap-2 border-b border-gray-100 pb-1.5 last:border-b-0">
+                                     <span className="text-gray-500 font-medium min-w-[120px]">{spec.name || spec.key}:</span>
+                                     <span className="text-gray-900 font-semibold">{spec.value}</span>
                                    </div>
-                                 </div>
-                               );
-                             });
-                           }
-                           
-                           // 2. Fallback: get detailed specifications
-                           const specs = selectedProduct.specifications || [];
-                           if (specs.length > 0) {
-                             return specs.slice(0, 5).map((spec, idx) => (
-                               <div key={idx} className="flex gap-2 border-b border-gray-100 pb-1.5 last:border-b-0">
-                                 <span className="text-gray-500 font-medium min-w-[120px]">{spec.name || spec.key}:</span>
-                                 <span className="text-gray-900 font-semibold">{spec.value}</span>
-                               </div>
-                             ));
-                           }
-                           
-                           // 3. Fallback: get other basic specs
-                           const basicSpecs = [
-                             { name: "Model", value: selectedProduct.modelName },
-                             { name: "Brand", value: selectedProduct.brand || selectedProduct.category },
-                             { name: "Warranty", value: selectedProduct.warranty },
-                           ].filter(s => s.value);
-                           
-                           if (basicSpecs.length > 0) {
-                             return basicSpecs.map((spec, idx) => (
-                               <div key={idx} className="flex gap-2 border-b border-gray-100 pb-1.5 last:border-b-0">
-                                 <span className="text-gray-500 font-medium min-w-[120px]">{spec.name}:</span>
-                                 <span className="text-gray-900 font-semibold truncate">{spec.value}</span>
-                               </div>
-                             ));
-                           }
+                                 ));
+                               }
 
-                           return <p className="text-gray-400 italic">No features available</p>;
-                        })()}
-                     </div>
-                     <button 
-                       onClick={() => {
-                         setActiveTab('specification');
-                         setTimeout(() => {
-                           const element = document.getElementById("product-description-tabs");
-                           if (element) {
-                             const y = element.getBoundingClientRect().top + window.scrollY - 80;
-                             window.scrollTo({ top: y, behavior: "smooth" });
-                           }
-                         }, 50);
-                       }}
-                       className="text-primary text-xs font-bold hover:underline mt-3.5 inline-flex items-center gap-1"
-                     >
-                       সম্পূর্ণ স্পেসিফিকেশন ও বিবরণ দেখুন →
-                     </button>
-                  </div>
+                               return null;
+                            })()}
+                         </div>
+                         <button 
+                           onClick={() => {
+                             setActiveTab('specification');
+                             setTimeout(() => {
+                               const element = document.getElementById("product-description-tabs");
+                               if (element) {
+                                 const y = element.getBoundingClientRect().top + window.scrollY - 80;
+                                 window.scrollTo({ top: y, behavior: "smooth" });
+                               }
+                             }, 50);
+                           }}
+                           className="text-primary text-xs font-bold hover:underline mt-3.5 inline-flex items-center gap-1"
+                         >
+                           সম্পূর্ণ স্পেসিফিকেশন ও বিবরণ দেখুন →
+                          </button>
+                      </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-5 mb-6">
                     {/* Variant Selection Logic */}
@@ -673,7 +687,19 @@ export default function ProductDetails(props: ProductDetailsProps) {
                       {/* Size selection */}
                       {Array.from(new Set(selectedProduct.variants.map(v => v.size).filter(Boolean))).length > 0 && (
                         <div className="flex flex-col items-start w-full">
-                            <h4 className="text-[14px] md:text-[15px] font-medium text-gray-800 mb-2">Choose Size:</h4>
+                            <div className="flex items-center justify-between w-full mb-2">
+                            <h4 className="text-[14px] md:text-[15px] font-medium text-gray-800">Choose Size:</h4>
+                            {isClothingProduct && (
+                              <button
+                                type="button"
+                                onClick={() => setIsSizeGuideOpen(!isSizeGuideOpen)}
+                                className="text-xs font-semibold text-primary hover:text-red-700 flex items-center gap-1 transition-colors hover:underline cursor-pointer"
+                              >
+                                <Ruler size={13} />
+                                <span>{isSizeGuideOpen ? "সাইজ গাইড বন্ধ করুন" : "সাইজ গাইড"}</span>
+                              </button>
+                            )}
+                          </div>
                           <div id="size-selection-area" className={`flex items-center w-full transition-all duration-300 ${sizeValError ? "border-2 border-red-500 bg-red-50/20 shadow-sm rounded-xl p-1" : "border-2 border-transparent"}`}>
                             <div className="flex flex-wrap items-center gap-2">
                             {Array.from(new Set(selectedProduct.variants.map(v => v.size).filter(Boolean))).map((size, idx) => (
@@ -690,10 +716,52 @@ export default function ProductDetails(props: ProductDetailsProps) {
                               ))}
                             </div>
                           </div>
+                          {/* Inline Size Guide Accordion */}
+                          {isClothingProduct && (
+                            <ProductSizeGuideInline
+                              isOpen={isSizeGuideOpen}
+                              onClose={() => setIsSizeGuideOpen(false)}
+                              onSelectSize={(size) => {
+                                setTempSelectedSize(size);
+                                setSizeValError(false);
+                              }}
+                              selectedSize={tempSelectedSize}
+                              availableSizes={
+                                selectedProduct?.variants
+                                  ? Array.from(new Set(selectedProduct.variants.map((v: any) => v.size).filter(Boolean)))
+                                  : []
+                              }
+                              productName={selectedProduct?.name}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
                   ) : null}
+                  {/* Size Guide for clothing products without variant sizes */}
+                  {isClothingProduct && (!selectedProduct?.variants || Array.from(new Set(selectedProduct.variants.map((v: any) => v.size).filter(Boolean))).length === 0) && (
+                    <div className="w-full flex flex-col mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsSizeGuideOpen(!isSizeGuideOpen)}
+                        className="self-start inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-xs font-bold text-gray-700 hover:text-primary transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Ruler size={14} className="text-primary" />
+                        <span>{isSizeGuideOpen ? "সাইজ গাইড বন্ধ করুন" : "সাইজ গাইড ও রিকমেন্ডার"}</span>
+                      </button>
+                      <ProductSizeGuideInline
+                        isOpen={isSizeGuideOpen}
+                        onClose={() => setIsSizeGuideOpen(false)}
+                        onSelectSize={(size) => {
+                          setTempSelectedSize(size);
+                          setSizeValError(false);
+                        }}
+                        selectedSize={tempSelectedSize}
+                        availableSizes={[]}
+                        productName={selectedProduct?.name}
+                      />
+                    </div>
+                  )}
 
             {/* Quantity Selector and Buy Now */}
             <div className="w-full flex flex-col mt-2">
@@ -861,7 +929,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
       </div>
 
       {/* Star Tech Style Tabs & Sidebar Layout */}
-      <div className="w-full bg-[#f2f4f8]/40 py-10 border-t border-gray-200/50">
+      <div className="w-full bg-[#f2f4f8]/40 pt-1 pb-8 border-t border-gray-200/40">
         <div className="container mx-auto px-4">
           {/* Frequently Bought Together / Bundle Section */}
           <FrequentlyBoughtTogether
@@ -1357,6 +1425,7 @@ export default function ProductDetails(props: ProductDetailsProps) {
             </button>
           </div>
         </div>
+
       </>
   );
 }

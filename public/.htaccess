@@ -24,6 +24,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   # Route API endpoints to PHP scripts on shared hosting
   RewriteRule ^api/send-sms$ api/send-sms.php [L]
   RewriteRule ^api/send-bulk-sms$ api/send-bulk-sms.php [L]
+  RewriteRule ^api/sms-balance$ api/sms-balance.php [L]
   RewriteRule ^api/confirm-order$ api/confirm-order.php [L]
   RewriteRule ^api/send-email$ api/send-email.php [L]
   RewriteRule ^api/send-push$ api/send-push.php [L]
@@ -43,6 +44,8 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteRule ^api/admin/marketing-config$ api/marketing.php?action=admin-config [L,QSA]
   RewriteRule ^api/admin/marketing-test/([a-zA-Z0-9_-]+)$ api/marketing.php?action=test&platform=$1 [L,QSA]
   RewriteRule ^api/track-event$ api/track-event.php [L]
+  RewriteRule ^api/track-visit$ api/track-visit.php [L,QSA]
+  RewriteRule ^api/admin/traffic-stats$ api/traffic-stats.php [L,QSA]
   RewriteRule ^api/admin/courier/sync-all$ api/courier-sync.php?action=sync-all [L,QSA]
   RewriteRule ^api/admin/courier/sync/([^/]+)$ api/courier-sync.php?action=sync-one&orderId=$1 [L,QSA]
   RewriteRule ^api/courier/webhook/steadfast$ api/courier-sync.php?action=webhook [L,QSA]

@@ -460,6 +460,12 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
     const htmlThermal = buildBulkOrderStickersHtml(orders, { layout: 'thermal' });
     expect(htmlThermal).toContain('4in 6in');
 
+    const html75 = buildBulkOrderStickersHtml(orders, { layout: '75x100' });
+    expect(html75).toContain('layout-75x100');
+    expect(html75).toContain('75mm 100mm');
+    expect(html75).toContain('PDF ডাউনলোড');
+    expect(html75).toContain('ফাইল সেভ (HTML)');
+
     // AdminOrdersTab surfaces the bulk Stickers button when orders are marked
     const onBulkPrintStickers = vi.fn();
     render(

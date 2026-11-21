@@ -5,10 +5,12 @@ export const ZoomableImage = ({
   src,
   alt,
   keyId,
+  fit = "cover",
 }: {
   src: string;
   alt: string;
   keyId?: string;
+  fit?: "cover" | "contain";
 }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ export const ZoomableImage = ({
         animate={{ opacity: 1, scale: isZoomed ? 2.5 : 1 }}
         drag={false}
         style={{ transformOrigin: "var(--zoom-x) var(--zoom-y)" }}
-        className="w-full h-full object-cover pointer-events-auto"
+        className={`w-full h-full pointer-events-auto ${fit === "contain" ? "object-contain p-2" : "object-cover"}`}
       />
       {isZoomed && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md text-white text-[10px] px-4 py-1.5 rounded-full pointer-events-none md:hidden animate-bounce">

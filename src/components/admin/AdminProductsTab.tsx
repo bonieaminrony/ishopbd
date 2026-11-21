@@ -1,19 +1,32 @@
 import React from 'react';
 import {
   Activity,
+  ArrowUpDown,
+  CheckCircle2,
   ChevronDown,
   Copy,
   Edit3,
+  Eye,
+  Filter,
+  Hash,
   ImageIcon,
   LayoutTemplate,
   List,
   MoreVertical,
+  Package,
   Plus,
   PlusCircle,
+  RefreshCw,
+  Search,
   Share2,
+  ShieldCheck,
+  ShoppingBag,
+  Smartphone,
+  Sparkles,
   Star,
   Tag,
   Trash2,
+  Truck,
   Upload,
   X,
 } from 'lucide-react';
@@ -73,10 +86,140 @@ export default function AdminProductsTab({
   openLandingEditor,
   deleteProduct,
 }: AdminProductsTabProps) {
+  const [isGeneratingTags, setIsGeneratingTags] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = React.useState('all');
+  const [previewMode, setPreviewMode] = React.useState<'card' | 'details'>('card');
+  const [previewActiveImageIdx, setPreviewActiveImageIdx] = React.useState(0);
+
+  // Collect all preview images
+  const previewImages = React.useMemo(() => {
+    const list: string[] = [];
+    if (editingProduct?.image) list.push(editingProduct.image);
+    if (Array.isArray(editingProduct?.images)) {
+      editingProduct.images.forEach((img: string) => {
+        if (img && !list.includes(img)) list.push(img);
+      });
+    }
+    if (Array.isArray(editingProduct?.variants)) {
+      editingProduct.variants.forEach((v: any) => {
+        if (v?.image && !list.includes(v.image)) list.push(v.image);
+      });
+    }
+    return list.length > 0 ? list : ['/logo.webp'];
+  }, [editingProduct]);
+
+  // Reset active image index when images change
+  React.useEffect(() => {
+    setPreviewActiveImageIdx(0);
+  }, [editingProduct?.id, editingProduct?.image]);
+
+  // Discount %
+  const discountPercent = React.useMemo(() => {
+    const p = Number(editingProduct?.price || 0);
+    const op = Number(editingProduct?.originalPrice || 0);
+    if (op > p && op > 0) {
+      return Math.round(((op - p) / op) * 100);
+    }
+    return 0;
+  }, [editingProduct?.price, editingProduct?.originalPrice]);
+
+  // Latest products first + Search by Code, Name, Category, ID
+  const sortedAndFilteredProducts = React.useMemo(() => {
+    const sorted = [...products].sort((a, b) => {
+      const getTime = (item: any) => {
+        if (!item) return 0;
+        if (item.createdAt?.seconds) return item.createdAt.seconds * 1000;
+        if (item.createdAt?.toMillis) return item.createdAt.toMillis();
+        if (item.updatedAt?.seconds) return item.updatedAt.seconds * 1000;
+        if (item.updatedAt?.toMillis) return item.updatedAt.toMillis();
+        if (item.createdAt) {
+          const d = new Date(item.createdAt).getTime();
+          if (!isNaN(d)) return d;
+        }
+        if (item.updatedAt) {
+          const d = new Date(item.updatedAt).getTime();
+          if (!isNaN(d)) return d;
+        }
+        return 0;
+      };
+      const timeA = getTime(a);
+      const timeB = getTime(b);
+      if (timeA !== timeB) return timeB - timeA;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+
+    return sorted.filter((p) => {
+      if (selectedCategoryFilter !== 'all' && p.category !== selectedCategoryFilter) {
+        return false;
+      }
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      const codeMatch = p.code ? String(p.code).toLowerCase().includes(q) : false;
+      const nameMatch = p.name ? String(p.name).toLowerCase().includes(q) : false;
+      const catMatch = p.category ? String(p.category).toLowerCase().includes(q) : false;
+      const idMatch = p.id ? String(p.id).toLowerCase().includes(q) : false;
+      const brandMatch = p.brand ? String(p.brand).toLowerCase().includes(q) : false;
+      return codeMatch || nameMatch || catMatch || idMatch || brandMatch;
+    });
+  }, [products, searchQuery, selectedCategoryFilter]);
+
+  const handleGenerateAiTags = async (count: number = 30) => {
+    const name = editingProduct?.name?.trim();
+    if (!name) {
+      toast.error('Please enter the Product Name first!');
+      const el = document.getElementById('field-name');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    try {
+      setIsGeneratingTags(true);
+      toast.loading(`Generating ${count} AI search tags...`);
+      const res = await fetch('/api/generate-product-tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          category: editingProduct?.category || '',
+          subcategory: editingProduct?.subcategory || '',
+          brand: editingProduct?.brand || '',
+          description: editingProduct?.description || '',
+          count,
+        }),
+      });
+
+      const data = await res.json();
+      toast.dismiss();
+
+      if (data.success && Array.isArray(data.tags) && data.tags.length > 0) {
+        const existingArr = editingProduct?.tags
+          ? editingProduct.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+          : [];
+
+        const combined = Array.from(new Set([...existingArr, ...data.tags])).join(', ');
+        setEditingProduct((prev: any) => ({
+          ...(prev || {}),
+          tags: combined,
+        }));
+        toast.success(`Successfully added ${data.tags.length} AI tags!`);
+      } else {
+        toast.error('Could not generate tags. Please try again.');
+      }
+    } catch (err) {
+      toast.dismiss();
+      toast.error('Could not connect to server.');
+    } finally {
+      setIsGeneratingTags(false);
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      {/* Add/Edit Form */}
-      <div className="lg:col-span-5">
+    <div className="space-y-10">
+      {/* Top Grid: Form on Left (7 cols) & Live Preview on Right (5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Add/Edit Form */}
+        <div className="lg:col-span-7">
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 sticky top-0">
           <div className="flex justify-between items-center mb-6">
             <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
@@ -517,9 +660,45 @@ export default function AdminProductsTab({
                   );
                 })()}
                 <div id="field-tags">
-                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">
-                    Search Tags <span className="text-gray-400 font-normal normal-case">(For Google &amp; Site Search)</span>
-                  </label>
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                    <label className="block text-[11px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
+                      <span>Search Tags</span>
+                      {editingProduct?.tags && editingProduct.tags.trim() && (
+                        <span className="text-[10px] bg-gray-200 text-gray-700 font-bold px-1.5 py-0.2 rounded-full">
+                          {editingProduct.tags.split(',').map((t: string) => t.trim()).filter(Boolean).length} Tags
+                        </span>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-400 font-semibold hidden sm:inline mr-0.5">AI Generate:</span>
+                      {[20, 30, 50].map((cnt) => (
+                        <button
+                          key={cnt}
+                          type="button"
+                          disabled={isGeneratingTags}
+                          onClick={() => handleGenerateAiTags(cnt)}
+                          className="text-[10px] bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 text-indigo-700 font-bold px-2 py-0.5 rounded-lg border border-indigo-200/80 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs"
+                          title={`Generate ${cnt} relevant search tags with AI`}
+                        >
+                          <Sparkles size={11} className="text-indigo-600 animate-pulse" />
+                          <span>{cnt} Tags</span>
+                        </button>
+                      ))}
+                      {editingProduct?.tags && editingProduct.tags.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to clear all tags?')) {
+                              setEditingProduct((prev: any) => ({ ...(prev || {}), tags: '' }));
+                            }
+                          }}
+                          className="text-[10px] text-red-500 hover:text-red-700 font-bold px-1.5 py-0.5 rounded-lg hover:bg-red-50 transition-colors ml-1"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 min-h-[46px] flex flex-wrap gap-1.5 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
                     {(editingProduct?.tags
                       ? editingProduct.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
@@ -837,6 +1016,12 @@ export default function AdminProductsTab({
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               message: `Write an engaging product description for a product named "${name}". Highlight its features and make it appealing. Format nicely in English.`,
+                              messages: [
+                                {
+                                  role: 'user',
+                                  content: `Write an engaging product description for a product named "${name}". Highlight its features and make it appealing. Format nicely in English.`,
+                                },
+                              ],
                             }),
                           });
                           const data = await response.json();
@@ -1071,6 +1256,70 @@ export default function AdminProductsTab({
                     🚚 Free Delivery
                   </span>
                 </label>
+                <div className="py-2.5 px-3 rounded-xl border border-gray-200 bg-gray-50/70 mt-1">
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1 flex items-center justify-between">
+                    <span>📦 Custom Delivery Fee (Optional)</span>
+                    <span className="text-[10px] text-gray-500 font-normal">Nationwide Flat Rate</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs font-bold text-gray-400">৳</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editingProduct?.deliveryCharge ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? undefined : Number(e.target.value);
+                        setEditingProduct((prev: any) => ({
+                          ...(prev || {}),
+                          deliveryCharge: val,
+                        }));
+                      }}
+                      placeholder="Leave empty for standard rates (৳70/৳130), or enter custom fee (e.g. 50, 60, 100)"
+                      className="w-full bg-white border border-gray-200 rounded-xl py-2 pl-7 pr-3 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-bold transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-[10px] text-gray-500 font-bold mr-0.5">Quick Select:</span>
+                    {[50, 60, 80, 100, 120].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct((prev: any) => ({
+                            ...(prev || {}),
+                            deliveryCharge: amt,
+                            isFreeDelivery: false,
+                          }));
+                        }}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all ${
+                          editingProduct?.deliveryCharge === amt
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-primary/50 hover:bg-red-50/30'
+                        }`}
+                      >
+                        ৳{amt}
+                      </button>
+                    ))}
+                    {(editingProduct?.deliveryCharge !== undefined && editingProduct?.deliveryCharge !== null && editingProduct?.deliveryCharge !== '') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProduct((prev: any) => {
+                            const updated = { ...(prev || {}) };
+                            delete updated.deliveryCharge;
+                            return updated;
+                          });
+                        }}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-all"
+                      >
+                        Remove (Standard Rate)
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1.5">
+                    * If set (e.g. 50, 60 or 100 BDT), this flat fee applies nationwide regardless of delivery location.
+                  </p>
+                </div>
                 <label htmlFor="isComingSoonCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
                   <input
                     type="checkbox"
@@ -1108,19 +1357,36 @@ export default function AdminProductsTab({
                     />
                   </div>
                 )}
+                <label htmlFor="showSizeGuideCheck" className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-gray-50 cursor-pointer group transition-all">
+                  <input
+                    type="checkbox"
+                    id="showSizeGuideCheck"
+                    checked={editingProduct?.showSizeGuide || false}
+                    onChange={(e) => setEditingProduct({ ...(editingProduct || {}), showSizeGuide: e.target.checked } as any)}
+                    className="w-4 h-4 rounded accent-primary"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors flex items-center gap-1.5">
+                      👕 Clothing Size Guide & Recommender
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      Show size chart and height/weight calculator for apparel and jackets
+                    </span>
+                  </div>
+                </label>
               </div>
             </div>
 
-            {/* Step 8: Frequently Bought Together (Bundle) */}
+            {/* Step 8: Frequently Bought Together (Bundle / Combo Offer) */}
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-              <div className="bg-purple-50 px-4 py-2.5 border-b border-purple-100 flex items-center justify-between">
+              <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="bg-purple-600 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">
+                  <span className="bg-slate-900 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0">
                     8
                   </span>
-                  <span className="text-sm font-bold text-purple-950">Frequently Bought Together (Bundle)</span>
+                  <span className="text-sm font-bold text-slate-900">Combo Offer / Bundle</span>
                 </div>
-                <span className="text-[10px] font-bold text-purple-600 bg-white px-2 py-0.5 rounded-full border border-purple-200">
+                <span className="text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded-full border border-slate-200">
                   {(editingProduct?.bundleProductIds || []).length} Selected
                 </span>
               </div>
@@ -1146,7 +1412,7 @@ export default function AdminProductsTab({
                         }));
                       }
                     }}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:ring-2 focus:ring-purple-400 text-xs font-bold transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-bold transition-all"
                   >
                     <option value="">-- Select a product to add to bundle --</option>
                     {(products || [])
@@ -1195,12 +1461,12 @@ export default function AdminProductsTab({
                         return (
                           <div
                             key={bId}
-                            className="flex items-center gap-3 p-2.5 bg-purple-50/40 rounded-xl border border-purple-100 hover:bg-purple-50/70 transition-all"
+                            className="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 transition-all"
                           >
                             <img
                               src={bProduct.image || bProduct.images?.[0] || '/logo.png'}
                               alt={bProduct.name}
-                              className="w-10 h-10 object-cover rounded-lg border border-purple-200 shrink-0 bg-white"
+                              className="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0 bg-white"
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-bold text-gray-800 truncate">{bProduct.name}</p>
@@ -1229,7 +1495,7 @@ export default function AdminProductsTab({
                   </div>
                 )}
 
-                <div className="pt-2 border-t border-purple-100/60 grid grid-cols-2 gap-3">
+                <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
                       Bundle Discount (Optional)
@@ -1246,7 +1512,7 @@ export default function AdminProductsTab({
                         }));
                       }}
                       placeholder="e.g., 10 (0 for no discount)"
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-purple-400 text-xs font-bold transition-all"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-bold transition-all"
                     />
                   </div>
                   <div>
@@ -1259,7 +1525,7 @@ export default function AdminProductsTab({
                           bundleDiscountType: e.target.value as 'percentage' | 'fixed',
                         }));
                       }}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-purple-400 text-xs font-bold transition-all"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-3 outline-none focus:ring-2 focus:ring-primary/30 text-xs font-bold transition-all"
                     >
                       <option value="percentage">% Percentage Off (e.g. 10%)</option>
                       <option value="fixed">৳ Flat Discount (e.g. ৳100)</option>
@@ -1291,26 +1557,382 @@ export default function AdminProductsTab({
         </div>
       </div>
 
-      {/* Products Table */}
-      <div className="lg:col-span-7">
-        <div className="bg-white rounded-3xl border border-gray-100 overflow-x-auto no-scrollbar shadow-sm min-h-[350px] pb-24 lg:overflow-visible">
-          <table className="w-full text-left min-w-[600px]">
-            <thead>
-              <tr className="bg-gray-50 text-[10px] text-gray-400 uppercase font-bold border-b border-gray-100">
-                <th className="px-6 py-4">Product</th>
-                <th className="px-6 py-4">Price</th>
-                <th className="px-6 py-4">Stock</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+      {/* Right Column: Live Product Preview */}
+      <div className="lg:col-span-5 sticky top-4 space-y-4">
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+          {/* Header with Switcher */}
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h4 className="text-sm font-bold text-secondary flex items-center gap-1.5">
+                <Eye size={16} className="text-primary" />
+                Live Preview
+              </h4>
+            </div>
+            <div className="flex bg-gray-100 p-0.5 rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setPreviewMode('card')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  previewMode === 'card'
+                    ? 'bg-white text-secondary shadow-xs font-black'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                <Smartphone size={13} />
+                Card View
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewMode('details')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  previewMode === 'details'
+                    ? 'bg-white text-secondary shadow-xs font-black'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                <LayoutTemplate size={13} />
+                Detail View
+              </button>
+            </div>
+          </div>
+
+          {/* Hint */}
+          <p className="text-[11px] text-gray-500 mb-4 bg-amber-50/70 border border-amber-200/60 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+            <span>💡</span>
+            <span>Live preview updates in real-time as you enter product details on the left.</span>
+          </p>
+
+          {/* PREVIEW CONTENT */}
+          {previewMode === 'card' ? (
+            /* --- CARD PREVIEW --- */
+            <div className="max-w-[320px] mx-auto bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col group select-none">
+              {/* Image & Badges */}
+              <div className="relative aspect-square bg-gray-50 overflow-hidden flex items-center justify-center">
+                <img
+                  src={previewImages[previewActiveImageIdx] || previewImages[0] || '/logo.webp'}
+                  alt={editingProduct?.name || 'Preview'}
+                  className="w-full h-full object-cover transition-transform duration-300"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo.webp';
+                  }}
+                />
+                {/* Badges on Top */}
+                <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                  {discountPercent > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                      -{discountPercent}% OFF
+                    </span>
+                  )}
+                  {editingProduct?.isFlashSale && (
+                    <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                      ⚡ Flash Sale
+                    </span>
+                  )}
+                  {editingProduct?.isFreeDelivery ? (
+                    <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                      🚚 Free Delivery
+                    </span>
+                  ) : (editingProduct?.deliveryCharge !== undefined && editingProduct?.deliveryCharge !== null && editingProduct?.deliveryCharge !== '' && Number(editingProduct.deliveryCharge) >= 0) ? (
+                    <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
+                      🚚 Delivery ৳{editingProduct.deliveryCharge}
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Code badge bottom-left */}
+                {editingProduct?.code && (
+                  <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-xs text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded-md">
+                    #{editingProduct.code}
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="p-3.5 flex flex-col gap-1.5 flex-1">
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span className="font-semibold uppercase tracking-wider">{editingProduct?.category || 'Category'}</span>
+                  <span className="font-mono text-gray-400">{editingProduct?.brand || 'iShopBD'}</span>
+                </div>
+
+                <h5 className="text-sm font-bold text-gray-900 line-clamp-2 leading-snug">
+                  {editingProduct?.name || 'Product name will appear here'}
+                </h5>
+
+                {/* Price Row */}
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-base font-black text-primary">
+                    ৳{Number(editingProduct?.price || 0).toLocaleString('en-US')}
+                  </span>
+                  {Number(editingProduct?.originalPrice || 0) > Number(editingProduct?.price || 0) && (
+                    <span className="text-xs text-gray-400 line-through font-semibold">
+                      ৳{Number(editingProduct.originalPrice).toLocaleString('en-US')}
+                    </span>
+                  )}
+                </div>
+
+                {/* Stock info */}
+                <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                    <CheckCircle2 size={12} />
+                    {editingProduct?.variants && editingProduct.variants.length > 0
+                      ? `${editingProduct.variants.length} Variants`
+                      : `${editingProduct?.stock || 0} in stock`}
+                  </span>
+                  <span className="text-gray-400 text-[10px]">Cash on Delivery Available</span>
+                </div>
+
+                {/* Buy Button */}
+                <button
+                  type="button"
+                  className="w-full mt-2 bg-secondary text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-xs hover:bg-black transition-all"
+                >
+                  <ShoppingBag size={13} />
+                  Order Now
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* --- DETAILS PREVIEW --- */
+            <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 max-h-[580px] overflow-y-auto no-scrollbar">
+              {/* Main Preview Image */}
+              <div className="relative aspect-4/3 rounded-xl bg-gray-50 overflow-hidden border border-gray-100 flex items-center justify-center">
+                <img
+                  src={previewImages[previewActiveImageIdx] || previewImages[0] || '/logo.webp'}
+                  alt={editingProduct?.name || 'Preview'}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo.webp';
+                  }}
+                />
+                {editingProduct?.code && (
+                  <div className="absolute top-2 right-2 bg-secondary/80 backdrop-blur-xs text-white text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg">
+                    Code: {editingProduct.code}
+                  </div>
+                )}
+              </div>
+
+              {/* Thumbnails */}
+              {previewImages.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {previewImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setPreviewActiveImageIdx(idx)}
+                      className={`w-12 h-12 rounded-lg border-2 overflow-hidden shrink-0 transition-all ${
+                        previewActiveImageIdx === idx ? 'border-primary ring-2 ring-primary/20' : 'border-gray-200 opacity-60'
+                      }`}
+                    >
+                      <img src={img} className="w-full h-full object-cover" alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Title & Category */}
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-md">
+                    {editingProduct?.category || 'Category'}
+                  </span>
+                  {editingProduct?.brand && (
+                    <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                      {editingProduct.brand}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-base font-bold text-gray-900 leading-snug">
+                  {editingProduct?.name || 'Product Name'}
+                </h3>
+              </div>
+
+              {/* Price Box */}
+              <div className="bg-gray-50 p-3 rounded-xl flex items-center justify-between border border-gray-100">
+                <div>
+                  <span className="text-[11px] text-gray-400 block font-semibold">Price</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-black text-primary">
+                      ৳{Number(editingProduct?.price || 0).toLocaleString('en-US')}
+                    </span>
+                    {Number(editingProduct?.originalPrice || 0) > Number(editingProduct?.price || 0) && (
+                      <span className="text-xs text-gray-400 line-through">
+                        ৳{Number(editingProduct.originalPrice).toLocaleString('en-US')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {discountPercent > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-black px-2.5 py-1 rounded-lg">
+                    {discountPercent}% OFF
+                  </span>
+                )}
+              </div>
+
+              {/* Delivery Badge */}
+              <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-100 text-[11px] font-bold text-blue-800 flex items-center gap-2">
+                <Truck size={16} className="text-blue-600 shrink-0" />
+                <span>
+                  {editingProduct?.isFreeDelivery
+                    ? 'Delivery Fee: Free Delivery (Nationwide)'
+                    : (editingProduct?.deliveryCharge !== undefined && editingProduct?.deliveryCharge !== null && editingProduct?.deliveryCharge !== '' && Number(editingProduct.deliveryCharge) >= 0)
+                    ? `Delivery Fee: ৳${editingProduct.deliveryCharge} (Nationwide)`
+                    : 'Delivery Fee: Inside Dhaka ৳70, Outside Dhaka ৳130'}
+                </span>
+              </div>
+
+              {/* Variants preview if available */}
+              {editingProduct?.variants && editingProduct.variants.length > 0 && (
+                <div>
+                  <span className="text-[11px] font-bold text-gray-600 block mb-1.5">
+                    Variants ({editingProduct.variants.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {editingProduct.variants.map((v: any, i: number) => (
+                      <span
+                        key={i}
+                        className="text-[10px] font-bold bg-white border border-gray-200 px-2 py-1 rounded-lg shadow-2xs text-gray-700"
+                      >
+                        {v.name || `Variant ${i + 1}`} ({v.stock || 0} in stock)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  className="w-full bg-primary text-white font-bold py-2.5 rounded-xl shadow-md shadow-primary/20 hover:bg-red-700 transition-all text-xs flex items-center justify-center gap-2"
+                >
+                  <ShoppingBag size={14} />
+                  Order Now
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Bottom Section: Full Width Products List & Code Search */}
+    <div className="w-full bg-white rounded-3xl border border-gray-100 shadow-sm p-6 overflow-hidden">
+      {/* Header and Search Filters */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+        <div>
+          <h3 className="text-lg font-bold text-secondary flex items-center gap-2">
+            <Package size={20} className="text-primary" />
+            Product Management &amp; Catalog
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Latest uploaded products appear at the top. Search instantly by Code or Name.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search Input by Code or Name */}
+          <div className="relative min-w-[260px] sm:min-w-[340px]">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 Search by Code (e.g. SAM-A55) or Name..."
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-9 pr-9 py-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter */}
+          <div className="relative">
+            <select
+              value={selectedCategoryFilter}
+              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+              className="bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer transition-all"
+            >
+              <option value="all">All Categories ({products.length})</option>
+              {categories.map((c: any) => (
+                <option key={c.id || c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Total Count Badge */}
+          <span className="text-xs font-black bg-primary/10 text-primary px-3 py-2 rounded-2xl border border-primary/20">
+            Total: {sortedAndFilteredProducts.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto no-scrollbar min-h-[350px] pb-24">
+        <table className="w-full text-left min-w-[700px]">
+          <thead>
+            <tr className="bg-gray-50 text-[10px] text-gray-400 uppercase font-bold border-b border-gray-100">
+              <th className="px-6 py-4">Product &amp; Code</th>
+              <th className="px-6 py-4">Price &amp; Delivery</th>
+              <th className="px-6 py-4">Stock &amp; Variants</th>
+              <th className="px-6 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sortedAndFilteredProducts.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                  <p className="text-sm font-bold">No products found!</p>
+                  {searchQuery && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      No product matches "{searchQuery}".{' '}
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="text-primary underline font-bold"
+                      >
+                        Clear Search
+                      </button>
+                    </p>
+                  )}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {products.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
+            ) : (
+              sortedAndFilteredProducts.map((p) => (
+                <tr key={p.id} className="hover:bg-gray-50/40 transition-colors">
                   <td className="px-6 py-4 flex items-center gap-4">
-                    <img loading="lazy" src={p.image} className="w-12 h-12 rounded-xl object-cover border border-gray-100" alt={p.name} />
-                    <div className="max-w-[140px] sm:max-w-[200px]">
+                    <img
+                      loading="lazy"
+                      src={p.image || p.images?.[0] || '/logo.webp'}
+                      className="w-14 h-14 rounded-2xl object-cover border border-gray-100 shrink-0"
+                      alt={p.name}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/logo.webp';
+                      }}
+                    />
+                    <div className="max-w-[200px] sm:max-w-[280px]">
                       <p className="text-sm font-bold text-secondary line-clamp-1">{p.name}</p>
-                      <p className="text-[10px] font-bold text-gray-500">{p.category}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                          {p.category}
+                        </span>
+                        {p.code ? (
+                          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">
+                            <Hash size={10} />
+                            {p.code}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-gray-300">No Code</span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -1318,6 +1940,15 @@ export default function AdminProductsTab({
                     {p.originalPrice > p.price && (
                       <p className="text-xs text-gray-400 line-through">৳{p.originalPrice}</p>
                     )}
+                    {p.isFreeDelivery ? (
+                      <span className="inline-block mt-1 text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                        🚚 Free Delivery
+                      </span>
+                    ) : (p.deliveryCharge !== undefined && p.deliveryCharge !== null && p.deliveryCharge !== '' && Number(p.deliveryCharge) >= 0) ? (
+                      <span className="inline-block mt-1 text-[9px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-md">
+                        🚚 Delivery: ৳{p.deliveryCharge}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-6 py-4">
                     {p.variants && p.variants.length > 0 ? (
@@ -1392,6 +2023,7 @@ export default function AdminProductsTab({
                                   bundleDiscountType: p.bundleDiscountType || 'percentage',
                                 });
                                 setActiveProductDropdown(null);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
                               }}
                               className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
                             >
@@ -1446,11 +2078,12 @@ export default function AdminProductsTab({
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
-  );
+  </div>
+);
 }

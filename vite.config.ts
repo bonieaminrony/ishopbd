@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'react': path.resolve(__dirname, 'node_modules/react'),
+        'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
       },
       dedupe: ['react', 'react-dom'],
     },
@@ -19,7 +21,6 @@ export default defineConfig(({ mode }) => {
         'react-dom',
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
-        'react-helmet-async',
       ],
     },
     server: {
@@ -54,7 +55,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/motion/') || id.includes('node_modules/react-hot-toast/')) {
               return 'ui-vendor';
             }
-            if (id.includes('node_modules/axios') || id.includes('node_modules/react-helmet-async')) {
+            if (id.includes('node_modules/axios')) {
               return 'utils-vendor';
             }
           }

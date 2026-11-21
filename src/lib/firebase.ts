@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, collectionGroup, query, where, getDocs, onSnapshot, serverTimestamp, addDoc, increment, runTransaction, orderBy, getDocFromServer, arrayUnion, arrayRemove, limit, DocumentReference, memoryLocalCache } from 'firebase/firestore';
 import rawFirebaseConfig from '../../firebase-applet-config.json';
 
@@ -122,6 +122,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 export { 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   createUserWithEmailAndPassword,

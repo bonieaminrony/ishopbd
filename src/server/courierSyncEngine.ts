@@ -1140,7 +1140,7 @@ export interface SteadfastFraudReportData extends CourierFraudReport {
 }
 
 const FRAUD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const FRAUD_RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
+const FRAUD_RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 60s cooldown instead of 5m
 const fraudMemoryCache = new Map<string, { fetchedAtMs: number; data: SteadfastFraudReportData }>();
 const fraudInFlight = new Map<string, Promise<SteadfastFraudReportData>>();
 let fraudRateLimitedUntilMs = 0;
@@ -1319,6 +1319,11 @@ export async function getSteadfastFraudReportCached(
     }
 
     if (Date.now() < fraudRateLimitedUntilMs) {
+      // Stale cache fallback (up to 30 days) to prevent blank data on rate limit
+      const stale = await readCachedFraudReport(phone, options.getDb, 30 * 24 * 60 * 60 * 1000);
+      if (stale) {
+        return { data: { ...stale, cached: true }, fromCache: true };
+      }
       const rateErr: any = new Error("Steadfast courier search rate limit reached. Please retry shortly.");
       rateErr.statusCode = 429;
       throw rateErr;
@@ -1367,6 +1372,11 @@ export async function getSteadfastFraudReportCached(
       } catch (apiErr: any) {
         if (apiErr?.response?.status === 429 || apiErr?.statusCode === 429) {
           fraudRateLimitedUntilMs = Date.now() + FRAUD_RATE_LIMIT_COOLDOWN_MS;
+          // Fall back to stale cache if available
+          const stale = await readCachedFraudReport(phone, options.getDb, 30 * 24 * 60 * 60 * 1000);
+          if (stale) {
+            return { ...stale, cached: true };
+          }
         }
         throw apiErr;
       } finally {

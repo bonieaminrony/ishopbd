@@ -276,30 +276,47 @@ const getProductPrice = (product: Product | undefined, quantity: number) => {
 
 const getDeliveryCharge = (items: any[], area: string, coupon: any) => {
     if (coupon) return 0;
-    if (items.some(item => item.product?.isFreeDelivery)) return 0;
-    const totalWeight = items.reduce((acc, item) => acc + (item.product?.weight || 0) * item.quantity, 0);
-    
-    let charge = 0;
-    const ceilWeight = Math.ceil(totalWeight);
-    if (area === "inside") {
-      if (totalWeight <= 1) {
-        charge = 80;
-      } else {
-        charge = 80 + (ceilWeight - 1) * 20;
-      }
+    if (items && items.some((item: any) => item.product?.isFreeDelivery)) return 0;
+
+    // Custom product-level fixed delivery charge (applicable nationwide)
+    const customChargeItems = (items || []).filter(
+      (item: any) =>
+        item.product?.deliveryCharge !== undefined &&
+        item.product?.deliveryCharge !== null &&
+        item.product?.deliveryCharge !== '' &&
+        !isNaN(Number(item.product?.deliveryCharge)) &&
+        Number(item.product?.deliveryCharge) > 0
+    );
+
+    let baseCharge = 0;
+    if (customChargeItems.length > 0) {
+      baseCharge = Math.max(...customChargeItems.map((item: any) => Number(item.product.deliveryCharge)));
     } else {
-      if (totalWeight < 1) {
-        charge = 120;
-      } else if (totalWeight === 1) {
-        charge = 130;
-      } else {
-        charge = 130 + (ceilWeight - 1) * 20;
-      }
+      // Default standard rates: 70 BDT inside Dhaka, 130 BDT outside Dhaka
+      baseCharge = (area === 'inside' || area === 'dhaka') ? 70 : 130;
     }
-    return charge;
+
+    // Weight calculation: first 1 kg is covered by baseCharge.
+    // Beyond 1 kg: for every additional kg or partial fraction (e.g. 1.1 kg, 1.5 kg -> ceil(weight - 1)), add 20 BDT per kg.
+    const totalWeight = (items || []).reduce((acc: number, item: any) => {
+      let w = Number(item.product?.weight || 0);
+      if (w > 50) {
+        // If weight > 50, it is in grams (e.g. 500g, 800g) -> convert to kg
+        w = w / 1000;
+      }
+      return acc + (w * (Number(item.quantity) || 1));
+    }, 0);
+
+    let extraCharge = 0;
+    if (totalWeight > 1) {
+      const extraKg = Math.ceil(totalWeight - 1);
+      extraCharge = extraKg * 20;
+    }
+
+    return baseCharge + extraCharge;
   };
 
-const calculateTotal = () => {
+  const calculateTotal = () => {
     const subtotal = checkoutItems.reduce(
       (total, item) => total + getProductPrice(item.product, item.quantity) * item.quantity,
       0,

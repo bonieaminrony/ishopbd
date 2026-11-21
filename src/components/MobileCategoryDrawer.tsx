@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ChevronRight, LayoutGrid, Check } from 'lucide-react';
 import { Category } from '../types';
+import { getCategoryPath } from '../utils/helpers';
 
 export interface MobileCategoryDrawerProps {
   isOpen: boolean;
@@ -155,8 +156,10 @@ export const MobileCategoryDrawer: React.FC<MobileCategoryDrawerProps> = ({
                       exit={{ height: 0, opacity: 0 }}
                       className="bg-gray-50/70 p-2.5 border-t border-gray-100 flex flex-wrap gap-2"
                     >
-                      <button
-                        onClick={() => {
+                      <a
+                        href={getCategoryPath(cat.name)}
+                        onClick={(e) => {
+                          e.preventDefault();
                           onSelectCategory(cat.name, "all");
                           onClose();
                         }}
@@ -167,13 +170,16 @@ export const MobileCategoryDrawer: React.FC<MobileCategoryDrawerProps> = ({
                         }`}
                       >
                         {t("সবগুলো", "All")}
-                      </button>
+                      </a>
                       {subcats.map((sub, idx) => {
                         const isSubSelected = isSelected && selectedSubcategory === sub;
+                        const subPath = getCategoryPath(cat.name, sub);
                         return (
-                          <button
+                          <a
                             key={idx}
-                            onClick={() => {
+                            href={subPath}
+                            onClick={(e) => {
+                              e.preventDefault();
                               onSelectCategory(cat.name, sub);
                               onClose();
                             }}
@@ -184,7 +190,7 @@ export const MobileCategoryDrawer: React.FC<MobileCategoryDrawerProps> = ({
                             }`}
                           >
                             {sub}
-                          </button>
+                          </a>
                         );
                       })}
                     </motion.div>

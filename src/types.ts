@@ -67,10 +67,13 @@ export interface Product {
   metaDescription?: string;
   features?: string;
   inTheBox?: string;
+  showSizeGuide?: boolean;
+  sizeGuideData?: any;
   specifications?: { key?: string; name?: string; value: string }[];
   bundleProductIds?: string[];
   bundleDiscount?: number;
   bundleDiscountType?: 'percentage' | 'fixed';
+  deliveryCharge?: number;
   subcategory?: string;
   createdAt?: any;
   updatedAt?: any;

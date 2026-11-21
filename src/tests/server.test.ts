@@ -163,3 +163,43 @@ describe('Order Total Verification', () => {
     expect(result.valid).toBe(false);
   });
 });
+
+// ---- AI Product Tag Generation Logic ----
+function generateLocalFallbackTags(name: string, category?: string, subcategory?: string, brand?: string, count: number = 30): string[] {
+  const set = new Set<string>();
+  const cleanName = name.trim();
+  set.add(cleanName.toLowerCase());
+  if (brand) set.add(brand.toLowerCase());
+  if (category) set.add(category.toLowerCase());
+  if (subcategory) set.add(subcategory.toLowerCase());
+
+  const words = cleanName.toLowerCase().replace(/[^\w\s\u0980-\u09FF]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+  words.forEach(w => set.add(w));
+  for (let i = 0; i < words.length - 1; i++) {
+    set.add(`${words[i]} ${words[i + 1]}`);
+  }
+  const lower = cleanName.toLowerCase();
+  set.add(`${lower} price in bd`);
+  set.add(`${lower} bd`);
+  set.add(`buy ${lower}`);
+  set.add(`best ${lower}`);
+  return Array.from(set).slice(0, count);
+}
+
+describe('AI Product Tag Generator', () => {
+  it('generates relevant tags including e-commerce buyer intents and bd keywords', () => {
+    const tags = generateLocalFallbackTags('T900 Ultra Smartwatch', 'Electronics', 'Smart Watches', 'Generic', 20);
+    expect(tags.length).toBeGreaterThanOrEqual(5);
+    expect(tags.length).toBeLessThanOrEqual(20);
+    expect(tags).toContain('t900 ultra smartwatch');
+    expect(tags).toContain('electronics');
+    expect(tags).toContain('t900 ultra smartwatch price in bd');
+  });
+
+  it('supports Bengali product titles and generated keywords', () => {
+    const tags = generateLocalFallbackTags('ছেলেদের প্রিমিয়াম কটন পাঞ্জাবি', 'Fashion', 'Panjabi', undefined, 30);
+    expect(tags.length).toBeGreaterThanOrEqual(4);
+    expect(tags.some(t => t.includes('পাঞ্জাবি'))).toBe(true);
+    expect(tags).toContain('fashion');
+  });
+});

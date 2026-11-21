@@ -89,7 +89,7 @@ export interface MarketingConfig {
 const DEFAULT_CONFIG: MarketingConfig = {
   meta: {
     enabled: true,
-    pixelId: "1358996272808579",
+    pixelId: "2190527024893219",
     accessToken: "",
     testEventCode: "",
     capiEnabled: true,
@@ -97,7 +97,7 @@ const DEFAULT_CONFIG: MarketingConfig = {
   },
   tiktok: {
     enabled: true,
-    pixelId: "DBPHK73C77U4J2JR78JG",
+    pixelId: "DC0TOGBC77U7MFIGUL5G",
     accessToken: "",
     testEventCode: "",
     eventsApiEnabled: true,
@@ -469,7 +469,7 @@ export const MarketingSettings: React.FC = () => {
                 type="text"
                 value={config.meta.pixelId}
                 onChange={(e) => setConfig((prev) => ({ ...prev, meta: { ...prev.meta, pixelId: e.target.value } }))}
-                placeholder="e.g. 1358996272808579"
+                placeholder="e.g. 2227433448178793"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary"
                 autoComplete="off"
                 data-form-type="other"

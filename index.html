@@ -157,7 +157,22 @@
     <meta name="theme-color" content="#ff4d4f" />
     <link rel="apple-touch-icon" href="/icon-192x192.png" />
 
-    <!-- Analytics & Pixels (Meta, GA4, Google Ads, GTM) are initialized dynamically via src/utils/tracking.ts -->
+    <!-- Meta Pixel Code -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '2190527024893219');
+      fbq('track', 'PageView');
+    </script>
+    <!-- End Meta Pixel Code -->
+    <script>window.__ishopbdMetaHeadPagePixel = '2190527024893219';</script>
+
     <!-- TikTok Pixel Code Start -->
     <script>
     !function (w, d, t) {
@@ -166,17 +181,18 @@
       ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
 
 
-      ttq.load('DBPHK73C77U4J2JR78JG');
+      ttq.load('DC0TOGBC77U7MFIGUL5G');
       ttq.page();
     }(window, document, 'ttq');
     </script>
     <!-- TikTok Pixel Code End -->
-    <script>window.__ishopbdTtqHeadPagePixel = 'DBPHK73C77U4J2JR78JG';</script>
+    <script>window.__ishopbdTtqHeadPagePixel = 'DC0TOGBC77U7MFIGUL5G';</script>
   </head>
   <body>
-    <noscript>
-      <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1358996272808579&ev=PageView&noscript=1"/>
-    </noscript>
+    <!-- Meta Pixel NoScript -->
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=2190527024893219&ev=PageView&noscript=1"
+    /></noscript>
     <div id="root">
       <style>
         .sk-wrap { max-width: 1200px; margin: 0 auto; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -222,10 +238,13 @@
     </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(function() {});
         });
+      } else if ('serviceWorker' in navigator && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) { for (var r of regs) r.unregister(); });
+        if ('caches' in window) { caches.keys().then(function(keys) { for (var k of keys) caches.delete(k); }); }
       }
     </script>
   </body>

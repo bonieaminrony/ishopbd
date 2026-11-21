@@ -532,6 +532,7 @@ async function startServer() {
   // Reduced body size limit to prevent DoS. Image uploads handled separately with higher limit.
   app.use("/api/chat", express.json({ limit: '32kb' }));
   app.use("/api/ai-recommendations", express.json({ limit: '32kb' }));
+  app.use("/api/generate-product-tags", express.json({ limit: '32kb' }));
   app.use("/api/send-push", express.json({ limit: '16kb' }));
   app.use("/api/send-sms", express.json({ limit: '8kb' }));
   app.use("/api/send-bulk-sms", express.json({ limit: '256kb' }));
@@ -838,6 +839,35 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   });
 
+  app.get("/api/send-sms", async (req, res) => {
+    try {
+      let rawApiKey = (req.query.apiKey as string)?.trim();
+      if (!rawApiKey) {
+        try {
+          const db = getFirestore();
+          const keysDoc = await db.collection("admin_config").doc("keys").get();
+          if (keysDoc.exists) {
+            rawApiKey = keysDoc.data()?.smsApiKey;
+          }
+        } catch (_) {}
+      }
+      if (!rawApiKey) {
+        rawApiKey = process.env.SMS_API_KEY || "ZmxsvZfckGDXn7Pa2Tjj";
+      }
+      const resp = await axios.get(`https://bulksmsbd.net/api/getBalanceApi`, {
+        params: { api_key: rawApiKey },
+        timeout: 10000
+      });
+      const data = resp.data;
+      if (data && (data.response_code === 202 || data.balance !== undefined)) {
+        return res.json({ success: true, balance: data.balance });
+      }
+      return res.json({ success: false, message: data?.error_message || "Could not retrieve balance" });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err?.message || "Failed to fetch balance" });
+    }
+  });
+
   app.post("/api/send-sms", async (req, res) => {
     const rawIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress || "unknown";
     const ip = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : rawIp);
@@ -853,32 +883,43 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Message cannot be empty.' });
     }
-    if (message.length > 600) {
-      return res.status(400).json({ success: false, message: 'Message cannot exceed 600 characters.' });
+    if (message.length > 800) {
+      return res.status(400).json({ success: false, message: 'Message cannot exceed 800 characters.' });
     }
 
     const isAdminSender = await verifyIsAdmin(req);
-    const SMS_API_KEY = process.env.SMS_API_KEY;
-    const SMS_SENDER_ID = (isAdminSender && typeof senderId === 'string' && senderId.trim())
+    const { apiKey: customApiKey } = req.body;
+    let SMS_API_KEY = (typeof customApiKey === 'string' && customApiKey.trim()) ? customApiKey.trim() : process.env.SMS_API_KEY;
+    if (!SMS_API_KEY) {
+      try {
+        const db = getFirestore();
+        const keysDoc = await db.collection("admin_config").doc("keys").get();
+        if (keysDoc.exists) {
+          SMS_API_KEY = keysDoc.data()?.smsApiKey;
+        }
+      } catch (_) {}
+    }
+    if (!SMS_API_KEY) {
+      SMS_API_KEY = "ZmxsvZfckGDXn7Pa2Tjj";
+    }
+
+    const SMS_SENDER_ID = (typeof senderId === 'string' && senderId.trim())
       ? senderId.trim()
       : (process.env.SMS_SENDER_ID || "8809648908219");
-
-    if (!SMS_API_KEY) {
-      console.warn("SMS_API_KEY not set in environment. SMS not sent.");
-      return res.status(200).json({ success: false, message: "SMS API key is not configured." });
-    }
 
     if (!isAdminSender) {
       const lowerMsg = message.toLowerCase();
       const isAuthorizedTemplate = 
         message.includes("অর্ডার") || 
+        message.includes("ইনভয়েস") || 
+        message.includes("invoice") || 
         lowerMsg.includes("order") || 
         lowerMsg.includes("ishopbd") || 
         message.includes("কোড") || 
         lowerMsg.includes("otp") || 
         lowerMsg.includes("verification");
 
-      if (!isAuthorizedTemplate || message.length > 300) {
+      if (!isAuthorizedTemplate || message.length > 800) {
         return res.status(403).json({ 
           success: false, 
           message: "Unauthorized: Custom SMS messages require admin privileges." 
@@ -1676,8 +1717,41 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         console.warn("EMAIL_USER or EMAIL_PASS not set. Email not sent.");
       }
       res.json({ success: true, message: "Order processed successfully" });
-      // Pre-warm Steadfast customer delivery ratio into Firestore cache as soon as order is placed
-      void getSteadfastFraudReportCached(customerPhone, { getDb: getFirestoreSafe }).catch(() => {});
+      // Automatic fraud pre-warming disabled to preserve daily API quota (10/day limit).
+      // Fraud reports are now checked on-demand via the admin dashboard Check button.
+
+      // Automatically clean up all abandoned/incomplete orders for this customer upon successful order placement
+      void (async () => {
+        try {
+          const db = getFirestoreSafe();
+          if (!db) return;
+          const cleanPhone = String(customerPhone || '').replace(/\D/g, '');
+          if (!cleanPhone || cleanPhone.length < 6) return;
+
+          const snap = await db.collection("incomplete_orders").get();
+          const batch = db.batch();
+          let deleteCount = 0;
+
+          snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            const incPhone = String(data.phone || data.customerPhone || '').replace(/\D/g, '');
+            if (
+              (incPhone && (incPhone === cleanPhone || incPhone.endsWith(cleanPhone) || cleanPhone.endsWith(incPhone))) ||
+              (req.body.sessionId && docSnap.id === req.body.sessionId)
+            ) {
+              batch.delete(docSnap.ref);
+              deleteCount++;
+            }
+          });
+
+          if (deleteCount > 0) {
+            await batch.commit();
+            console.log(`[INCOMPLETE_CLEANUP] Automatically cleaned ${deleteCount} incomplete order(s) for customer ${customerPhone}`);
+          }
+        } catch (cleanupErr) {
+          console.warn("[INCOMPLETE_CLEANUP] Error cleaning incomplete orders:", cleanupErr);
+        }
+      })();
     } catch (error) {
       console.error("Error sending email:", error);
       res.status(500).json({ success: false, error: "Failed to send email" });
@@ -1984,6 +2058,35 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
   });
 
+  app.get("/api/sms-balance", async (req, res) => {
+    try {
+      let rawApiKey = (req.query.apiKey as string)?.trim();
+      if (!rawApiKey) {
+        try {
+          const db = getFirestore();
+          const keysDoc = await db.collection("admin_config").doc("keys").get();
+          if (keysDoc.exists) {
+            rawApiKey = keysDoc.data()?.smsApiKey;
+          }
+        } catch (_) {}
+      }
+      if (!rawApiKey) {
+        rawApiKey = process.env.SMS_API_KEY || "ZmxsvZfckGDXn7Pa2Tjj";
+      }
+      const resp = await axios.get(`https://bulksmsbd.net/api/getBalanceApi`, {
+        params: { api_key: rawApiKey },
+        timeout: 10000
+      });
+      const data = resp.data;
+      if (data && (data.response_code === 202 || data.balance !== undefined)) {
+        return res.json({ success: true, balance: data.balance });
+      }
+      return res.json({ success: false, message: data?.error_message || "Could not retrieve balance" });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err?.message || "Failed to fetch balance" });
+    }
+  });
+
   app.post("/api/admin/keys", async (req, res) => {
     const isAuthorized = await verifyIsAdmin(req);
     if (!isAuthorized) {
@@ -1997,7 +2100,9 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       pathaoClientId,
       pathaoClientSecret,
       pathaoUsername,
-      pathaoPassword
+      pathaoPassword,
+      smsApiKey,
+      smsSenderId
     } = req.body;
     try {
       const db = getFirestore();
@@ -2010,6 +2115,8 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         pathaoClientSecret: pathaoClientSecret || "",
         pathaoUsername: pathaoUsername || "",
         pathaoPassword: pathaoPassword || "",
+        smsApiKey: smsApiKey || "",
+        smsSenderId: smsSenderId || "",
         updatedAt: new Date().toISOString()
       }, { merge: true });
       res.json({ success: true, message: "Keys updated successfully on server" });
@@ -2042,6 +2149,139 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
   });
 
   // =========================================================================
+  // Real-Time Traffic & Platform Click Tracking (YouTube, TikTok, Facebook, Google, Direct)
+  // =========================================================================
+
+  interface RecentVisitEntry {
+    id: string;
+    timestamp: number;
+    source: string;
+    path: string;
+    device: 'mobile' | 'desktop';
+    inAppBrowser?: string;
+    ipMasked?: string;
+    referrer?: string;
+  }
+
+  const recentVisitsBuffer: RecentVisitEntry[] = [];
+
+  app.post("/api/track-visit", async (req, res) => {
+    try {
+      const rawIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.ip || "unknown";
+      const ip = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : rawIp);
+      const ipMasked = ip.includes('.') ? ip.split('.').slice(0, 2).join('.') + '.*.*' : (ip.includes(':') ? ip.split(':').slice(0, 2).join(':') + ':*' : 'masked');
+
+      const {
+        source = "direct",
+        path = "/",
+        device = "desktop",
+        inAppBrowser,
+        isUnique = false,
+        referrer = ""
+      } = req.body || {};
+
+      const validSources = ["youtube", "tiktok", "facebook", "google", "direct"];
+      const cleanSource = validSources.includes(source) ? source : "other";
+
+      const visitEntry: RecentVisitEntry = {
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: Date.now(),
+        source: cleanSource,
+        path: typeof path === 'string' ? path.substring(0, 100) : "/",
+        device: device === "mobile" ? "mobile" : "desktop",
+        inAppBrowser: typeof inAppBrowser === 'string' ? inAppBrowser.substring(0, 30) : undefined,
+        ipMasked,
+        referrer: typeof referrer === 'string' ? referrer.substring(0, 150) : ""
+      };
+
+      recentVisitsBuffer.unshift(visitEntry);
+      if (recentVisitsBuffer.length > 50) recentVisitsBuffer.pop();
+
+      // Dhaka time calculations (UTC+6)
+      const now = new Date();
+      const dhakaDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(now);
+      const hour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', hour: 'numeric', hour12: false }).format(now), 10);
+      const dayOfWeek = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', weekday: 'short' }).format(now);
+
+      const db = getFirestoreSafe ? getFirestoreSafe() : getFirestore();
+      if (db) {
+        const updateData: Record<string, any> = {
+          date: dhakaDate,
+          dayOfWeek,
+          totalVisits: FieldValue.increment(1),
+          [`sources.${cleanSource}`]: FieldValue.increment(1),
+          [`hourly.${hour}`]: FieldValue.increment(1),
+          [`devices.${device === 'mobile' ? 'mobile' : 'desktop'}`]: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp()
+        };
+        if (isUnique) {
+          updateData.uniqueVisitors = FieldValue.increment(1);
+        }
+        db.collection("traffic_daily").doc(dhakaDate).set(updateData, { merge: true }).catch(err => {
+          console.warn("[TRAFFIC_TRACK] DB record warning:", err.message);
+        });
+      }
+
+      res.json({ success: true });
+    } catch {
+      res.status(200).json({ success: false });
+    }
+  });
+
+  app.get("/api/admin/traffic-stats", async (req, res) => {
+    try {
+      const db = getFirestoreSafe ? getFirestoreSafe() : getFirestore();
+      let dailyDocs: any[] = [];
+      if (db) {
+        const snap = await db.collection("traffic_daily")
+          .orderBy("date", "desc")
+          .limit(30)
+          .get();
+        dailyDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+
+      const nowMs = Date.now();
+      // Active Shoppers: distinct visitors active within the last 5 minutes
+      const activeWindowMs = 5 * 60 * 1000;
+      const activeIps = new Set<string>();
+      recentVisitsBuffer.forEach(v => {
+        if (nowMs - v.timestamp < activeWindowMs) {
+          activeIps.add(v.ipMasked || v.id);
+        }
+      });
+      const activeVisitors = Math.max(1, activeIps.size);
+      const visits60m = recentVisitsBuffer.filter(v => nowMs - v.timestamp < 60 * 60 * 1000).length;
+
+      // 48 Hours volume: calculate from today + yesterday daily aggregates if available, fallback to buffer
+      const daily48hTotal = dailyDocs.slice(0, 2).reduce((acc: number, d: any) => acc + (Number(d.totalVisits || d.visits) || 0), 0);
+      const buffer48h = recentVisitsBuffer.filter(v => nowMs - v.timestamp < 48 * 3600 * 1000).length;
+      const visits48h = Math.max(daily48hTotal, buffer48h);
+
+      const sources48h: Record<string, number> = { facebook: 0, tiktok: 0, youtube: 0, google: 0, direct: 0, other: 0 };
+      recentVisitsBuffer.filter(v => nowMs - v.timestamp < 48 * 3600 * 1000).forEach(v => {
+        const s = v.source || 'direct';
+        sources48h[s] = (sources48h[s] || 0) + 1;
+      });
+
+      res.json({
+        success: true,
+        daily: dailyDocs,
+        recent: recentVisitsBuffer.slice(0, 50),
+        activeVisitors: activeVisitors,
+        realtime: {
+          activeShoppers: activeVisitors,
+          last60Minutes: visits60m,
+          last48Hours: visits48h,
+          sources: sources48h
+        }
+      });
+    } catch (error: any) {
+      console.error("Error fetching traffic stats:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // =========================================================================
   // Marketing & Ads Integration API Endpoints (Central Tracking Engine)
   // =========================================================================
 
@@ -2059,11 +2299,11 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const publicConfig = {
         meta: {
           enabled: data?.meta?.enabled ?? true,
-          pixelId: data?.meta?.pixelId || "1358996272808579"
+          pixelId: data?.meta?.pixelId || "2227433448178793"
         },
         tiktok: {
           enabled: data?.tiktok?.enabled ?? true,
-          pixelId: (data?.tiktok?.pixelId || "").trim() || "DBPHK73C77U4J2JR78JG"
+          pixelId: (data?.tiktok?.pixelId || "").trim() || "DC0TOGBC77U7MFIGUL5G"
         },
         google: {
           enabled: data?.google?.enabled ?? true,
@@ -2263,6 +2503,26 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     try {
       let imageStr: string | undefined;
       const index = req.query.index !== undefined ? parseInt(String(req.query.index), 10) : NaN;
+
+      // 0. Super Fast Path: Local Disk Cache in public/api/img_cache/
+      const imgCacheDir = path.join(process.cwd(), 'public', 'api', 'img_cache');
+      const candidates: string[] = [];
+      if (!isNaN(index)) {
+        candidates.push(`${productId}_idx${index}`, `${productId}_${index}`);
+      }
+      candidates.push(productId);
+
+      for (const base of candidates) {
+        for (const ext of ['.jpg', '.jpeg', '.webp', '.png']) {
+          const diskFile = path.join(imgCacheDir, `${base}${ext}`);
+          if (fs.existsSync(diskFile)) {
+            const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
+            res.setHeader("Content-Type", contentType);
+            res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
+            return res.sendFile(diskFile);
+          }
+        }
+      }
 
       // 1. Fast Path: In-Memory Product Cache
       const prods = await getCachedProducts();
@@ -2565,18 +2825,28 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         }
       } else {
         let categorySlug = "";
+        let subcategorySlug = "";
         if (req.path.startsWith('/category/')) {
-          categorySlug = req.path.replace(/^\/category\//, '').split('/')[0];
+          const parts = req.path.replace(/^\/category\//, '').split('/');
+          categorySlug = parts[0] || "";
+          if (parts[1]) subcategorySlug = parts[1];
         } else if (req.path.startsWith('/c/')) {
-          categorySlug = req.path.replace(/^\/c\//, '').split('/')[0];
+          const parts = req.path.replace(/^\/c\//, '').split('/');
+          categorySlug = parts[0] || "";
+          if (parts[1]) subcategorySlug = parts[1];
         } else if (req.query.category) {
           categorySlug = String(req.query.category).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          if (req.query.subcategory || req.query.sub) {
+            subcategorySlug = String(req.query.subcategory || req.query.sub).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          }
         }
         
         if (categorySlug) {
           const protocol = req.headers['x-forwarded-proto'] || req.protocol;
           const host = req.get('host');
-          const currentUrl = `${protocol}://${host}/category/${categorySlug}`;
+          const currentUrl = subcategorySlug 
+            ? `${protocol}://${host}/category/${categorySlug}/${subcategorySlug}` 
+            : `${protocol}://${host}/category/${categorySlug}`;
           
           const CATEGORY_SEO_DATA: Record<string, { title: string; description: string; keywords: string }> = {
             "charger-fan": {
@@ -2612,11 +2882,16 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
           };
 
           const formattedName = categorySlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-          const categorySeo = CATEGORY_SEO_DATA[categorySlug] || {
+          const formattedSubName = subcategorySlug ? subcategorySlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+          const categorySeo = subcategorySlug ? {
+            title: `${formattedSubName} - ${formattedName} Price in Bangladesh - i SHOP BD`,
+            description: `Buy authentic ${formattedSubName} from ${formattedName} category online at best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!`,
+            keywords: `${subcategorySlug}, ${categorySlug}, buy ${subcategorySlug} bd, ishopbd`
+          } : (CATEGORY_SEO_DATA[categorySlug] || {
             title: `${formattedName} Price in Bangladesh - i SHOP BD`,
             description: `Buy authentic ${formattedName} online at the best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!`,
             keywords: `${categorySlug}, buy ${categorySlug} bd, ishopbd`
-          };
+          });
 
           const imageUrl = `${protocol}://${host}/logo.png`;
 
@@ -2626,7 +2901,13 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
             categoryProducts = allProds.filter(p => {
               if (p.deleted || p.isPublished === false) return false;
               const catSlug = (p.category || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-              return catSlug.includes(categorySlug) || categorySlug.includes(catSlug);
+              const subcatSlug = (p.subcategory || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+              const catMatch = catSlug.includes(categorySlug) || categorySlug.includes(catSlug);
+              if (!catMatch) return false;
+              if (subcategorySlug) {
+                return subcatSlug.includes(subcategorySlug) || subcategorySlug.includes(subcatSlug);
+              }
+              return true;
             });
           } catch (e) {}
 

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { Product, Category } from '../types';
-import { findProductBySlugOrId, normalizeProducts, normalizeProduct, safeGetLocalStorage } from '../utils/helpers';
+import { findProductBySlugOrId, normalizeProducts, normalizeProduct, safeGetLocalStorage, slugify } from '../utils/helpers';
 import { STORAGE_KEYS, purgeLegacyCaches } from '../constants/data';
 
 type ProductContextType = {
@@ -209,8 +209,8 @@ const filteredProducts = useMemo(() => {
           ? (aiSearchProductIds.includes(p.id) || keywordMatches)
           : keywordMatches;
 
-        const matchesCategory = isSearching || selCat === "all" || category === selCat;
-        const matchesSubcategory = isSearching || selSubcat === "all" || subcategory === selSubcat;
+        const matchesCategory = isSearching || selCat === "all" || category === selCat || slugify(category) === slugify(selCat);
+        const matchesSubcategory = isSearching || selSubcat === "all" || subcategory === selSubcat || slugify(subcategory) === slugify(selSubcat);
         const matchesBrand = isSearching || selBrand === "all" || brand === selBrand;
         const matchesColor =
           selectedColor === "all" || (p.colors && p.colors.includes(selectedColor));
@@ -245,8 +245,8 @@ const filteredProducts = useMemo(() => {
           ? (aiSearchProductIds.includes(p.id) || keywordMatches)
           : keywordMatches;
 
-        const matchesCategory = isSearching || selCat === "all" || category === selCat;
-        const matchesSubcategory = isSearching || selSubcat === "all" || subcategory === selSubcat;
+        const matchesCategory = isSearching || selCat === "all" || category === selCat || slugify(category) === slugify(selCat);
+        const matchesSubcategory = isSearching || selSubcat === "all" || subcategory === selSubcat || slugify(subcategory) === slugify(selSubcat);
         const matchesBrand = isSearching || selBrand === "all" || brand === selBrand;
         const matchesColor =
           selectedColor === "all" || (p.colors && p.colors.includes(selectedColor));

@@ -54,7 +54,14 @@ export function registerAiRoutes(app: Express, { rateLimit, getCachedProducts, e
       return res.status(429).json({ error: 'AI request limit reached. Please wait a moment.' });
     }
 
-    const { messages } = req.body;
+    let messages = req.body.messages;
+    if (!messages && req.body.message) {
+      messages = [{ role: 'user', content: String(req.body.message) }];
+    }
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'No message provided.' });
+    }
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({ error: 'AI is not configured.' });
@@ -188,10 +195,128 @@ Guidelines:
         }
       }
 
-      res.json({ text: aiReplyText });
+      res.json({ reply: aiReplyText, text: aiReplyText });
     } catch (error: any) {
       console.error('Gemini Error:', error);
       res.status(500).json({ error: error?.message || 'Failed to get response from AI' });
+    }
+  });
+
+  app.post('/api/generate-product-tags', async (req, res) => {
+    const ip = extractClientIp(req.headers, req.socket.remoteAddress) || 'unknown';
+    if (!rateLimit(ip + ':tags', 30, 60_000)) {
+      return res.status(429).json({ error: 'Too many tag generation requests. Please wait a moment.' });
+    }
+
+    const { name, category, subcategory, brand, description, count = 30 } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'Product name is required for tag generation.' });
+    }
+
+    const targetCount = Math.min(60, Math.max(10, Number(count) || 30));
+
+    // Intelligent local fallback generator
+    const generateLocalFallbackTags = () => {
+      const set = new Set<string>();
+      const cleanName = name.trim();
+      set.add(cleanName.toLowerCase());
+      if (brand) set.add(brand.toLowerCase());
+      if (category) set.add(category.toLowerCase());
+      if (subcategory) set.add(subcategory.toLowerCase());
+
+      const words = cleanName.toLowerCase().replace(/[^\w\s\u0980-\u09FF]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+      words.forEach(w => set.add(w));
+      for (let i = 0; i < words.length - 1; i++) {
+        set.add(`${words[i]} ${words[i + 1]}`);
+      }
+      const lower = cleanName.toLowerCase();
+      set.add(`${lower} price in bd`);
+      set.add(`${lower} bd`);
+      set.add(`buy ${lower}`);
+      set.add(`best ${lower}`);
+      set.add(`original ${cleanName}`);
+      set.add(`online shopping bd`);
+      return Array.from(set).slice(0, targetCount);
+    };
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.json({ success: true, tags: generateLocalFallbackTags(), fallback: true });
+    }
+
+    try {
+      const prompt = `You are an expert SEO and e-commerce tag specialist for "i SHOP BD" (the premier online shopping platform in Bangladesh).
+Generate exactly ${targetCount} high-intent, relevant search tags/keywords for this product:
+
+Product Name: ${name}
+Category: ${category || 'General'}${subcategory ? ` > ${subcategory}` : ''}
+${brand ? `Brand: ${brand}` : ''}
+${description ? `Description: ${description.substring(0, 300)}` : ''}
+
+CRITICAL INSTRUCTIONS:
+1. Include high-intent buyer keywords, product variations, synonyms, and related searches.
+2. Include BOTH English keywords AND Bengali keywords (বাংলা হরফ এবং বাংলিশ, যেমন: ঘড়ি, smart watch, স্মার্ট ওয়াচ, পাঞ্জাবি, panjabi, ছেলেদের টিশার্ট, ইত্যাদি) which Bangladeshi online shoppers frequently type on Google and search bars.
+3. Tags must be clean search terms (1 to 4 words each). NO hashtags (#), NO numbering, NO quotation marks.
+4. Output format: Return ONLY a valid JSON array of strings, for example: ["tag 1", "tag 2", "ট্যাগ ৩"]. Do NOT write markdown backticks or any explanation.`;
+
+      const genAI = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+      });
+
+      const modelsToTry = [
+        'gemini-3.6-flash',
+        'gemini-3.5-flash',
+        'gemini-3.8-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-3.7-flash',
+      ];
+
+      let rawOutput = '';
+      for (const model of modelsToTry) {
+        try {
+          const response = await genAI.models.generateContent({
+            model,
+            contents: prompt,
+          });
+          if (response.text) {
+            rawOutput = response.text;
+            break;
+          }
+        } catch (mErr: any) {
+          console.warn(`[Tags AI] Model ${model} failed:`, mErr.message);
+        }
+      }
+
+      if (rawOutput) {
+        const cleaned = rawOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
+        try {
+          const parsed = JSON.parse(cleaned);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const cleanTags = Array.from(new Set(
+              parsed
+                .map((t: any) => String(t || '').replace(/^[#\d.)\s"]+|["\s]+$/g, '').trim())
+                .filter((t: string) => t.length > 0)
+            )).slice(0, targetCount);
+
+            return res.json({ success: true, tags: cleanTags, count: cleanTags.length });
+          }
+        } catch (_parseErr) {
+          const splitTags = Array.from(new Set(
+            cleaned
+              .split(/[,\n]+/)
+              .map(t => t.replace(/^[-*•\d.)\]\s"]+|["\s]+$/g, '').trim())
+              .filter(t => t.length > 1 && !t.startsWith('#'))
+          )).slice(0, targetCount);
+
+          if (splitTags.length > 0) {
+            return res.json({ success: true, tags: splitTags, count: splitTags.length });
+          }
+        }
+      }
+
+      return res.json({ success: true, tags: generateLocalFallbackTags(), fallback: true });
+    } catch (err: any) {
+      console.error('Failed to generate product tags with Gemini:', err);
+      return res.json({ success: true, tags: generateLocalFallbackTags(), fallback: true });
     }
   });
 
