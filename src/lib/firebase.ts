@@ -11,7 +11,7 @@ const isLocalhost = typeof window !== 'undefined' && (
 
 export const firebaseConfig = {
   ...rawFirebaseConfig,
-  authDomain: isLocalhost ? `${rawFirebaseConfig.projectId}.firebaseapp.com` : (rawFirebaseConfig.authDomain || `${rawFirebaseConfig.projectId}.firebaseapp.com`)
+  authDomain: `${rawFirebaseConfig.projectId}.firebaseapp.com`
 };
 
 const app = initializeApp(firebaseConfig);

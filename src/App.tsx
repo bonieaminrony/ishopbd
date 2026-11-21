@@ -5534,35 +5534,44 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         }
       }
 
-      if (authModalType === "signup") {
-        if (!authName.trim()) throw new Error("আপনার নাম লিখুন।");
-        if (authPassword.length < 6) throw new Error("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।");
-        
-        const userCred = await createUserWithEmailAndPassword(auth, email, authPassword);
-        // On signup, update display name
-        await updateProfile(userCred.user, {
-           displayName: authName.trim()
-        });
-        toast.success("অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!");
-      } else {
-        try {
-          await signInWithEmailAndPassword(auth, email, authPassword);
-        } catch (signInErr: any) {
-          // If login failed for a phone number with auth/user-not-found, try legacy formats if applicable
-          if (signInErr.code === "auth/user-not-found" && email.endsWith("@mobile.user")) {
-            const rawDigits = digitsOnly;
-            const altEmail = rawDigits.startsWith("88") ? `${rawDigits}@mobile.user` : `88${rawDigits}@mobile.user`;
-            if (altEmail !== email) {
-              await signInWithEmailAndPassword(auth, altEmail, authPassword);
+        const authWithTimeout = <T,>(promise: Promise<T>, timeoutMs = 15000): Promise<T> => {
+          return Promise.race([
+            promise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("সার্ভার থেকে রেসপন্স পেতে দেরি হচ্ছে। অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।")), timeoutMs)
+            )
+          ]);
+        };
+
+        if (authModalType === "signup") {
+          if (!authName.trim()) throw new Error("আপনার নাম লিখুন।");
+          if (authPassword.length < 6) throw new Error("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।");
+          
+          const userCred = await authWithTimeout(createUserWithEmailAndPassword(auth, email, authPassword));
+          // On signup, update display name
+          await updateProfile(userCred.user, {
+             displayName: authName.trim()
+          });
+          toast.success("অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!");
+        } else {
+          try {
+            await authWithTimeout(signInWithEmailAndPassword(auth, email, authPassword));
+          } catch (signInErr: any) {
+            // If login failed for a phone number with auth/user-not-found or auth/invalid-credential, try legacy formats if applicable
+            if ((signInErr.code === "auth/user-not-found" || signInErr.code === "auth/invalid-credential") && email.endsWith("@mobile.user")) {
+              const rawDigits = digitsOnly;
+              const altEmail = rawDigits.startsWith("88") ? `${rawDigits.slice(2)}@mobile.user` : `88${rawDigits}@mobile.user`;
+              if (altEmail !== email) {
+                await authWithTimeout(signInWithEmailAndPassword(auth, altEmail, authPassword));
+              } else {
+                throw signInErr;
+              }
             } else {
               throw signInErr;
             }
-          } else {
-            throw signInErr;
           }
+          toast.success("সফলভাবে লগইন হয়েছে।");
         }
-        toast.success("সফলভাবে লগইন হয়েছে।");
-      }
       
       setIsAuthModalOpen(false);
       setAuthIdentifier("");

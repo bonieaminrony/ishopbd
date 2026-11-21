@@ -68,6 +68,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
 
   # SPA Routing: Send all non-file non-directory non-api requests to app.php
   RewriteCond %{REQUEST_URI} !^/api [NC]
+  RewriteCond %{REQUEST_URI} !^/__/auth [NC]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteCond %{REQUEST_FILENAME} !-l
