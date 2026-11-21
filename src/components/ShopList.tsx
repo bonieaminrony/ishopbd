@@ -104,59 +104,36 @@ export default function ShopList(props: ShopListProps) {
   return (
     <>
       {activeCampaign && (
-              <div className="relative bg-black overflow-hidden mb-12 shadow-2xl">
-                {activeCampaign.image && (
-                  <img
-                    loading="lazy"
-                    decoding="async"
-                    src={activeCampaign.image}
-                    className="w-full h-auto block"
-                    alt={activeCampaign.name}
-                  />
-                )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6">
-              {!activeCampaign.image && (
-                <>
-                  <motion.h2
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="text-3xl md:text-6xl font-black text-center mb-4 tracking-tighter font-ador"
-                  >
-                    {activeCampaign.name}
-                  </motion.h2>
-                  {activeCampaign.description && (
-                    <motion.p
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.1 }}
-                      className="text-sm md:text-lg text-center max-w-2xl opacity-90 font-bold font-ador"
-                    >
-                      {cleanLatex(activeCampaign.description || "")}
-                    </motion.p>
-                  )}
-                </>
-              )}
-              <motion.button
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                onClick={() => {
-                  setActiveCampaign(null);
-                  const url = new URL(window.location.href);
-                  url.searchParams.delete("campaign");
-                  window.history.pushState({}, "", url.toString());
-                }}
-                className="mt-8 flex items-center gap-2 bg-cream text-black px-8 py-3 rounded-full font-black text-xs hover:bg-primary hover:text-white transition-all shadow-xl active:scale-95 group"
-              >
-                <Home
-                  size={16}
-                  className="group-hover:-translate-y-0.5 transition-transform"
-                />
-              Back to Home
-              </motion.button>
+        <div className="container mx-auto px-4 mb-6">
+          {activeCampaign.image ? (
+            <div className="relative overflow-hidden rounded-2xl md:rounded-3xl shadow-md border border-gray-100 bg-gray-50 mb-4">
+              <img
+                loading="eager"
+                decoding="async"
+                src={activeCampaign.image}
+                className="w-full h-auto block max-h-[420px] object-cover"
+                alt={activeCampaign.name}
+              />
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-to-r from-primary via-rose-600 to-amber-600 text-white p-6 sm:p-10 mb-4 shadow-lg">
+              <div className="max-w-2xl">
+                <span className="inline-block bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2.5">
+                  🔥 স্পেশাল ক্যাম্পেইন
+                </span>
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight font-ador mb-2">
+                  {activeCampaign.name}
+                </h1>
+                {activeCampaign.description && (
+                  <p className="text-sm sm:text-base text-white/90 font-medium font-ador max-w-xl">
+                    {cleanLatex(activeCampaign.description || "")}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
         {/* 4.5 Featured Section (Only on Homepage) */}
         {selectedCategory === "all" && !searchQuery && !activeCampaign && !isTrendingFilterActive && (
           <div className="space-y-6 mb-6">
@@ -374,37 +351,51 @@ export default function ShopList(props: ShopListProps) {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              {/* Filter Toggle */}
-              <button
-                onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-sm font-bold whitespace-nowrap ${
-                  isFilterMenuOpen || selectedBrand !== "all" || minPrice !== "" || maxPrice !== ""
-                    ? "bg-primary text-white border-primary shadow-lg shadow-primary/20"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-primary"
-                }`}
-              >
-                <LayoutGrid size={18} />
-                {t("ফিল্টার", "Filters")}
-                {(selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
-                  <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                )}
-              </button>
-              {/* Quick Sort Dropdown */}
-              <div className="relative group">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="appearance-none bg-white border border-gray-200 text-gray-600 px-4 py-2 pr-10 rounded-xl text-sm font-bold focus:outline-none focus:border-primary cursor-pointer hover:border-primary transition-all shadow-sm"
+            {!activeCampaign ? (
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                {/* Filter Toggle */}
+                <button
+                  onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-sm font-bold whitespace-nowrap ${
+                    isFilterMenuOpen || selectedBrand !== "all" || minPrice !== "" || maxPrice !== ""
+                      ? "bg-primary text-white border-primary shadow-lg shadow-primary/20"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-primary"
+                  }`}
                 >
-                  <option value="newest">{t("নতুনগুলো আগে", "Newest Arrivals")}</option>
-                  <option value="price_low">{t("দাম: কম থেকে বেশি", "Price: Low to High")}</option>
-                  <option value="price_high">{t("দাম: বেশি থেকে কম", "Price: High to Low")}</option>
-                  <option value="popularity">{t("জনপ্রিয়তা", "Popularity")}</option>
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <LayoutGrid size={18} />
+                  {t("ফিল্টার", "Filters")}
+                  {(selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
+                    <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  )}
+                </button>
+                {/* Quick Sort Dropdown */}
+                <div className="relative group">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="appearance-none bg-white border border-gray-200 text-gray-600 px-4 py-2 pr-10 rounded-xl text-sm font-bold focus:outline-none focus:border-primary cursor-pointer hover:border-primary transition-all shadow-sm"
+                  >
+                    <option value="newest">{t("নতুনগুলো আগে", "Newest Arrivals")}</option>
+                    <option value="price_low">{t("দাম: কম থেকে বেশি", "Price: Low to High")}</option>
+                    <option value="price_high">{t("দাম: বেশি থেকে কম", "Price: High to Low")}</option>
+                    <option value="popularity">{t("জনপ্রিয়তা", "Popularity")}</option>
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
               </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCampaign(null);
+                  window.history.pushState({}, "", "/");
+                }}
+                className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-primary bg-white hover:bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl transition-all shadow-xs"
+              >
+                <Home size={14} />
+                <span>সাইটের সব পণ্য দেখুন</span>
+              </button>
+            )}
           </div>
           {/* Expanded Filter Menu */}
           <AnimatePresence>

@@ -1160,18 +1160,18 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const categoryParam = params.get("category");
     const subcategoryParam = params.get("subcategory") || params.get("sub");
-    const campaignSlug = params.get("campaign");
+    let campaignSlug = params.get("campaign");
+    if (!campaignSlug && window.location.pathname.startsWith("/campaign/")) {
+      const parts = window.location.pathname.replace(/^\/campaign\//, "").split("/");
+      campaignSlug = parts[0] || "";
+    }
     if (campaignSlug && campaigns.length > 0) {
-      const found = campaigns.find((c) => c.slug === campaignSlug && c.isActive);
+      const found = campaigns.find((c) => (c.slug === campaignSlug || c.id === campaignSlug) && c.isActive);
       if (found) {
         setActiveCampaign(found);
         setSelectedCategory("all");
         setSelectedSubcategory("all");
         setSearchInput("");
-      } else {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("campaign");
-        window.history.replaceState({}, "", url.toString());
       }
     }
     if (categoryParam) {
@@ -3535,6 +3535,23 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         if (parts[1]) subcategoryParam = parts[1];
       }
 
+      let campaignSlug = urlParams.get("campaign");
+      if (!campaignSlug && path.startsWith("/campaign/")) {
+        const parts = path.replace(/^\/campaign\//, "").split("/");
+        campaignSlug = parts[0] || "";
+      }
+      if (campaignSlug && campaigns.length > 0) {
+        const found = campaigns.find((c) => (c.slug === campaignSlug || c.id === campaignSlug) && c.isActive);
+        if (found) {
+          setActiveCampaign(found);
+          setSelectedCategory("all");
+          setSelectedSubcategory("all");
+          setSearchInput("");
+        }
+      } else if (!campaignSlug && activeCampaign && !path.startsWith("/campaign/")) {
+        setActiveCampaign(null);
+      }
+
       if (path === "/order-success") {
         // Stay on order-success — receipt modal handles display
         return;
@@ -4554,10 +4571,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       toast.error("সঠিক Slug প্রয়োজন (শুধুমাত্র ছোট অক্ষর, সংখ্যা এবং ড্যাশ)");
       return;
     }
-    if (!editingCampaign?.image) {
-      toast.error("ব্যানার ইমেজ প্রয়োজন");
-      return;
-    }
+    // Banner image is optional
+    const image = editingCampaign?.image || "";
     // Generate slug from name if not provided (though we required it)
     const slug = editingCampaign.slug.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
     try {
@@ -7592,7 +7607,7 @@ ${productNames}
     }, 5000);
     return () => clearInterval(timer);
   }, [heroBanners.length, isBannerHovered]);
-  const campaignParam = urlParams.get("campaign");
+  const campaignParam = urlParams.get("campaign") || (typeof window !== "undefined" && window.location.pathname.startsWith("/campaign/") ? window.location.pathname.replace(/^\/campaign\//, "").split("/")[0] : null);
   const isCampaignLoading = !!campaignParam && !activeCampaign && campaigns.length === 0;
   if (landingProduct) {
     return (

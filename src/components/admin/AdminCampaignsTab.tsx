@@ -56,9 +56,20 @@ export default function AdminCampaignsTab({
               <p className="text-[10px] text-gray-400 mt-1 italic">Must be unique. e.g. ?campaign=eid-dhamaka</p>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
-                Upload Banner
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Upload Banner (ঐচ্ছিক / Optional)
+                </label>
+                {editingCampaign?.image && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingCampaign({ ...editingCampaign, image: '' } as any)}
+                    className="text-[10px] text-red-500 font-bold hover:underline"
+                  >
+                    ব্যানার মুছুন
+                  </button>
+                )}
+              </div>
               <div className="space-y-3">
                 <input
                   type="file"
@@ -72,11 +83,14 @@ export default function AdminCampaignsTab({
                   className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl py-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition-all"
                 >
                   {editingCampaign?.image ? (
-                    <img loading="lazy" src={editingCampaign.image} className="h-24 rounded-lg shadow-sm" alt="Preview" />
+                    <div className="relative group">
+                      <img loading="lazy" src={editingCampaign.image} className="h-24 rounded-lg shadow-sm object-contain" alt="Preview" />
+                      <span className="text-[10px] font-bold text-gray-400 mt-1 block text-center">ক্লিক করে পরিবর্তন করুন</span>
+                    </div>
                   ) : (
                     <>
                       <Upload size={20} className="text-gray-300" />
-                      <span className="text-[10px] font-bold text-gray-400 mt-1">Upload Image</span>
+                      <span className="text-[10px] font-bold text-gray-400 mt-1">কভার ফটো দিন (না দিলেও চলবে)</span>
                     </>
                   )}
                 </label>
@@ -168,7 +182,7 @@ export default function AdminCampaignsTab({
                 </div>
               </div>
               <h5 className="font-bold text-secondary">{campaign.name}</h5>
-              <p className="text-[10px] text-gray-400 font-bold mb-3 truncate">Link: ?campaign={campaign.slug}</p>
+              <p className="text-[10px] text-gray-400 font-bold mb-3 truncate">Link: /campaign/{campaign.slug}</p>
               <div className="flex items-center justify-between border-t pt-4">
                 <span className="text-[10px] font-bold text-primary bg-primary/5 px-2 py-1 rounded-lg">
                   {campaign.productIds?.length || 0} Products
@@ -176,9 +190,9 @@ export default function AdminCampaignsTab({
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      const url = window.location.origin + window.location.pathname + '?campaign=' + campaign.slug;
+                      const url = `${window.location.origin}/campaign/${campaign.slug}`;
                       navigator.clipboard.writeText(url);
-                      toast.success('Link copied!');
+                      toast.success('ক্যাম্পেইন লিংক কপি হয়েছে!');
                     }}
                     className="p-2 bg-gray-50 text-gray-400 rounded-xl hover:bg-gray-100 transition-all"
                     title="Copy Link"
