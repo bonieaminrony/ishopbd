@@ -3,7 +3,7 @@
  * প্রাইস ক্যালকুলেশন, ডিসকাউন্ট, ডেলিভারি চার্জ ইত্যাদির test।
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { toLeanProductCache, safeSetLocalStorage, safeGetLocalStorage, saveProductsToCache } from '../utils/helpers';
+import { toLeanProductCache, restoreProxyImages, safeSetLocalStorage, safeGetLocalStorage, saveProductsToCache } from '../utils/helpers';
 import { STORAGE_KEYS } from '../constants/data';
 
 // ---- Price Calculation Helpers ----
@@ -309,10 +309,34 @@ describe('Professional Product URL Generation & Resolution', () => {
 
     const lean = toLeanProductCache(products);
     expect(lean[0].landingConfig).toBeUndefined();
-    expect(lean[0].image).toBe('/api/product-image/prod-123');
-    expect(lean[0].images[0]).toBe('/api/product-image/prod-123?index=0');
+    expect(lean[0].image).toMatch(/^\/api\/product-image\/prod-123\?v=[a-z0-9]+$/);
+    expect(lean[0].images[0]).toMatch(/^\/api\/product-image\/prod-123\?index=0&v=[a-z0-9]+$/);
     expect(lean[0].images[1]).toBe('https://cdn.example.com/photo.jpg');
     expect(lean[0].description.length).toBe(500);
+
+    // A changed photo must get a new URL so no cache keeps showing the old photo
+    const changed = toLeanProductCache([{ ...products[0], image: 'data:image/jpeg;base64,' + 'B'.repeat(50000) }]);
+    expect(changed[0].image).not.toBe(lean[0].image);
+
+    // Gallery index must match the Firestore array position even when an earlier slot is empty
+    const gapped = toLeanProductCache([{ id: 'p2', images: ['', hugeBase64] }]);
+    expect(gapped[0].images).toHaveLength(1);
+    expect(gapped[0].images[0]).toMatch(/\?index=1&v=/);
+
+    // Saving a lean product must put the real stored photos back (never write a link over a photo)
+    const stored = { image: 'data:image/jpeg;base64,MAIN', images: ['data:image/jpeg;base64,G0', 'https://cdn.example.com/g1.jpg'], variants: [{ color: 'Red', image: 'data:image/jpeg;base64,RED' }] };
+    const leanForm = toLeanProductCache([{ id: 'p9', ...stored }])[0];
+    const restored = restoreProxyImages({ ...leanForm, images: [...leanForm.images, 'data:image/png;base64,NEW'] }, stored);
+    expect(restored.image).toBe(stored.image);
+    expect(restored.images).toEqual([stored.images[0], stored.images[1], 'data:image/png;base64,NEW']);
+    expect(restored.variants[0].image).toBe('data:image/jpeg;base64,RED');
+    // If the stored value is itself only a link (already lost), the link is kept, not replaced by something wrong
+    expect(restoreProxyImages({ image: '/api/product-image/x' }, { image: '/api/product-image/x' }).image).toBe('/api/product-image/x');
+
+    // Colour variants keep their own photo instead of the main product photo
+    const withVariants = toLeanProductCache([{ id: 'p3', image: hugeBase64, variants: [{ color: 'Red', image: hugeBase64 }, { color: 'Blue', image: 'https://cdn.example.com/blue.jpg' }] }]);
+    expect(withVariants[0].variants[0].image).toMatch(/\?variant=0&v=/);
+    expect(withVariants[0].variants[1].image).toBe('https://cdn.example.com/blue.jpg');
 
     // Verify massive size reduction
     const rawSize = JSON.stringify(products).length;

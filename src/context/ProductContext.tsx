@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Product, Category } from '../types';
-import { findProductBySlugOrId, normalizeProducts, normalizeProduct, safeGetLocalStorage, slugify } from '../utils/helpers';
+import { findProductBySlugOrId, normalizeProducts, normalizeProduct, safeGetLocalStorage, slugify, resolveCategoryFromLocation } from '../utils/helpers';
 import { STORAGE_KEYS, purgeLegacyCaches } from '../constants/data';
 
 type ProductContextType = {
@@ -107,11 +107,36 @@ const [searchQuery, setSearchQuery] = useState("");
 
 const [searchInput, setSearchInput] = useState("");
 
-const [selectedCategory, setSelectedCategory] = useState("all");
-const [selectedSubcategory, setSelectedSubcategory] = useState("all");
+// A /category/... link (e.g. from an ad) opens that category on the very first render, without
+// showing the home page first.
+const [initialDeepLink] = useState(() => {
+  try {
+    if (typeof window === 'undefined') return null;
+    return resolveCategoryFromLocation(window.location.pathname, window.location.search, categories, productsRaw);
+  } catch {
+    return null;
+  }
+});
+const [selectedCategory, setSelectedCategory] = useState(initialDeepLink?.category || "all");
+const [selectedSubcategory, setSelectedSubcategoryRaw] = useState(initialDeepLink?.subcategory || "all");
+// When the category changes, the subcategory resets to "all" - unless a subcategory was chosen in the
+// same step (e.g. Home -> "Winter Collection / Fashionable Koti" from the popup, or a deep link).
+// Before, that reset silently threw the chosen subcategory away.
+const subcategoryChosenAtRef = useRef(initialDeepLink && initialDeepLink.subcategory !== 'all' ? Date.now() : 0);
+const setSelectedSubcategory = useCallback((value: any) => {
+  subcategoryChosenAtRef.current = Date.now();
+  setSelectedSubcategoryRaw(value);
+}, []);
 
+const previousCategoryRef = useRef(selectedCategory);
 useEffect(() => {
-  setSelectedSubcategory("all");
+  // Only when the category really changes (not on the first render, which would drop the
+  // subcategory of a /category/<cat>/<sub> link).
+  if (previousCategoryRef.current === selectedCategory) return;
+  previousCategoryRef.current = selectedCategory;
+  // chosen together with the category (same click) -> keep it
+  if (Date.now() - subcategoryChosenAtRef.current < 300) return;
+  setSelectedSubcategoryRaw("all");
 }, [selectedCategory]);
 
 const [isTrendingFilterActive, setIsTrendingFilterActive] = useState(false);

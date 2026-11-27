@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { formatEnglishDateTime, getProductPath } from '../../utils/helpers';
+import { normalizeBdPhone } from '../../utils/courierDisplay';
 import IncompleteOrderModal, { CompleteIncompleteOrderPayload } from './IncompleteOrderModal';
 
 export function buildCartReminderMessage(order: any, products: any[] = []): string {
@@ -29,14 +30,24 @@ export interface IncompleteCustomerOrderStatus {
   activeOrdersCount: number;
 }
 
+function extractTimestampMs(record: any): number | null {
+  const raw = record?.createdAt ?? record?.updatedAt ?? record?.timestamp;
+  if (!raw) return null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw?.seconds === 'number') return raw.seconds * 1000;
+  if (typeof raw?.toMillis === 'function') return raw.toMillis();
+  const parsed = Date.parse(String(raw));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function getIncompleteCustomerOrderStatus(order: any, orderHistory: any[] = []): IncompleteCustomerOrderStatus | null {
   const rawPhone = (order.phone || order.customerPhone || '').trim();
-  const cleanDigits = rawPhone.replace(/\D/g, '');
+  const cleanDigits = normalizeBdPhone(rawPhone);
   if (!cleanDigits || cleanDigits.length < 6) return null;
 
   const customerOrders = orderHistory.filter((o: any) => {
     if (!o || o.deleted) return false;
-    const oPhone = String(o.customerPhone || o.phone || '').replace(/\D/g, '');
+    const oPhone = normalizeBdPhone(o.customerPhone || o.phone || '');
     return oPhone && (oPhone === cleanDigits || oPhone.endsWith(cleanDigits) || cleanDigits.endsWith(oPhone));
   });
 
@@ -47,8 +58,14 @@ export function getIncompleteCustomerOrderStatus(order: any, orderHistory: any[]
 
   const incItemIds = (order.items || []).map((it: any) => String(it.id || it.product?.id || '')).filter(Boolean);
   const incItemNames = (order.items || []).map((it: any) => String(it.name || it.product?.name || '').toLowerCase().trim()).filter(Boolean);
+  const incTimeMs = extractTimestampMs(order);
 
   const sameProductOrder = activeOrders.find((o: any) => {
+    const oTimeMs = extractTimestampMs(o);
+    // Do not treat historical orders placed long before this incomplete session as "already ordered"
+    if (incTimeMs !== null && oTimeMs !== null && oTimeMs < incTimeMs - 12 * 60 * 60 * 1000) {
+      return false;
+    }
     const oItems = o.items || [];
     return oItems.some((it: any) => {
       const pId = String(it.product?.id || it.id || '');
@@ -111,7 +128,7 @@ export default function AdminIncompleteOrdersTab({
   // Automatically filter out phoneless records and records where customer already ordered this product
   const activeIncompleteOrders = incompleteOrders.filter(inc => {
     const rawPhone = (inc.phone || inc.customerPhone || '').trim();
-    const cleanDigits = rawPhone.replace(/\D/g, '');
+    const cleanDigits = normalizeBdPhone(rawPhone);
     const hasRealPhone = Boolean(
       rawPhone &&
       !rawPhone.includes('কার্টে') &&
@@ -128,7 +145,7 @@ export default function AdminIncompleteOrdersTab({
   React.useEffect(() => {
     const junkOrAlreadyOrdered = incompleteOrders.filter(inc => {
       const rawPhone = (inc.phone || inc.customerPhone || '').trim();
-      const cleanDigits = rawPhone.replace(/\D/g, '');
+      const cleanDigits = normalizeBdPhone(rawPhone);
       const hasRealPhone = Boolean(
         rawPhone &&
         !rawPhone.includes('কার্টে') &&
@@ -153,7 +170,7 @@ export default function AdminIncompleteOrdersTab({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <ShoppingCart className="text-red-500" size={24} /> Incomplete Orders (Abandoned Carts)
+            <ShoppingCart className="text-primary" size={22} /> Incomplete Orders
           </h2>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
             Customers who added items to cart or entered contact details but abandoned checkout.
@@ -161,7 +178,7 @@ export default function AdminIncompleteOrdersTab({
         </div>
         <div className="bg-white px-4 py-2 rounded-xl shadow-xs border border-gray-200 flex items-center gap-2 self-start sm:self-auto">
           <span className="text-xs text-gray-500 font-bold">Total Incomplete:</span>
-          <span className="text-lg font-black text-red-600">{activeIncompleteOrders.length}</span>
+          <span className="text-lg font-black text-gray-900 price-num">{activeIncompleteOrders.length}</span>
         </div>
       </div>
 
@@ -179,7 +196,7 @@ export default function AdminIncompleteOrdersTab({
         ) : (
           <>
             {/* Mobile View for Incomplete Orders */}
-            <div className="lg:hidden space-y-3 p-3">
+            <div className="lg:hidden space-y-2.5 p-2.5">
               {activeIncompleteOrders.map((order: any) => {
                 const rawPhone = (order.phone || order.customerPhone || '').trim();
                 const hasRealPhone =
@@ -207,142 +224,113 @@ export default function AdminIncompleteOrdersTab({
                 const fullAddress = [order.address, order.thana, order.district].filter(Boolean).join(', ');
                 const stats = hasRealPhone ? getCustomerStats(rawPhone) : { total: 0, delivered: 0 };
 
+                const sourceLabel =
+                  order.type === 'cart_checkout' ? 'Cart Checkout' : order.type === 'inline_checkout' ? 'Product Page' : 'Landing Page';
+                const statusInfo = getIncompleteCustomerOrderStatus(order, orderHistory);
+                const savedAt = order.updatedAt || order.createdAt || order.date;
+                const savedDate = savedAt?.seconds ? new Date(savedAt.seconds * 1000) : savedAt ? new Date(savedAt) : null;
+
                 return (
-                  <div
-                    key={order.id}
-                    className="rounded-2xl shadow-xs border border-red-100/90 bg-[#faf5ff] p-2.5 flex flex-col gap-2.5 transition-all"
-                  >
-                    <div className="flex gap-2.5 items-start">
-                      <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200/60 bg-white shrink-0 self-start">
+                  <div key={order.id} className="tone-neutral tone-card rounded-xl p-3 flex flex-col gap-2.5">
+                    {/* Row 1: photo + cart + amount */}
+                    <div className="flex gap-3 items-start">
+                      <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-100 shrink-0">
                         <img loading="lazy" src={itemImage} className="w-full h-full object-cover" alt="" />
-                        <div className="absolute top-1.5 left-1.5 bg-white/95 rounded-[6px] w-[22px] h-[22px] flex items-center justify-center border border-gray-300 shadow-2xs">
-                          <ShoppingCart size={12} className="text-red-500" />
-                        </div>
                       </div>
-
-                      <div className="flex flex-col flex-1 min-w-0 justify-between min-h-[80px]">
-                        <div className="text-[13px] font-bold text-[#1e1b4b] truncate leading-tight" title={itemsTitle}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-gray-800 leading-snug line-clamp-2" title={itemsTitle}>
                           {itemsTitle}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-1.5 min-w-0 mt-1">
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span
-                              className="text-[13px] font-bold text-[#e11d48] truncate leading-tight"
-                              title={customerName}
-                            >
-                              {customerName}
-                            </span>
-                            <span className="text-[12.5px] font-extrabold text-[#1e293b] leading-tight tracking-tight mt-0.5 select-all">
-                              {hasRealPhone ? rawPhone : 'No phone provided'}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {onCompleteIncompleteOrder && (
-                              <button
-                                type="button"
-                                onClick={() => setVerifyingOrder(order)}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-bold hover:bg-indigo-700 transition-all shadow-2xs cursor-pointer"
-                                title="Verify & Place Order"
-                              >
-                                <CheckCircle2 size={11} /> Order
-                              </button>
-                            )}
-                            <span className="text-[10px] font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-full border border-slate-200/80 shadow-2xs whitespace-nowrap">
-                              Total: {stats.total || 1}
-                            </span>
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shadow-2xs whitespace-nowrap">
-                              SCS: {stats.delivered || 0}
-                            </span>
-                            {hasRealPhone && (
-                              <a
-                                href={`https://wa.me/${waPhone}?text=${encodeURIComponent(
-                                  buildCartReminderMessage(order, products)
-                                )}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-7 h-7 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all border border-emerald-200/70 shadow-2xs"
-                                title="WhatsApp"
-                              >
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-                                </svg>
-                              </a>
-                            )}
-                            {hasRealPhone && (
-                              <a
-                                href={`tel:${cleanDigits}`}
-                                className="w-7 h-7 flex items-center justify-center bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 hover:scale-105 active:scale-95 transition-all border border-teal-200/70 shadow-2xs"
-                                title="Call"
-                              >
-                                <Phone size={13} />
-                              </a>
-                            )}
-                          </div>
-                        </div>
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {sourceLabel}
+                          {savedDate && !isNaN(savedDate.getTime())
+                            ? ` · ${savedDate.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
+                            : ''}
+                        </p>
                       </div>
+                      <div className="text-[15px] font-extrabold text-gray-900 price-num shrink-0">৳{Number(totalAmt).toLocaleString()}</div>
                     </div>
 
-                    {(() => {
-                      const orderStatusInfo = getIncompleteCustomerOrderStatus(order, orderHistory);
-                      if (!orderStatusInfo) return null;
-                      return (
-                        <div className={`flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border ${
-                          orderStatusInfo.isSameProduct
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : 'bg-amber-50 text-amber-800 border-amber-300'
-                        }`}>
-                          <span>
-                            {orderStatusInfo.isSameProduct
-                              ? `✅ এই প্রোডাক্ট ইতোমধ্যে অর্ডার করা হয়েছে (#${String(orderStatusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`
-                              : `⚠️ অন্য অর্ডার রয়েছে (#${String(orderStatusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (window.confirm('এই ইনকমপ্লিট রেকর্ডটি ডিলিট করতে চান?')) {
-                                await deleteDoc(doc(db, 'incomplete_orders', order.id));
-                                toast.success('ইনকমপ্লিট রেকর্ড মুছে ফেলা হয়েছে।');
-                              }
-                            }}
-                            className="text-red-600 hover:text-red-700 font-bold px-1.5 py-0.5 rounded bg-white/90 border border-red-200 cursor-pointer"
-                          >
-                            মুছুন
-                          </button>
-                        </div>
-                      );
-                    })()}
-
-                    <div className="flex items-center gap-2 w-full pt-0.5">
-                      <div
-                        className="bg-white flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600 font-medium truncate shadow-2xs"
-                        title={fullAddress}
-                      >
-                        {fullAddress || 'No address entered'}
+                    {/* Row 2: customer + verify button */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-bold text-gray-900 truncate" title={customerName}>{customerName}</div>
+                        <div className="text-[12px] text-gray-500 price-num select-all">{hasRealPhone ? rawPhone : 'No phone provided'}</div>
                       </div>
-                      <div className="shrink-0">
-                        <span
-                          className={`text-xs font-bold px-2.5 py-1.5 rounded-xl border block shadow-2xs ${
-                            order.type === 'cart_checkout'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : order.type === 'inline_checkout'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}
+                      {onCompleteIncompleteOrder && (
+                        <button
+                          type="button"
+                          onClick={() => setVerifyingOrder(order)}
+                          className="h-8 px-3 rounded-lg bg-primary text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
+                          title="Verify & Place Order"
                         >
-                          {order.type === 'cart_checkout'
-                            ? 'Cart Checkout'
-                            : order.type === 'inline_checkout'
-                            ? 'Product Page'
-                            : 'Landing Page'}
+                          <CheckCircle2 size={14} /> Verify &amp; Order
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Row 3: address */}
+                    <div className="text-[12px] text-gray-500 truncate -mt-1" title={fullAddress}>
+                      {fullAddress || 'No address entered'}
+                    </div>
+
+                    {/* Already ordered? */}
+                    {statusInfo && (
+                      <div
+                        className={`${statusInfo.isSameProduct ? 'tone-delivered' : 'tone-returned'} tone-chip flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] font-bold`}
+                      >
+                        <span className="min-w-0">
+                          {statusInfo.isSameProduct
+                            ? `এই প্রোডাক্ট ইতোমধ্যে অর্ডার হয়েছে (#${String(statusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`
+                            : `অন্য একটি অর্ডার আছে (#${String(statusInfo.matchedOrder?.id || '').slice(-6).toUpperCase()})`}
                         </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm('এই ইনকমপ্লিট রেকর্ডটি ডিলিট করতে চান?')) {
+                              await deleteDoc(doc(db, 'incomplete_orders', order.id));
+                              toast.success('ইনকমপ্লিট রেকর্ড মুছে ফেলা হয়েছে।');
+                            }
+                          }}
+                          className="shrink-0 text-red-400 font-bold px-2 py-0.5 rounded-md bg-gray-100 cursor-pointer"
+                        >
+                          মুছুন
+                        </button>
                       </div>
-                      <div className="shrink-0">
-                        <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl block shadow-2xs">
-                          ৳{Number(totalAmt).toLocaleString()}
-                        </span>
-                      </div>
+                    )}
+
+                    {/* Row 4: customer history + contact */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-8 px-2.5 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap">
+                        <span>Total {stats.total || 0}</span>
+                        <span className="opacity-40">|</span>
+                        <span>SCS {stats.delivered || 0}</span>
+                      </span>
+                      <span className="flex-1" />
+                      {hasRealPhone && (
+                        <a
+                          href={`https://wa.me/${waPhone}?text=${encodeURIComponent(buildCartReminderMessage(order, products))}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-8 px-2.5 flex items-center gap-1.5 bg-gray-100 text-gray-700 rounded-lg text-[11px] font-bold hover:text-gray-900 transition-colors"
+                          title="Send a WhatsApp reminder"
+                        >
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                                </svg>
+                          Reminder
+                        </a>
+                      )}
+                      {hasRealPhone && (
+                        <a
+                          href={`tel:${cleanDigits}`}
+                          className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:text-gray-900 transition-colors"
+                          title="Call"
+                          aria-label="Call"
+                        >
+                          <Phone size={14} />
+                        </a>
+                      )}
                     </div>
                   </div>
                 );
@@ -456,7 +444,7 @@ export default function AdminIncompleteOrdersTab({
                                 <div className="min-w-0">
                                   <p className="text-xs font-bold text-gray-800 truncate">{item.name}</p>
                                   <p className="text-[11px] text-gray-500">
-                                    <span className="text-purple-700 font-bold">৳{item.price}</span> × {item.quantity || 1}
+                                    <span className="text-gray-700 font-bold">৳{item.price}</span> × {item.quantity || 1}
                                     {(item.color || item.size) && (
                                       <span className="text-gray-400 ml-1">
                                         ({[item.color, item.size].filter(Boolean).join(', ')})
@@ -469,15 +457,7 @@ export default function AdminIncompleteOrdersTab({
                           </div>
                         </td>
                         <td className="p-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                              order.type === 'cart_checkout'
-                                ? 'bg-blue-100 text-blue-700'
-                                : order.type === 'inline_checkout'
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-emerald-100 text-emerald-700'
-                            }`}
-                          >
+                          <span className="tone-neutral tone-chip inline-block whitespace-nowrap px-2 py-0.5 text-[10px] font-bold">
                             {order.type === 'cart_checkout'
                               ? 'Cart Checkout'
                               : order.type === 'inline_checkout'
@@ -490,8 +470,18 @@ export default function AdminIncompleteOrdersTab({
                             ৳{Number(totalAmt).toLocaleString()}
                           </span>
                         </td>
-                        <td className="p-4 text-gray-500 whitespace-nowrap">
-                          {formatEnglishDateTime(order.date || order.updatedAt || order.createdAt)}
+                        <td className="p-4 text-gray-500 whitespace-nowrap text-xs">
+                          {(() => {
+                            const raw = order.date || order.updatedAt || order.createdAt;
+                            const d = raw?.seconds ? new Date(raw.seconds * 1000) : typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(raw) ? new Date(raw) : null;
+                            if (!d || isNaN(d.getTime())) return formatEnglishDateTime(raw);
+                            return (
+                              <>
+                                <div className="font-semibold text-gray-700">{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                                <div className="text-[11px] text-gray-500">{d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
+                              </>
+                            );
+                          })()}
                         </td>
                         <td className="p-4">
                           <div className="flex items-center justify-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>

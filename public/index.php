@@ -1,6 +1,7 @@
 <?php
 /**
- * i SHOP BD - Dynamic Open Graph, Social Sharing & SEO SSR Engine
+ * iShopBD - first HTML for every page: titles, descriptions, canonical links,
+ * structured data and visible first-paint content. Rules live in api/_seo_lib.php (see SEO.md).
  * Fully Compliant with Google Search Console, Rich Results, and Schema.org
  */
 
@@ -21,6 +22,7 @@ if (!file_exists($htmlPath)) {
 }
 
 $html = file_get_contents($htmlPath);
+require_once __DIR__ . '/api/_seo_lib.php';
 
 // Protocol & Host detection
 $protocol = "https";
@@ -87,22 +89,7 @@ function getProductSlug($p) {
 
 // Helper: Normalize Category Slug
 function getCategorySlug($categoryName) {
-    if (!$categoryName) return "";
-    $name = strtolower(trim((string)$categoryName));
-    $map = [
-        "charger fan" => "charger-fan",
-        "power bank" => "power-bank",
-        "smart watch" => "smart-watch",
-        "headphone" => "headphone",
-        "mobile accessories" => "mobile-accessories",
-        "lifestyle & watch" => "lifestyle-watch",
-        "lifestyle watch" => "lifestyle-watch",
-        "electrical" => "charger-fan",
-        "gadgets" => "mobile-accessories",
-        "lifestyle" => "lifestyle-watch"
-    ];
-    if (isset($map[$name])) return $map[$name];
-    return preg_replace('/[^a-z0-9]+/i', '-', $name);
+    return seoSlugify((string)$categoryName);
 }
 
 // Helper: Parse Firestore value
@@ -402,474 +389,175 @@ function getEffectiveRequestUri() {
 
 // Fetch all cached products
 $allProducts = getAllProductsCached();
+$publishedProducts = array_values(array_filter($allProducts, 'seoIsPublished'));
+$productPathFn = function ($p) { return '/p/' . getProductSlug($p); };
 
-// 0. Detect /order-success URL — set SEO tags for Google Ads conversion page
 $effectiveUriEarly = getEffectiveRequestUri();
 $pathEarly = parse_url($effectiveUriEarly, PHP_URL_PATH) ?: $effectiveUriEarly;
+$pathEarly = '/' . ltrim((string)$pathEarly, '/');
 $isOrderSuccessPage = ($pathEarly === '/order-success');
+$isDashboard = (bool)preg_match('~^/dashboard(?:/|$)~i', $pathEarly);
 
-// 1. Detect Product URL
+// 1. Product page
 $productIdentifier = isset($_GET['p']) ? $_GET['p'] : (isset($_GET['product']) ? $_GET['product'] : (isset($_GET['landing']) ? $_GET['landing'] : null));
-if (!$productIdentifier) {
-    $effectiveUri = getEffectiveRequestUri();
-    $path = parse_url($effectiveUri, PHP_URL_PATH) ?: $effectiveUri;
-    if (preg_match('~/(?:product|p|landing)/([^/?#]+)~i', $path, $matches)) {
-        $productIdentifier = urldecode($matches[1]);
-    }
+if (!$productIdentifier && preg_match('~^/(?:product|p|landing)/([^/?#]+)~i', $pathEarly, $matches)) {
+    $productIdentifier = urldecode($matches[1]);
 }
 
 $matchedProduct = null;
 if ($productIdentifier) {
     $found = findProductInList($allProducts, $productIdentifier);
-    if ($found && empty($found['deleted']) && (!isset($found['isPublished']) || $found['isPublished'] !== false)) {
-        $matchedProduct = $found;
-    }
+    if ($found && seoIsPublished($found)) $matchedProduct = $found;
 }
 
-if ($matchedProduct) {
-    // ---- PRODUCT SSR ----
-    $name = $matchedProduct['name'] ?: "Product Details";
-    $rawDesc = $matchedProduct['description'] ?: "";
-    $brand = $matchedProduct['brand'] ?: "i SHOP BD";
-    $category = $matchedProduct['category'] ?: "";
-    $price = (float)($matchedProduct['price'] ?? 0);
-    $stockVal = (int)($matchedProduct['stock'] ?? 1);
-    $inStock = $stockVal > 0;
-    $rating = (float)($matchedProduct['rating'] ?? 5.0);
-    $reviewCount = (int)($matchedProduct['reviewCount'] ?? 0);
-    $resolvedId = $matchedProduct['id'];
+// 2. Category page (/category/<slug>[/<sub>])
+$categorySlug = isset($_GET['category']) ? $_GET['category'] : (isset($_GET['c']) ? $_GET['c'] : null);
+$subcategorySlug = isset($_GET['subcategory']) ? $_GET['subcategory'] : (isset($_GET['sub']) ? $_GET['sub'] : null);
+if (!$categorySlug && preg_match('~^/(?:category|c)/([^/?#]+)(?:/([^/?#]+))?~i', $pathEarly, $catMatches)) {
+    $categorySlug = urldecode($catMatches[1]);
+    if (!empty($catMatches[2])) $subcategorySlug = urldecode($catMatches[2]);
+}
 
-    // Clean description for meta tags
-    $cleanDesc = trim(preg_replace('/[\r\n\t]+/', ' ', strip_tags($rawDesc)));
-    $cleanDesc = str_replace('"', '&quot;', $cleanDesc);
-    if (mb_strlen($cleanDesc, 'UTF-8') > 160) {
-        $cleanDesc = mb_substr($cleanDesc, 0, 157, 'UTF-8') . "...";
+if ($isDashboard) {
+    // Admin panel: never indexed.
+    $html = seoApplyHead($html, [
+        'title' => 'Dashboard | ' . SEO_SITE_NAME, 'description' => seoHomeDescription($publishedProducts),
+        'canonical' => SEO_SITE_URL . '/', 'robots' => 'noindex,nofollow', 'ogType' => 'website', 'jsonLd' => [],
+    ]);
+
+} elseif ($matchedProduct) {
+    $p = $matchedProduct;
+    $path = $productPathFn($p);
+    $crumbs = [['name' => SEO_SITE_NAME, 'url' => SEO_SITE_URL . '/']];
+    if (!empty($p['category'])) $crumbs[] = ['name' => $p['category'], 'url' => SEO_SITE_URL . seoCategoryPath($p['category'])];
+    if (!empty($p['category']) && !empty($p['subcategory'])) $crumbs[] = ['name' => $p['subcategory'], 'url' => SEO_SITE_URL . seoCategoryPath($p['category'], $p['subcategory'])];
+    $crumbs[] = ['name' => seoCleanProductName($p['name'] ?? ''), 'url' => SEO_SITE_URL . $path];
+
+    $html = seoApplyHead($html, [
+        'title' => seoProductTitle($p),
+        'description' => seoProductDescription($p),
+        'canonical' => SEO_SITE_URL . $path,
+        'ogType' => 'product',
+        'image' => seoProductImageUrl($p),
+        'price' => (float)($p['price'] ?? 0),
+        'jsonLd' => ['seo-ld-page' => seoProductJsonLd($p, $path), 'seo-ld-breadcrumb' => seoBreadcrumb($crumbs)],
+    ]);
+
+    $nav = '';
+    foreach (array_slice($crumbs, 0, -1) as $c) {
+        $nav .= '<a href="' . seoEsc(str_replace(SEO_SITE_URL, '', $c['url']) ?: '/') . '">' . seoEsc($c['name']) . '</a> / ';
     }
-    if (empty($cleanDesc)) {
-        $cleanDesc = "$name - Buy authentic $brand products online at best price in Bangladesh from i SHOP BD. Fast cash on home delivery!";
+    $img = (string)($p['image'] ?? '');
+    $imgSrc = (strpos($img, 'data:') === 0 || $img === '') ? '/api/product-image/' . rawurlencode($p['id'] ?? '') : $img;
+    $about = seoClip(seoStripHtml(!empty($p['shortDescription']) ? $p['shortDescription'] : ($p['description'] ?? '')), 320);
+    $avail = seoAvailability($p) === 'InStock' ? 'ইন স্টক' : (seoAvailability($p) === 'PreOrder' ? 'প্রি-অর্ডার' : 'স্টক শেষ');
+    $related = array_values(array_filter($publishedProducts, function ($x) use ($p) {
+        return ($x['id'] ?? '') !== ($p['id'] ?? '') && ($x['category'] ?? '') === ($p['category'] ?? '');
+    }));
+    $inner = '<nav aria-label="Breadcrumb">' . $nav . '</nav>'
+        . '<img class="hero" src="' . seoEsc($imgSrc) . '" alt="' . seoEsc(seoCleanProductName($p['name'] ?? '')) . '" width="480" height="480" fetchpriority="high">'
+        . '<h1>' . seoEsc($p['name'] ?? '') . '</h1>'
+        . '<div class="price">' . seoMoney($p['price'] ?? 0) . '</div>'
+        . '<p>' . seoEsc($avail) . ($about !== '' ? ' · ' . seoEsc($about) : '') . '</p>'
+        . (count($related) ? '<p><b>' . seoEsc($p['category'] ?? '') . '</b></p>' . seoSsrCards($related, $productPathFn, 8) : '');
+    $html = seoInjectSsr($html, $inner);
+
+} elseif ($categorySlug) {
+    $categorySlug = strtolower(trim($categorySlug));
+    $subcategorySlug = $subcategorySlug ? strtolower(trim($subcategorySlug)) : '';
+
+    $category = null;
+    foreach (seoPublishedCategories($publishedProducts) as $c) {
+        if (seoSlugify($c) === $categorySlug) { $category = $c; break; }
+    }
+    if ($category === null && isset(SEO_LEGACY_CATEGORY_SLUGS[$categorySlug])) {
+        // Old address: send people and search engines to today's category.
+        header('Location: ' . SEO_SITE_URL . seoCategoryPath(SEO_LEGACY_CATEGORY_SLUGS[$categorySlug]), true, 301);
+        exit;
     }
 
-    // Resolve Image URL
-    $imageUrl = $defaultOgImage;
-    if (!empty($matchedProduct['image']) && is_string($matchedProduct['image'])) {
-        $imgStr = trim($matchedProduct['image']);
-        if (strpos($imgStr, 'http://') === 0 || strpos($imgStr, 'https://') === 0) {
-            $imageUrl = $imgStr;
-        } elseif (strpos($imgStr, '/api/product-image') === 0 || strpos($imgStr, '/uploads/') === 0) {
-            $imageUrl = "$baseUrl" . $imgStr;
-        } elseif (strpos($imgStr, 'data:image') === 0) {
-            $imageUrl = "$baseUrl/api/product-image/" . urlencode($resolvedId);
+    $sub = null;
+    if ($category !== null && $subcategorySlug !== '') {
+        foreach (seoSubcategories($publishedProducts, $category) as $s) {
+            if (seoSlugify($s) === $subcategorySlug) { $sub = $s; break; }
         }
     }
 
-    $canonicalSlug = getProductSlug($matchedProduct);
-    $canonicalUrl = "$baseUrl/p/$canonicalSlug";
-    $catSlug = !empty($category) ? getCategorySlug($category) : "";
-
-    $nameEscaped = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
-    $descEscaped = htmlspecialchars($cleanDesc, ENT_QUOTES, 'UTF-8');
-    $brandEscaped = htmlspecialchars($brand, ENT_QUOTES, 'UTF-8');
-    $urlEscaped = htmlspecialchars($canonicalUrl, ENT_QUOTES, 'UTF-8');
-    $imgEscaped = htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8');
-
-    $currentYear = (int)gmdate('Y');
-    $validFromDate = $currentYear . '-01-01';
-    if (!empty($matchedProduct['createdAt']) && is_string($matchedProduct['createdAt'])) {
-        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', trim($matchedProduct['createdAt']), $dateMatches)) {
-            $validFromDate = $dateMatches[1];
-        } else {
-            $parsedCreatedTs = strtotime($matchedProduct['createdAt']);
-            if ($parsedCreatedTs !== false) {
-                $validFromDate = gmdate('Y-m-d', $parsedCreatedTs);
-            }
+    if ($category === null) {
+        $label = ucwords(str_replace('-', ' ', $categorySlug));
+        $html = seoApplyHead($html, [
+            'title' => $label . ' | ' . SEO_SITE_NAME, 'description' => seoHomeDescription($publishedProducts),
+            'canonical' => SEO_SITE_URL . '/category/' . seoSlugify($categorySlug), 'robots' => 'noindex,follow',
+            'ogType' => 'website', 'jsonLd' => [],
+        ]);
+    } else {
+        $items = array_values(array_filter($publishedProducts, function ($x) use ($category, $sub) {
+            return ($x['category'] ?? '') === $category && ($sub === null || ($x['subcategory'] ?? '') === $sub);
+        }));
+        $path = seoCategoryPath($category, $sub);
+        $crumbs = [['name' => SEO_SITE_NAME, 'url' => SEO_SITE_URL . '/'], ['name' => $category, 'url' => SEO_SITE_URL . seoCategoryPath($category)]];
+        if ($sub !== null) $crumbs[] = ['name' => $sub, 'url' => SEO_SITE_URL . $path];
+        $listItems = [];
+        foreach (array_slice($items, 0, 50) as $i => $x) {
+            $listItems[] = ['@type' => 'ListItem', 'position' => $i + 1, 'url' => SEO_SITE_URL . $productPathFn($x), 'name' => seoCleanProductName($x['name'] ?? '')];
         }
-    }
-    $priceValidUntilDate = ($currentYear + 1) . '-12-31';
-    $isFreeDelivery = !empty($matchedProduct['isFreeDelivery']);
-    $prodWeight = isset($matchedProduct['weight']) ? (float)$matchedProduct['weight'] : 0.0;
-    if ($isFreeDelivery) {
-        $shippingRateBdt = 0;
-    } elseif ($prodWeight <= 1.0) {
-        $shippingRateBdt = 80;
-    } else {
-        $shippingRateBdt = 80 + ((int)ceil($prodWeight) - 1) * 20;
-    }
-
-    // Product Schema JSON-LD
-    $productSchema = [
-        "@context" => "https://schema.org/",
-        "@type" => "Product",
-        "name" => $name,
-        "image" => [$imageUrl],
-        "description" => $cleanDesc,
-        "sku" => $resolvedId,
-        "mpn" => !empty($matchedProduct['code']) ? $matchedProduct['code'] : $resolvedId,
-        "brand" => [
-            "@type" => "Brand",
-            "name" => !empty($brand) ? $brand : "i SHOP BD"
-        ],
-        "offers" => [
-            "@type" => "Offer",
-            "url" => $canonicalUrl,
-            "priceCurrency" => "BDT",
-            "price" => $price,
-            "validFrom" => $validFromDate,
-            "priceValidUntil" => $priceValidUntilDate,
-            "itemCondition" => "https://schema.org/NewCondition",
-            "availability" => $inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-            "seller" => [
-                "@type" => "Organization",
-                "name" => "i SHOP BD"
-            ],
-            "shippingDetails" => [
-                "@type" => "OfferShippingDetails",
-                "shippingRate" => [
-                    "@type" => "MonetaryAmount",
-                    "value" => $shippingRateBdt,
-                    "currency" => "BDT"
+        $html = seoApplyHead($html, [
+            'title' => seoCategoryTitle($category, $sub),
+            'description' => seoCategoryDescription($category, $sub, $items),
+            'canonical' => SEO_SITE_URL . $path,
+            'ogType' => 'website',
+            'image' => count($items) ? seoProductImageUrl($items[0]) : SEO_OG_IMAGE,
+            'jsonLd' => [
+                'seo-ld-page' => [
+                    '@context' => 'https://schema.org', '@type' => 'CollectionPage',
+                    'name' => $sub !== null ? "{$sub} – {$category}" : $category,
+                    'url' => SEO_SITE_URL . $path,
+                    'isPartOf' => ['@type' => 'WebSite', 'name' => SEO_SITE_NAME, 'url' => SEO_SITE_URL],
+                    'mainEntity' => ['@type' => 'ItemList', 'numberOfItems' => count($items), 'itemListElement' => $listItems],
                 ],
-                "shippingDestination" => [
-                    "@type" => "DefinedRegion",
-                    "addressCountry" => "BD"
-                ],
-                "deliveryTime" => [
-                    "@type" => "ShippingDeliveryTime",
-                    "handlingTime" => [
-                        "@type" => "QuantitativeValue",
-                        "minValue" => 0,
-                        "maxValue" => 1,
-                        "unitCode" => "DAY"
-                    ],
-                    "transitTime" => [
-                        "@type" => "QuantitativeValue",
-                        "minValue" => 1,
-                        "maxValue" => 3,
-                        "unitCode" => "DAY"
-                    ]
-                ]
+                'seo-ld-breadcrumb' => seoBreadcrumb($crumbs),
             ],
-            "hasMerchantReturnPolicy" => [
-                "@type" => "MerchantReturnPolicy",
-                "applicableCountry" => "BD",
-                "returnPolicyCategory" => "https://schema.org/MerchantReturnFiniteReturnWindow",
-                "merchantReturnDays" => 7,
-                "returnMethod" => "https://schema.org/ReturnByMail",
-                "returnFees" => "https://schema.org/FreeReturn"
-            ]
-        ]
-    ];
+        ]);
 
-    if ($reviewCount > 0 && $rating > 0) {
-        $productSchema["aggregateRating"] = [
-            "@type" => "AggregateRating",
-            "ratingValue" => $rating,
-            "reviewCount" => $reviewCount
-        ];
+        $chips = '';
+        foreach (seoSubcategories($publishedProducts, $category) as $s) {
+            $chips .= '<a href="' . seoEsc(seoCategoryPath($category, $s)) . '">' . seoEsc($s) . '</a>';
+        }
+        $h1 = $sub !== null ? "{$sub} – {$category}" : $category;
+        $inner = '<nav aria-label="Breadcrumb"><a href="/">' . SEO_SITE_NAME . '</a> / ' . ($sub !== null ? '<a href="' . seoEsc(seoCategoryPath($category)) . '">' . seoEsc($category) . '</a> / ' : '') . '</nav>'
+            . '<h1>' . seoEsc($h1) . ' Price in Bangladesh</h1>'
+            . ($chips !== '' ? '<div class="chips">' . $chips . '</div>' : '')
+            . seoSsrCards($items, $productPathFn, 40);
+        $html = seoInjectSsr($html, $inner);
     }
 
-    // BreadcrumbList Schema JSON-LD
-    $breadcrumbItems = [
-        [
-            "@type" => "ListItem",
-            "position" => 1,
-            "name" => "Home",
-            "item" => "$baseUrl/"
-        ]
-    ];
-    if (!empty($category)) {
-        $breadcrumbItems[] = [
-            "@type" => "ListItem",
-            "position" => 2,
-            "name" => $category,
-            "item" => "$baseUrl/category/$catSlug"
-        ];
-    }
-    $breadcrumbItems[] = [
-        "@type" => "ListItem",
-        "position" => count($breadcrumbItems) + 1,
-        "name" => $name,
-        "item" => $canonicalUrl
-    ];
-
-    $productBreadcrumbSchema = [
-        "@context" => "https://schema.org",
-        "@type" => "BreadcrumbList",
-        "itemListElement" => $breadcrumbItems
-    ];
-
-    // Meta tags injection
-    $html = preg_replace('/<title>.*?<\/title>/is', "<title>{$nameEscaped} - i SHOP BD</title>", $html);
-    $html = preg_replace('/<meta name="description" content="[^"]*"\s*\/?>/i', "<meta name=\"description\" content=\"{$descEscaped}\" />", $html);
-
-    // Canonical URL
-    if (strpos($html, '<!-- CANONICAL_URL_PLACEHOLDER -->') !== false) {
-        $html = str_replace('<!-- CANONICAL_URL_PLACEHOLDER -->', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-    } else {
-        $html = preg_replace('/<link rel="canonical" href="[^"]*"\s*\/?>/i', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-    }
-
-    // Open Graph
-    $html = preg_replace('/<meta property="og:type" content="[^"]*"\s*\/?>/i', "<meta property=\"og:type\" content=\"product\" />", $html);
-    $html = preg_replace('/<meta property="og:url" content="[^"]*"\s*\/?>/i', "<meta property=\"og:url\" content=\"{$urlEscaped}\" />", $html);
-    $html = preg_replace('/<meta property="og:title" content="[^"]*"\s*\/?>/i', "<meta property=\"og:title\" content=\"{$nameEscaped}\" />", $html);
-    $html = preg_replace('/<meta property="og:description" content="[^"]*"\s*\/?>/i', "<meta property=\"og:description\" content=\"{$descEscaped}\" />", $html);
-    $html = preg_replace('/<meta property="og:image" content="[^"]*"\s*\/?>/i', "<meta property=\"og:image\" content=\"{$imgEscaped}\" /><meta property=\"og:image:secure_url\" content=\"{$imgEscaped}\" /><meta property=\"og:image:alt\" content=\"{$nameEscaped}\" /><meta property=\"product:price:amount\" content=\"{$price}\" /><meta property=\"product:price:currency\" content=\"BDT\" />", $html);
-
-    // Twitter
-    $html = preg_replace('/<meta (?:name|property)="twitter:url" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:url\" content=\"{$urlEscaped}\" />", $html);
-    $html = preg_replace('/<meta (?:name|property)="twitter:title" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:title\" content=\"{$nameEscaped}\" />", $html);
-    $html = preg_replace('/<meta (?:name|property)="twitter:description" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:description\" content=\"{$descEscaped}\" />", $html);
-    $html = preg_replace('/<meta (?:name|property)="twitter:image" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:image\" content=\"{$imgEscaped}\" />", $html);
-
-    // Inject Schemas
-    $schemasHtml = '<script type="application/ld+json">' . json_encode($productSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' .
-                   '<script type="application/ld+json">' . json_encode($productBreadcrumbSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>';
-    $html = str_replace('</head>', $schemasHtml . '</head>', $html);
-
-    // Semantic H1 and Crawlable Fallback HTML
-    $catNavHtml = !empty($category) ? "<li><a href=\"/category/{$catSlug}\">{$category}</a></li>" : "";
-    $availText = $inStock ? 'ইন স্টক (In Stock)' : 'স্টক আউট (Out of Stock)';
-    $crawlerFallback = "
-      <div id=\"seo-crawler-fallback\" style=\"position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;\">
-        <nav aria-label=\"Breadcrumb\">
-          <ol>
-            <li><a href=\"/\">Home</a></li>
-            {$catNavHtml}
-            <li>{$nameEscaped}</li>
-          </ol>
-        </nav>
-        <h1>{$nameEscaped}</h1>
-        <p>{$descEscaped}</p>
-        <p>মূল্য: ৳" . number_format($price) . " BDT | ব্র্যান্ড: {$brandEscaped} | প্রাপ্যতা: {$availText}</p>
-        <img src=\"{$imgEscaped}\" alt=\"{$nameEscaped}\" />
-      </div>
-    ";
-    $html = str_replace('<div id="root">', '<div id="root">' . $crawlerFallback, $html);
+} elseif ($isOrderSuccessPage) {
+    $html = seoApplyHead($html, [
+        'title' => 'অর্ডার সম্পন্ন হয়েছে | ' . SEO_SITE_NAME, 'description' => 'আপনার অর্ডার সফলভাবে সম্পন্ন হয়েছে। ধন্যবাদ!',
+        'canonical' => SEO_SITE_URL . '/order-success', 'robots' => 'noindex,nofollow', 'ogType' => 'website', 'jsonLd' => [],
+    ]);
 
 } else {
-    // 2. Detect Category & Subcategory URL
-    $categorySlug = isset($_GET['category']) ? $_GET['category'] : (isset($_GET['c']) ? $_GET['c'] : null);
-    $subcategorySlug = isset($_GET['subcategory']) ? $_GET['subcategory'] : (isset($_GET['sub']) ? $_GET['sub'] : null);
-    if (!$categorySlug) {
-        $effectiveUri = getEffectiveRequestUri();
-        $path = parse_url($effectiveUri, PHP_URL_PATH) ?: $effectiveUri;
-        if (preg_match('~/(?:category|c)/([^/?#]+)(?:/([^/?#]+))?~i', $path, $catMatches)) {
-            $categorySlug = urldecode($catMatches[1]);
-            if (!empty($catMatches[2])) {
-                $subcategorySlug = urldecode($catMatches[2]);
-            }
+    // Home page, and any other address the app handles itself.
+    $isHome = ($pathEarly === '/' || $pathEarly === '');
+    $notFoundProduct = (bool)$productIdentifier;
+    $html = seoApplyHead($html, [
+        'title' => seoHomeTitle(),
+        'description' => seoHomeDescription($publishedProducts),
+        'canonical' => SEO_SITE_URL . '/',
+        'robots' => ($isHome && !$notFoundProduct) ? SEO_DEFAULT_ROBOTS : 'noindex,follow',
+        'ogType' => 'website',
+        'jsonLd' => [],
+    ]);
+    if ($isHome) {
+        $chips = '';
+        foreach (seoPublishedCategories($publishedProducts) as $c) {
+            $chips .= '<a href="' . seoEsc(seoCategoryPath($c)) . '">' . seoEsc($c) . '</a>';
         }
-    }
-
-    if ($categorySlug) {
-        $categorySlug = strtolower(trim($categorySlug));
-        $subcategorySlug = !empty($subcategorySlug) ? strtolower(trim($subcategorySlug)) : '';
-        $catData = [
-            "charger-fan" => [
-                "title" => "চার্জার ফ্যান ও মিনি ফ্যান দাম | Rechargeable Charger Fan Price in BD - i SHOP BD",
-                "desc" => "সেরা দামে রিচার্জেবল চার্জার ফ্যান ও পোর্টেবল মিনি ফ্যান কিনুন i SHOP BD থেকে। হাই স্পিড ব্যাটারি ব্যাকআপ, ওয়ারেন্টি এবং দ্রুত হোম ডেলিভারি!",
-                "kw" => "চার্জার ফ্যান, রিচার্জেবল ফ্যান, মিনি ফ্যান, portable fan, mini charger fan, hand fan, fan price in bangladesh, rechargeable table fan, ishopbd"
-            ],
-            "power-bank" => [
-                "title" => "পাওয়ার ব্যাংক এর দাম | Best Power Bank Price in Bangladesh - i SHOP BD",
-                "desc" => "সেরা দামে আসল পাওয়ার ব্যাংক (Power Bank) কিনুন i SHOP BD থেকে। 10000mAh, 20000mAh, 30000mAh ফাস্ট চার্জিং ও অফিসিয়াল ওয়ারেন্টি সহ হোম ডেলিভারি!",
-                "kw" => "পাওয়ার ব্যাংক, power bank price in bd, 10000mah power bank, 20000mah fast charging power bank, portable mobile charger, reman, joyroom, anker, ishopbd"
-            ],
-            "smart-watch" => [
-                "title" => "স্মার্ট ওয়াচ এর দাম | Smart Watch Price in Bangladesh - i SHOP BD",
-                "desc" => "লেটেস্ট মডেলের স্মার্ট ওয়াচ কিনুন i SHOP BD থেকে। অ্যামোলেড ডিসপ্লে, ব্লুটুথ কলিং, হার্টরেট মনিটর ও দীর্ঘস্থায়ী ব্যাটারি ব্যাকআপ সহ সেরা অফার!",
-                "kw" => "স্মার্ট ওয়াচ, smart watch price in bd, calling smart watch, amoled smartwatch, smartwatch bd, ishopbd"
-            ],
-            "headphone" => [
-                "title" => "হেডফোন ও ব্লুটুথ ইয়ারবাডস | Headphone & Earbuds Price in BD - i SHOP BD",
-                "desc" => "সেরা সাউন্ড কোয়ালিটি এবং অ্যাক্টিভ নয়েজ ক্যান্সেলেশন (ANC) হেডফোন ও ওয়্যারলেস ইয়ারবাডস কিনুন i SHOP BD থেকে। আকর্ষণীয় ডিসকাউন্ট ও ফাস্ট ডেলিভারি!",
-                "kw" => "হেডফোন, ব্লুটুথ ইয়ারবাডস, earbuds price in bd, wireless headphones, tws airpods bd, gaming headphone, ishopbd"
-            ],
-            "mobile-accessories" => [
-                "title" => "মোবাইল এক্সেসরিজ ও গ্যাজেট | Mobile Accessories in Bangladesh - i SHOP BD",
-                "desc" => "সব ধরনের প্রিমিয়াম মোবাইল এক্সেসরিজ, ফাস্ট চার্জার, কেবল, ট্রাইপড ও ট্রিপড মাউন্ট কিনুন সেরা মূল্যে i SHOP BD থেকে।",
-                "kw" => "মোবাইল এক্সেসরিজ, mobile accessories bd, fast charger, usb cable, phone tripod, microphone, ishopbd"
-            ],
-            "lifestyle-watch" => [
-                "title" => "লাইফস্টাইল গ্যাজেট ও ঘড়ি | Lifestyle & Watches in BD - i SHOP BD",
-                "desc" => "আধুনিক লাইফস্টাইল গ্যাজেট ও ট্রেন্ডি ঘড়ির বিশাল কালেকশন কিনুন i SHOP BD থেকে। দ্রুত হোম ডেলিভারি ও শতভাগ আসল পণ্যের গ্যারান্টি।",
-                "kw" => "লাইফস্টাইল গ্যাজেট, ঘড়ি, watches in bd, lifestyle accessories, ishopbd"
-            ]
-        ];
-
-        $formattedName = ucwords(str_replace('-', ' ', $categorySlug));
-        $formattedSubName = !empty($subcategorySlug) ? ucwords(str_replace('-', ' ', $subcategorySlug)) : '';
-        if (!empty($subcategorySlug)) {
-            $catTitle = "{$formattedSubName} - {$formattedName} Price in Bangladesh - i SHOP BD";
-            $catDesc = "Buy authentic {$formattedSubName} from {$formattedName} category online at best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!";
-            $catKw = "{$subcategorySlug}, {$categorySlug}, buy {$subcategorySlug} bd, ishopbd";
-            $catUrl = "$baseUrl/category/$categorySlug/$subcategorySlug";
-        } else {
-            $catTitle = isset($catData[$categorySlug]['title']) ? $catData[$categorySlug]['title'] : "{$formattedName} Price in Bangladesh - i SHOP BD";
-            $catDesc = isset($catData[$categorySlug]['desc']) ? $catData[$categorySlug]['desc'] : "Buy authentic {$formattedName} online at the best price in Bangladesh from i SHOP BD. Fast home delivery and warranty!";
-            $catKw = isset($catData[$categorySlug]['kw']) ? $catData[$categorySlug]['kw'] : "{$categorySlug}, buy {$categorySlug} bd, ishopbd";
-            $catUrl = "$baseUrl/category/$categorySlug";
-        }
-
-        $titleEscaped = htmlspecialchars($catTitle, ENT_QUOTES, 'UTF-8');
-        $descEscaped = htmlspecialchars($catDesc, ENT_QUOTES, 'UTF-8');
-        $urlEscaped = htmlspecialchars($catUrl, ENT_QUOTES, 'UTF-8');
-        $imgEscaped = htmlspecialchars($defaultOgImage, ENT_QUOTES, 'UTF-8');
-
-        // Meta tags
-        $html = preg_replace('/<title>.*?<\/title>/is', "<title>{$titleEscaped}</title>", $html);
-        $html = preg_replace('/<meta name="description" content="[^"]*"\s*\/?>/i', "<meta name=\"description\" content=\"{$descEscaped}\" />", $html);
-        $html = preg_replace('/<meta name="keywords" content="[^"]*"\s*\/?>/i', "<meta name=\"keywords\" content=\"{$catKw}\" />", $html);
-
-        // Canonical URL
-        if (strpos($html, '<!-- CANONICAL_URL_PLACEHOLDER -->') !== false) {
-            $html = str_replace('<!-- CANONICAL_URL_PLACEHOLDER -->', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-        } else {
-            $html = preg_replace('/<link rel="canonical" href="[^"]*"\s*\/?>/i', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-        }
-
-        // Open Graph
-        $html = preg_replace('/<meta property="og:url" content="[^"]*"\s*\/?>/i', "<meta property=\"og:url\" content=\"{$urlEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:title" content="[^"]*"\s*\/?>/i', "<meta property=\"og:title\" content=\"{$titleEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:description" content="[^"]*"\s*\/?>/i', "<meta property=\"og:description\" content=\"{$descEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:image" content="[^"]*"\s*\/?>/i', "<meta property=\"og:image\" content=\"{$imgEscaped}\" /><meta property=\"og:image:secure_url\" content=\"{$imgEscaped}\" />", $html);
-
-        // Twitter
-        $html = preg_replace('/<meta (?:name|property)="twitter:url" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:url\" content=\"{$urlEscaped}\" />", $html);
-        $html = preg_replace('/<meta (?:name|property)="twitter:title" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:title\" content=\"{$titleEscaped}\" />", $html);
-        $html = preg_replace('/<meta (?:name|property)="twitter:description" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:description\" content=\"{$descEscaped}\" />", $html);
-        $html = preg_replace('/<meta (?:name|property)="twitter:image" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:image\" content=\"{$imgEscaped}\" />", $html);
-
-        // Filter Category & Subcategory Products
-        $categoryProducts = [];
-        foreach ($allProducts as $prod) {
-            if (!empty($prod['deleted']) || (isset($prod['isPublished']) && $prod['isPublished'] === false)) continue;
-            $pCat = strtolower(getCategorySlug($prod['category'] ?? ''));
-            $pSub = strtolower(getCategorySlug($prod['subcategory'] ?? ''));
-            $catMatches = ($pCat === $categorySlug || strpos($pCat, $categorySlug) !== false || strpos($categorySlug, $pCat) !== false);
-            if ($catMatches) {
-                if (!empty($subcategorySlug)) {
-                    if ($pSub === $subcategorySlug || strpos($pSub, $subcategorySlug) !== false || strpos($subcategorySlug, $pSub) !== false) {
-                        $categoryProducts[] = $prod;
-                    }
-                } else {
-                    $categoryProducts[] = $prod;
-                }
-            }
-        }
-
-        // Category Schemas
-        $categorySchema = [
-            "@context" => "https://schema.org",
-            "@type" => "CollectionPage",
-            "name" => $catTitle,
-            "description" => $catDesc,
-            "url" => $catUrl,
-            "image" => $defaultOgImage,
-            "mainEntity" => [
-                "@type" => "ItemList",
-                "numberOfItems" => count($categoryProducts),
-                "itemListElement" => array_map(function($p, $idx) use ($baseUrl) {
-                    $pSlug = getProductSlug($p);
-                    $pId = $p['id'] ?? '';
-                    $pImg = !empty($p['image']) && strpos($p['image'], 'data:') === false ? $p['image'] : "$baseUrl/api/product-image/{$pId}";
-                    if (strpos($pImg, 'http') !== 0) $pImg = "$baseUrl$pImg";
-                    return [
-                        "@type" => "ListItem",
-                        "position" => $idx + 1,
-                        "url" => "$baseUrl/p/{$pSlug}",
-                        "name" => $p['name'] ?? '',
-                        "image" => $pImg
-                    ];
-                }, $categoryProducts, array_keys($categoryProducts))
-            ]
-        ];
-
-        $catBreadcrumbSchema = [
-            "@context" => "https://schema.org",
-            "@type" => "BreadcrumbList",
-            "itemListElement" => [
-                [
-                    "@type" => "ListItem",
-                    "position" => 1,
-                    "name" => "Home",
-                    "item" => "$baseUrl/"
-                ],
-                [
-                    "@type" => "ListItem",
-                    "position" => 2,
-                    "name" => $formattedName,
-                    "item" => $catUrl
-                ]
-            ]
-        ];
-
-        $schemasHtml = '<script type="application/ld+json">' . json_encode($categorySchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>' .
-                       '<script type="application/ld+json">' . json_encode($catBreadcrumbSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '</script>';
-        $html = str_replace('</head>', $schemasHtml . '</head>', $html);
-
-        // Category Crawlable Fallback HTML
-        $catFallback = "<div id=\"seo-category-fallback\" style=\"position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;\">";
-        $catFallback .= "<nav aria-label=\"Breadcrumb\"><ol><li><a href=\"/\">Home</a></li><li>{$formattedName}</li></ol></nav>";
-        $catFallback .= "<h1>{$titleEscaped}</h1><p>{$descEscaped}</p><ul>";
-        foreach (array_slice($categoryProducts, 0, 25) as $cp) {
-            $cpName = htmlspecialchars($cp['name'] ?? '', ENT_QUOTES, 'UTF-8');
-            $cpPrice = $cp['price'] ?? 0;
-            $cpSlug = getProductSlug($cp);
-            $catFallback .= "<li><a href=\"/p/{$cpSlug}\">{$cpName} - ৳" . number_format($cpPrice) . "</a></li>";
-        }
-        $catFallback .= "</ul></div>";
-        $html = str_replace('<div id="root">', '<div id="root">' . $catFallback, $html);
-
-    } else if ($isOrderSuccessPage) {
-        // 2b. /order-success — Google Ads Conversion Tracking Page
-        $successUrl = "$baseUrl/order-success";
-        $successTitle = "অর্ডার সম্পন্ন হয়েছে | i SHOP BD";
-        $successDesc  = "আপনার অর্ডার সফলভাবে সম্পন্ন হয়েছে। ধন্যবাদ! | i SHOP BD Bangladesh";
-        $urlEscaped   = htmlspecialchars($successUrl, ENT_QUOTES, 'UTF-8');
-        $titleEscaped = htmlspecialchars($successTitle, ENT_QUOTES, 'UTF-8');
-        $descEscaped  = htmlspecialchars($successDesc, ENT_QUOTES, 'UTF-8');
-        $imgEscaped   = htmlspecialchars($defaultOgImage, ENT_QUOTES, 'UTF-8');
-
-        $html = preg_replace('/<title>.*?<\/title>/is', "<title>{$titleEscaped}</title>", $html);
-        $html = preg_replace('/<meta name="description" content="[^"]*"\s*\/?>/i', "<meta name=\"description\" content=\"{$descEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:url" content="[^"]*"\s*\/?>/i', "<meta property=\"og:url\" content=\"{$urlEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:title" content="[^"]*"\s*\/?>/i', "<meta property=\"og:title\" content=\"{$titleEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:description" content="[^"]*"\s*\/?>/i', "<meta property=\"og:description\" content=\"{$descEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:image" content="[^"]*"\s*\/?>/i', "<meta property=\"og:image\" content=\"{$imgEscaped}\" /><meta property=\"og:image:secure_url\" content=\"{$imgEscaped}\" />", $html);
-        if (strpos($html, '<!-- CANONICAL_URL_PLACEHOLDER -->') !== false) {
-            $html = str_replace('<!-- CANONICAL_URL_PLACEHOLDER -->', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-        } else {
-            $html = preg_replace('/<link rel="canonical" href="[^"]*"\s*\/?>/i', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-        }
-        // noindex so Google doesn't index this page (it's only for conversion tracking)
-        $html = str_replace('</head>', "<meta name=\"robots\" content=\"noindex,nofollow\" /></head>", $html);
-
-    } else {
-        // 3. Homepage Default
-        $currentUrl = "$baseUrl/";
-        $urlEscaped = htmlspecialchars($currentUrl, ENT_QUOTES, 'UTF-8');
-        $imgEscaped = htmlspecialchars($defaultOgImage, ENT_QUOTES, 'UTF-8');
-
-        if (strpos($html, '<!-- CANONICAL_URL_PLACEHOLDER -->') !== false) {
-            $html = str_replace('<!-- CANONICAL_URL_PLACEHOLDER -->', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-        } else {
-            $html = preg_replace('/<link rel="canonical" href="[^"]*"\s*\/?>/i', "<link rel=\"canonical\" href=\"{$urlEscaped}\" />", $html);
-        }
-
-        $html = preg_replace('/<meta property="og:url" content="[^"]*"\s*\/?>/i', "<meta property=\"og:url\" content=\"{$urlEscaped}\" />", $html);
-        $html = preg_replace('/<meta property="og:image" content="[^"]*"\s*\/?>/i', "<meta property=\"og:image\" content=\"{$imgEscaped}\" /><meta property=\"og:image:secure_url\" content=\"{$imgEscaped}\" />", $html);
-        $html = preg_replace('/<meta (?:name|property)="twitter:image" content="[^"]*"\s*\/?>/i', "<meta name=\"twitter:image\" content=\"{$imgEscaped}\" />", $html);
-
-        // Home Crawlable Fallback
-        $homeCrawlerFallback = '
-      <div id="seo-crawler-fallback" style="position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden;">
-        <h1>i SHOP BD (আই শপ বিডি) - Online Gadgets, Winter Koti & Lifestyle Store in Bangladesh</h1>
-        <p>i SHOP BD (ishopbd.com) হলো বাংলাদেশের বিশ্বস্ত অনলাইন গ্যাজেট, শীতের কোটি (Winter Koti / Waistcoat) এবং লাইফস্টাইল ই-কমার্স শপ। সেরা মূল্যে Wireless Microphone (DJI, Boya, Hollyland, Ulanzi), Fast Charging Power Bank, Rechargeable Fan, Smart Watch, Headphone ও প্রিমিয়াম ফ্যাশনেবল শীতের কোটি কিনুন ক্যাশ অন হোম ডেলিভারিতে।</p>
-        <p>অফিসিয়াল ওয়েবসাইট: https://ishopbd.com | ব্র্যান্ড: i SHOP BD (ishopbd) | Catalog Feed: https://ishopbd.com/llms.txt</p>
-      </div>
-';
-        $html = str_replace('</body>', $homeCrawlerFallback . '</body>', $html);
+        $inner = '<h1>' . SEO_SITE_NAME . ' (আই শপ বিডি) – Online Shopping in Bangladesh</h1>'
+            . '<div class="chips">' . $chips . '</div>'
+            . seoSsrCards($publishedProducts, $productPathFn, 24);
+        $html = seoInjectSsr($html, $inner);
     }
 }
 

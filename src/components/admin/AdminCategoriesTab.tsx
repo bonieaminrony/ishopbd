@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { LayoutGrid, Share2, X } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Check, Edit3, LayoutGrid, Link2, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 import { db } from '../../lib/firebase';
 
 export interface AdminCategoriesTabProps {
@@ -11,7 +12,11 @@ export interface AdminCategoriesTabProps {
   copyCategoryLink: (name: string) => void;
   deleteCategory: (id: string, name: string) => Promise<void> | void;
   deletingCatId: string | null;
+  /** Used only to show how many products are in each category / subcategory. */
+  products?: any[];
 }
+
+const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
 export default function AdminCategoriesTab({
   categories,
@@ -21,182 +26,263 @@ export default function AdminCategoriesTab({
   copyCategoryLink,
   deleteCategory,
   deletingCatId,
+  products = [],
 }: AdminCategoriesTabProps) {
   const [newSubcategoryInputs, setNewSubcategoryInputs] = useState<Record<string, string>>({});
+  const [busySub, setBusySub] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const formRef = useRef<HTMLFormElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Product counts per category and per "category|subcategory".
+  const counts = useMemo(() => {
+    const byCat = new Map<string, number>();
+    const bySub = new Map<string, number>();
+    for (const p of products) {
+      if (!p || p.deleted) continue;
+      const c = norm(p.category);
+      if (!c) continue;
+      byCat.set(c, (byCat.get(c) || 0) + 1);
+      const s = norm(p.subcategory);
+      if (s) bySub.set(`${c}|${s}`, (bySub.get(`${c}|${s}`) || 0) + 1);
+    }
+    return { byCat, bySub };
+  }, [products]);
+
+  const visibleCategories = useMemo(() => {
+    const q = norm(query);
+    if (!q) return categories;
+    return categories.filter(
+      (c) => norm(c.name).includes(q) || (c.subcategories || []).some((s: string) => norm(s).includes(q)),
+    );
+  }, [categories, query]);
+
+  const isEditing = Boolean(editingCategory?.id);
+
+  const startEdit = (cat: any) => {
+    setEditingCategory(cat);
+    // The form is at the top; bring it into view (on phones it is far away) and focus it.
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameInputRef.current?.focus();
+    });
+  };
+
+  const addSubcategory = async (cat: any) => {
+    const subName = (newSubcategoryInputs[cat.id] || '').trim();
+    if (!subName) return;
+    if ((cat.subcategories || []).some((s: string) => norm(s) === norm(subName))) {
+      toast.error(`"${subName}" আগে থেকেই আছে`);
+      return;
+    }
+    setBusySub(`${cat.id}|+`);
+    try {
+      await updateDoc(doc(db, 'categories', cat.id), { subcategories: arrayUnion(subName) });
+      setNewSubcategoryInputs((prev) => ({ ...prev, [cat.id]: '' }));
+    } catch (err) {
+      console.error('Add subcategory failed', err);
+      toast.error('সাবক্যাটাগরি যোগ হয়নি, আবার চেষ্টা করুন');
+    } finally {
+      setBusySub(null);
+    }
+  };
+
+  const removeSubcategory = async (cat: any, sub: string) => {
+    const inUse = counts.bySub.get(`${norm(cat.name)}|${norm(sub)}`) || 0;
+    const message = inUse
+      ? `"${sub}" সাবক্যাটাগরিতে ${inUse}টি প্রোডাক্ট আছে। সরালে প্রোডাক্টগুলো থাকবে, শুধু এই সাবক্যাটাগরির তালিকা থেকে বাদ যাবে। সরাবেন?`
+      : `"${sub}" সাবক্যাটাগরি সরাবেন?`;
+    if (!window.confirm(message)) return;
+    setBusySub(`${cat.id}|${sub}`);
+    try {
+      await updateDoc(doc(db, 'categories', cat.id), { subcategories: arrayRemove(sub) });
+    } catch (err) {
+      console.error('Remove subcategory failed', err);
+      toast.error('সাবক্যাটাগরি সরানো যায়নি, আবার চেষ্টা করুন');
+    } finally {
+      setBusySub(null);
+    }
+  };
+
+  const iconBtn =
+    'w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors cursor-pointer';
 
   return (
-    <div className="w-full space-y-6 font-sans">
-      {/* Category Header & Add Form */}
-      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-red-50 text-primary rounded-2xl">
-              <LayoutGrid size={24} />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-secondary">Categories &amp; Subcategories</h3>
-              <p className="text-xs text-gray-500 font-medium">Create and organize product categories and subcategories</p>
-            </div>
+    <div className="w-full space-y-4 font-sans">
+      {/* Title, add / edit form */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-secondary flex items-center gap-2">
+              <LayoutGrid size={20} className="text-primary shrink-0" />
+              Categories
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {categories.length} categories · {categories.reduce((n, c) => n + (c.subcategories?.length || 0), 0)} subcategories
+            </p>
           </div>
-          <div className="px-3.5 py-1.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold self-start sm:self-auto">
-            Total: {categories.length} Categories
-          </div>
+          {categories.length > 6 && (
+            <div className="relative w-40 sm:w-56">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search..."
+                className="w-full h-9 bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+            </div>
+          )}
         </div>
 
-        <form onSubmit={saveCategory} className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            required
-            value={editingCategory?.name || ''}
-            onChange={(e) =>
-              setEditingCategory({
-                ...editingCategory,
-                name: e.target.value,
-              })
-            }
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-bold text-sm text-gray-900 transition-all"
-            placeholder="e.g. Smart Watch, Winter Wear..."
-          />
+        <form ref={formRef} onSubmit={saveCategory} className="space-y-1.5">
+          {isEditing && (
+            <p className="text-[11px] font-bold text-primary">Editing: {categories.find((c) => c.id === editingCategory.id)?.name}</p>
+          )}
           <div className="flex gap-2">
+            <input
+              ref={nameInputRef}
+              type="text"
+              required
+              value={editingCategory?.name || ''}
+              onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+              className="flex-1 min-w-0 h-11 bg-gray-50 border border-gray-200 rounded-xl px-3.5 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary font-semibold text-sm text-gray-900 transition-all"
+              placeholder={isEditing ? 'Category name' : 'New category name'}
+            />
             {editingCategory && (
               <button
                 type="button"
                 onClick={() => setEditingCategory(null)}
-                className="px-5 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-100 transition-all cursor-pointer"
+                title="Cancel"
+                className="h-11 px-3 sm:px-4 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-200 transition-all cursor-pointer"
               >
-                Cancel
+                <span className="hidden sm:inline">Cancel</span>
+                <X size={16} className="sm:hidden" />
               </button>
             )}
-            <button className="bg-primary text-white font-bold px-8 py-3 rounded-xl shadow-md shadow-primary/20 hover:bg-red-700 transition-all active:scale-95 text-sm whitespace-nowrap cursor-pointer">
-              {editingCategory?.id ? 'Update Category' : 'Add Category'}
+            <button className="h-11 px-4 sm:px-6 rounded-xl bg-primary text-white font-bold text-sm shadow-sm hover:opacity-90 transition-all active:scale-95 whitespace-nowrap cursor-pointer flex items-center gap-1.5">
+              {isEditing ? <Check size={16} /> : <Plus size={16} />}
+              {isEditing ? 'Update' : 'Add'}
+              <span className="hidden sm:inline">{isEditing ? '' : ' Category'}</span>
             </button>
           </div>
         </form>
       </div>
 
-      {/* Category Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {categories.map((cat) => {
-          const subcats = cat.subcategories || [];
-          return (
-            <div
-              key={cat.id}
-              className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between gap-4 hover:shadow-md transition-shadow"
-            >
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0"></span>
-                    <p className="font-bold text-secondary text-base">{cat.name}</p>
+      {/* Category cards */}
+      {visibleCategories.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 px-6 py-14 text-center text-gray-400 text-sm font-semibold">
+          {categories.length === 0 ? 'No categories yet. Add the first one above.' : 'No category matches your search.'}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4">
+          {visibleCategories.map((cat) => {
+            const subcats: string[] = cat.subcategories || [];
+            const catCount = counts.byCat.get(norm(cat.name)) || 0;
+            const isDeleting = deletingCatId === String(cat.id);
+            const isBeingEdited = editingCategory?.id === cat.id;
+            return (
+              <div
+                key={cat.id}
+                className={`bg-white rounded-2xl border flex flex-col ${isBeingEdited ? 'border-primary/50' : 'border-gray-100'}`}
+              >
+                {/* Name, product count, actions */}
+                <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-3 border-b border-gray-100">
+                  <div className="min-w-0">
+                    <p className="font-bold text-secondary text-[15px] truncate">{cat.name}</p>
+                    <p className="text-[11px] text-gray-500 font-semibold">
+                      {catCount} {catCount === 1 ? 'product' : 'products'}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => copyCategoryLink(cat.name)}
-                      className="px-2.5 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all border border-blue-100 flex items-center gap-1 cursor-pointer"
-                      title="Action"
-                    >
-                      <Share2 size={12} /> Link
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button type="button" onClick={() => copyCategoryLink(cat.name)} className={iconBtn} title="Copy category link">
+                      <Link2 size={16} />
+                    </button>
+                    <button type="button" onClick={() => startEdit(cat)} className={iconBtn} title="Rename category">
+                      <Edit3 size={15} />
                     </button>
                     <button
-                      onClick={() => setEditingCategory(cat)}
-                      className="text-xs font-bold text-gray-500 hover:text-primary transition-colors px-2.5 py-1.5 hover:bg-gray-100 rounded-lg cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                    <button
+                      type="button"
                       onClick={async (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         await deleteCategory(cat.id, cat.name);
                       }}
-                      disabled={deletingCatId === String(cat.id)}
-                      className={`text-xs font-bold transition-all px-2.5 py-1.5 rounded-lg cursor-pointer ${
-                        deletingCatId === String(cat.id)
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'text-red-500 hover:bg-red-50 active:scale-95 border border-transparent hover:border-red-100'
-                      }`}
+                      disabled={isDeleting}
+                      title="Delete category"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {deletingCatId === String(cat.id) ? 'Deleting...' : 'Delete'}
+                      {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                     </button>
                   </div>
                 </div>
 
-                {/* Subcategories Management */}
-                <div className="mt-4">
-                  <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
-                    Subcategories ({subcats.length})
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
-                    {subcats.length === 0 ? (
-                      <span className="text-xs text-gray-400 italic">No subcategories defined</span>
-                    ) : (
-                      subcats.map((sub: string, sIdx: number) => (
-                        <span
-                          key={sIdx}
-                          className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200/60 text-gray-700 px-3 py-1 rounded-full text-xs font-bold shadow-xs"
-                        >
-                          {sub}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await updateDoc(doc(db, 'categories', cat.id), {
-                                subcategories: arrayRemove(sub),
-                              });
-                            }}
-                            className="text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                {/* Subcategories */}
+                <div className="px-4 py-3 flex-1">
+                  {subcats.length === 0 ? (
+                    <p className="text-xs text-gray-400">No subcategories</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {subcats.map((sub) => {
+                        const subCount = counts.bySub.get(`${norm(cat.name)}|${norm(sub)}`) || 0;
+                        const busy = busySub === `${cat.id}|${sub}`;
+                        return (
+                          <span
+                            key={sub}
+                            className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-lg bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700"
                           >
-                            <X size={12} />
-                          </button>
-                        </span>
-                      ))
-                    )}
-                  </div>
+                            {sub}
+                            <span className="text-[10px] text-gray-400 tabular-nums">{subCount}</span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => removeSubcategory(cat, sub)}
+                              title={`Remove "${sub}"`}
+                              className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer"
+                            >
+                              {busy ? <Loader2 size={11} className="animate-spin" /> : <X size={12} />}
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add subcategory */}
+                <div className="flex gap-2 px-4 pb-4">
+                  <input
+                    type="text"
+                    value={newSubcategoryInputs[cat.id] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewSubcategoryInputs((prev) => ({ ...prev, [cat.id]: val }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSubcategory(cat);
+                      }
+                    }}
+                    placeholder="Add subcategory..."
+                    aria-label={`Add subcategory to ${cat.name}`}
+                    className="flex-1 min-w-0 h-9 bg-gray-50 border border-gray-200 rounded-lg px-3 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  />
+                  <button
+                    type="button"
+                    disabled={!(newSubcategoryInputs[cat.id] || '').trim() || busySub === `${cat.id}|+`}
+                    onClick={() => addSubcategory(cat)}
+                    title="Add subcategory"
+                    className="h-9 w-9 shrink-0 rounded-lg bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 flex items-center justify-center transition-colors disabled:opacity-40 cursor-pointer"
+                  >
+                    {busySub === `${cat.id}|+` ? <Loader2 size={15} className="animate-spin" /> : <Plus size={16} />}
+                  </button>
                 </div>
               </div>
-
-              <div className="flex gap-2 pt-2 border-t border-gray-50">
-                <input
-                  type="text"
-                  value={newSubcategoryInputs[cat.id] || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewSubcategoryInputs((prev) => ({ ...prev, [cat.id]: val }));
-                  }}
-                  placeholder="Add subcategory name..."
-                  className="flex-1 bg-gray-50/70 border border-gray-200 transition-colors focus:border-primary focus:bg-white text-xs font-bold px-3 py-2 rounded-xl outline-none"
-                  onKeyDown={async (e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const subName = (newSubcategoryInputs[cat.id] || '').trim();
-                      if (subName) {
-                        await updateDoc(doc(db, 'categories', cat.id), {
-                          subcategories: arrayUnion(subName),
-                        });
-                        setNewSubcategoryInputs((prev) => ({ ...prev, [cat.id]: '' }));
-                      }
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const subName = (newSubcategoryInputs[cat.id] || '').trim();
-                    if (subName) {
-                      await updateDoc(doc(db, 'categories', cat.id), {
-                        subcategories: arrayUnion(subName),
-                      });
-                      setNewSubcategoryInputs((prev) => ({ ...prev, [cat.id]: '' }));
-                    }
-                  }}
-                  className="bg-primary hover:brightness-105 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm shadow-primary/10 active:scale-95 cursor-pointer whitespace-nowrap"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

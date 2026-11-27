@@ -341,12 +341,17 @@ function steadfastFetchLiveAndCache($phone, $apiKey, $secretKey) {
     ];
 }
 
-$cacheTtlSeconds = 24 * 60 * 60;
+// A checked report is kept until the admin presses Check / Refresh again (?refresh=1).
+// It no longer expires after 24 hours: every expiry spent the Steadfast search limit.
+$cacheTtlSeconds = 10 * 365 * 24 * 60 * 60;
 
 if ($isBatchRequest) {
     $body = json_decode(file_get_contents('php://input'), true) ?: [];
     $rawPhones = is_array($body['phones'] ?? null) ? $body['phones'] : [];
     $forceRefresh = !empty($body['forceRefresh']);
+    // cacheOnly: the order list loading saved reports. Never call Steadfast for it; a live check
+    // happens only when the admin presses Check / Refresh on one customer.
+    $cacheOnly = !empty($body['cacheOnly']);
 
     $uniquePhones = [];
     foreach ($rawPhones as $rp) {
@@ -392,7 +397,7 @@ if ($isBatchRequest) {
 
     $rateLimited = steadfastGetCooldownRemaining() > 0;
     $maxLiveFetch = 4;
-    if (!$rateLimited && !empty($uncachedPhones)) {
+    if (!$cacheOnly && !$rateLimited && !empty($uncachedPhones)) {
         list($apiKey, $secretKey) = steadfastResolveCredentials();
         if ($apiKey === '' || $secretKey === '') {
             foreach ($uncachedPhones as $p) {

@@ -347,7 +347,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 md:py-8 animate-in fade-in duration-300">
+    <div className="container mx-auto px-4 pt-6 pb-28 md:py-8 animate-in fade-in duration-300">
       <div className="w-full">
         
         {/* Step Progress Bar & Navigation Header */}
@@ -441,30 +441,33 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                   {/* Name & Mobile (Single Name field followed immediately by Mobile Number) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Full Name</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">আপনার নাম (Full Name) *</label>
                       <input
                         required
                         type="text"
-                        placeholder="Enter your full name *"
+                        autoComplete="name"
+                        placeholder="আপনার সম্পূর্ণ নাম লিখুন *"
                         value={checkoutName || checkoutFirstName}
                         onChange={(e) => {
                           setCheckoutName(e.target.value);
                           setCheckoutFirstName(e.target.value);
                         }}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-medium"
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-base sm:text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-medium"
                       />
                     </div>
                     <div className="relative w-full">
-                      <label className="block text-xs font-bold text-secondary mb-1.5">Mobile Number</label>
+                      <label className="block text-xs font-bold text-secondary mb-1.5">মোবাইল নাম্বার (Mobile Number) *</label>
                       <input
                         required
                         type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
                         placeholder="01XXXXXXXXX *"
                         value={checkoutPhone}
                         onChange={(e) => setCheckoutPhone(e.target.value)}
                         onFocus={() => setCheckoutPhoneFocused(true)}
                         onBlur={() => setTimeout(() => setCheckoutPhoneFocused(false), 250)}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-medium"
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-base sm:text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400 font-medium"
                       />
                       {checkoutPhoneFocused && savedProfiles.filter(p => p.phone.includes(checkoutPhone)).length > 0 && (
                         <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">
@@ -496,14 +499,15 @@ export default function CheckoutModal(props: CheckoutModalProps) {
 
                   {/* Address */}
                   <div>
-                    <label className="block text-xs font-bold text-secondary mb-1.5">Full Delivery Address</label>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">সম্পূর্ণ ডেলিভারি ঠিকানা (Full Address) *</label>
                     <input
                       required
                       type="text"
-                      placeholder="House / Road / Area address *"
+                      autoComplete="street-address"
+                      placeholder="বাসা/রোড, এলাকা, থানা লিখুন *"
                       value={checkoutAddress}
                       onChange={(e) => setCheckoutAddress(e.target.value)}
-                      className="w-full bg-white border border-gray-200 rounded-lg px-3.5 py-2.5 text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
+                      className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-base sm:text-xs focus:border-primary focus:ring-2 focus:ring-primary/5 outline-none transition-all placeholder:text-gray-400"
                     />
                   </div>
 
@@ -893,7 +897,7 @@ export default function CheckoutModal(props: CheckoutModalProps) {
                     type="submit"
                     form="checkout-form"
                     disabled={isOrderProcessing}
-                    className="w-full bg-gradient-to-r from-primary to-red-600 hover:from-red-600 hover:to-primary text-white font-black text-sm sm:text-base py-3.5 sm:py-4 rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 font-sans touch-manipulation cursor-pointer"
+                    className="w-full bg-primary hover:bg-primary-dark text-white font-black text-sm sm:text-base py-3.5 sm:py-4 rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 font-sans touch-manipulation cursor-pointer"
                   >
                     {isOrderProcessing ? (
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -927,6 +931,32 @@ export default function CheckoutModal(props: CheckoutModalProps) {
           </div>
         )}
       </div>
+
+      {/* Fixed Mobile Sticky Checkout Bar */}
+      {!isOrderSuccess && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)] shadow-[0_-6px_25px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-gray-500 uppercase">সর্বমোট বিল</span>
+            <span className="text-lg font-black text-primary leading-tight">
+              ৳{checkoutItems.reduce((acc: number, curr: any) => acc + (getProductPrice(curr.product, curr.quantity) || 0) * curr.quantity, 0) + (appliedCoupon ? 0 : safeGetDeliveryCharge(checkoutItems, deliveryArea, appliedCoupon)) - (isApplyingRewardPoints ? Math.floor(availableRewardPoints / 10) : 0)}
+            </span>
+          </div>
+          <button
+            type="submit"
+            form="checkout-form"
+            disabled={isOrderProcessing}
+            className="flex-1 bg-primary hover:bg-primary-dark text-white font-black text-sm py-3.5 px-4 rounded-xl shadow-lg shadow-primary/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 touch-manipulation cursor-pointer"
+          >
+            {isOrderProcessing ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>
+                অর্ডার কনফার্ম করুন <ArrowRight size={16} className="shrink-0" />
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

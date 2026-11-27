@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import AdminOrdersTab, { AdminOrdersTabProps } from '../components/admin/AdminOrdersTab';
-import AdminIncompleteOrdersTab from '../components/admin/AdminIncompleteOrdersTab';
+import AdminIncompleteOrdersTab, { getIncompleteCustomerOrderStatus } from '../components/admin/AdminIncompleteOrdersTab';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 import { buildBulkOrderStickersHtml, renderCode39BarcodeSvg } from '../utils/adminExports';
 
@@ -137,7 +137,7 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
     );
 
     // Not Booked badge (mobile + desktop), Barishal Hub badge, and Delivered badge
-    expect(screen.getAllByText('Not Booked').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Not booked').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText(/BARISHAL HUB/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/DELIVERED/i).length).toBeGreaterThanOrEqual(1);
 
@@ -214,7 +214,8 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
     );
 
     expect(screen.getByText('Chattogram Hub')).toBeInTheDocument();
-    expect(screen.getByText('500 গ্রাম')).toBeInTheDocument();
+    // Weight is now an editable kg input (non-numeric legacy value "0.5" must parse to 0.5, never NaN)
+    expect((screen.getByLabelText('Order Weight') as HTMLInputElement).value).toBe('0.5');
     expect(screen.getByText('সর্বমোট')).toBeInTheDocument();
 
     // Closing modal resets editing state
@@ -308,7 +309,7 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
       'Total Price',
       'Customer Info',
       'Courier History',
-      'Courier',
+      'Courier & Note',
       'Status & Payment',
       'ACTIONS',
     ]);
@@ -598,5 +599,212 @@ describe('AdminOrdersTab & OrderDetailsModal UI behavior', () => {
       quantity: 2,
       unitPrice: 450,
     });
+  });
+
+  it('allows full editing of completed orders in OrderDetailsModal (name, address, product, size, color, price, discount, deliveryCharge)', () => {
+    const mockProducts = [
+      {
+        id: 'prod-1',
+        name: 'Classic Panjabi',
+        price: 1200,
+        sizes: ['M', 'L', 'XL'],
+        colors: ['White', 'Navy'],
+        image: '/panjabi.png',
+      },
+      {
+        id: 'prod-2',
+        name: 'Cotton Koti',
+        code: 'KP-02',
+        price: 800,
+        sizes: ['M', 'L'],
+        colors: ['Black'],
+        image: '/koti.png',
+      },
+    ];
+
+    const initialOrder = {
+      id: 'ord_complete_1',
+      displayId: 'ORD999',
+      customerName: 'Karim Uddin',
+      customerPhone: '01811223344',
+      address: 'Mirpur 2, Dhaka',
+      district: 'ঢাকা',
+      deliveryArea: 'inside',
+      status: 'confirmed',
+      paymentMethod: 'CASH',
+      subtotal: 1200,
+      discount: 0,
+      deliveryCharge: 70,
+      total: 1270,
+      totalWeight: 0.5,
+      items: [
+        {
+          id: 'prod-1',
+          productId: 'prod-1',
+          name: 'Classic Panjabi',
+          price: 1200,
+          quantity: 1,
+          size: 'M',
+          color: 'White',
+          product: mockProducts[0],
+        },
+      ],
+    };
+
+    const handleUpdateOrderDetails = vi.fn();
+
+    function TestWrapper() {
+      const [isEditing, setIsEditing] = React.useState(false);
+      const [editData, setEditData] = React.useState<any>({});
+      const [selected, setSelected] = React.useState<any>(initialOrder);
+      return (
+        <OrderDetailsModal
+          selectedOrderForDetails={selected}
+          setSelectedOrderForDetails={setSelected}
+          isAdminVerified={true}
+          isEditingOrder={isEditing}
+          setIsEditingOrder={setIsEditing}
+          editingOrderData={editData}
+          setEditingOrderData={setEditData}
+          handleUpdateOrderDetails={() => handleUpdateOrderDetails(editData)}
+          orderHistory={[initialOrder]}
+          setOrderHistory={vi.fn()}
+          handleUpdatePaymentMethod={vi.fn()}
+          sendToCourier={vi.fn()}
+          handleUpdateOrderStatus={vi.fn()}
+          getProductPrice={(p) => Number(p?.price || 0)}
+          products={mockProducts}
+        />
+      );
+    }
+
+    render(<TestWrapper />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'এডিট করুন' }));
+
+    fireEvent.change(screen.getByLabelText('Customer Name'), { target: { value: 'Rahim Mia' } });
+    fireEvent.change(screen.getByLabelText('Delivery Address'), { target: { value: 'Banani, Dhaka' } });
+    fireEvent.change(screen.getByLabelText('Product Name 1'), { target: { value: 'Luxury Panjabi' } });
+    fireEvent.change(screen.getByLabelText('Size 1'), { target: { value: 'XL' } });
+    fireEvent.change(screen.getByLabelText('Color 1'), { target: { value: 'Navy' } });
+    fireEvent.click(screen.getByLabelText('Increase quantity 1'));
+    fireEvent.change(screen.getByLabelText('Unit Price 1'), { target: { value: '1000' } });
+
+    // Search and add second product by code
+    const searchInput = screen.getByLabelText('Add Product Search');
+    fireEvent.focus(searchInput);
+    fireEvent.change(searchInput, { target: { value: 'KP-02' } });
+    fireEvent.mouseDown(screen.getByText('Cotton Koti'));
+
+    // Edit discount and delivery charge
+    fireEvent.change(screen.getByLabelText('Order Discount'), { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('Order Delivery Charge'), { target: { value: '100' } });
+
+    // Subtotal: 2*1000 + 1*800 = 2800; Total: 2800 - 150 + 100 = 2750
+    expect(screen.getByText('৳2750')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /পরিবর্তন সেভ করুন/i }));
+
+    expect(handleUpdateOrderDetails).toHaveBeenCalledTimes(1);
+    const saved = handleUpdateOrderDetails.mock.calls[0][0];
+    expect(saved.customerName).toBe('Rahim Mia');
+    expect(saved.address).toBe('Banani, Dhaka');
+    expect(saved.subtotal).toBe(2800);
+    expect(saved.discount).toBe(150);
+    expect(saved.deliveryCharge).toBe(100);
+    expect(saved.items).toHaveLength(2);
+    expect(saved.items[0]).toMatchObject({
+      name: 'Luxury Panjabi',
+      size: 'XL',
+      color: 'Navy',
+      quantity: 2,
+      price: 1000,
+    });
+    expect(saved.items[1]).toMatchObject({
+      name: 'Cotton Koti',
+      quantity: 1,
+      price: 800,
+    });
+
+    // Also test deleting all remaining items when editing
+    fireEvent.click(screen.getByLabelText('Remove item 2'));
+    fireEvent.click(screen.getByLabelText('Remove item 1'));
+    expect(screen.getByText(/অর্ডারে কোনো পণ্য নেই/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: /পরিবর্তন সেভ করুন/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('preserves incomplete orders for repeat customers with historical orders and normalizes Bengali phone digits', () => {
+    const now = Date.now();
+    const tenDaysAgo = now - 10 * 24 * 60 * 60 * 1000;
+
+    const newIncompleteOrder = {
+      id: 'landing_123',
+      phone: '০১৭১২৩৪৫৬৭৮',
+      updatedAt: { seconds: Math.floor(now / 1000) },
+      items: [{ id: 'prod-1', name: 'Classic Panjabi' }],
+    };
+
+    const historicalOrder = {
+      id: 'ord_old',
+      customerPhone: '01712345678',
+      status: 'delivered',
+      createdAt: { seconds: Math.floor(tenDaysAgo / 1000) },
+      items: [{ id: 'prod-1', name: 'Classic Panjabi' }],
+    };
+
+    const statusHistoricalOnly = getIncompleteCustomerOrderStatus(newIncompleteOrder, [historicalOrder]);
+    expect(statusHistoricalOnly).not.toBeNull();
+    expect(statusHistoricalOnly?.isSameProduct).toBe(false);
+
+    const recentCompletedOrder = {
+      id: 'ord_new',
+      customerPhone: '01712345678',
+      status: 'pending',
+      createdAt: { seconds: Math.floor((now + 30_000) / 1000) },
+      items: [{ id: 'prod-1', name: 'Classic Panjabi' }],
+    };
+
+    const statusWithRecent = getIncompleteCustomerOrderStatus(newIncompleteOrder, [historicalOrder, recentCompletedOrder]);
+    expect(statusWithRecent?.isSameProduct).toBe(true);
+  });
+});
+
+
+describe('Order note (shop only, not sent to the courier)', () => {
+  const base = {
+    customerPhone: '01700000009',
+    address: 'Dhaka',
+    total: 500,
+    paymentMethod: 'CASH',
+    deliveryArea: 'inside',
+    items: [{ product: { name: 'Fan', image: '/logo.png' }, quantity: 1 }],
+  };
+  it('shows the note while the order is not booked, and hides it once booked', () => {
+    const orders = [
+      { ...base, id: 'ord_wait', customerName: 'Waiting', status: 'confirmed', internalNote: 'Will take it in 7 days' },
+      {
+        ...base,
+        id: 'ord_booked',
+        customerName: 'Booked',
+        status: 'shipped',
+        internalNote: 'Old note that should be hidden',
+        courierName: 'Steadfast',
+        courierTrackingId: 'SF_1',
+        courierStatus: 'in_transit',
+        courierStatusNormalized: 'in_transit',
+        courierStatusLabel: 'In Transit',
+      },
+    ];
+    render(<AdminOrdersTab {...makeBaseOrdersProps({ orderHistory: orders, filteredOrders: orders })} />);
+    expect(screen.getAllByText('Will take it in 7 days').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Old note that should be hidden')).toBeNull();
+  });
+
+  it('offers "Add note" on orders without a note and opens an editor', () => {
+    const orders = [{ ...base, id: 'ord_new', customerName: 'New', status: 'pending' }];
+    render(<AdminOrdersTab {...makeBaseOrdersProps({ orderHistory: orders, filteredOrders: orders })} />);
+    const addButtons = screen.getAllByRole('button', { name: /Add note/i });
+    fireEvent.click(addButtons[0]);
+    expect(screen.getByLabelText('Order note')).toBeTruthy();
   });
 });

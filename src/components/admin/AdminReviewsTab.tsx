@@ -170,7 +170,7 @@ export default function AdminReviewsTab({
     <>
       <div className="w-full space-y-6 font-sans">
         {/* Header Banner */}
-        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 p-6 md:p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
+        <div className="bg-white border border-gray-100 p-6 md:p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -395,7 +395,7 @@ export default function AdminReviewsTab({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-white font-black text-lg flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-gray-100 text-white font-black text-lg flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
                         {(rev.userName || 'C').trim().charAt(0).toUpperCase()}
                       </div>
                       <div>

@@ -1282,6 +1282,46 @@ export function resolveOrderTrafficSource(order: any): TrafficPlatform {
   return "other";
 }
 
+// Anonymous random id kept in this browser, so the dashboard counts people (not IP guesses)
+const VISITOR_ID_KEY = "ishopbd_visitor_id";
+export function getAnonymousVisitorId(): string {
+  try {
+    let id = localStorage.getItem(VISITOR_ID_KEY);
+    if (!id || !/^[a-zA-Z0-9_-]{6,40}$/.test(id)) {
+      id = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+        ? crypto.randomUUID().replace(/-/g, "").slice(0, 20)
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(VISITOR_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+// A product was opened: feeds the "clicks" column per source in Analytics (once per product per session)
+export function trackProductView(productId: string): void {
+  if (typeof window === "undefined" || !productId) return;
+  try {
+    const key = "ishopbd_pv_" + productId;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+  } catch {}
+  const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  fetch("/api/track-visit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "product_view",
+      source: detectTrafficSource(),
+      path: window.location.pathname,
+      device: isMobile ? "mobile" : "desktop",
+      visitorId: getAnonymousVisitorId(),
+    }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 let lastTrackedPath = "";
 export function trackPlatformVisit(): void {
   if (typeof window === "undefined") return;
@@ -1306,7 +1346,8 @@ export function trackPlatformVisit(): void {
     device: isMobile ? "mobile" : "desktop",
     inAppBrowser: detectInAppBrowser(),
     isUnique,
-    referrer: document.referrer || ""
+    referrer: document.referrer || "",
+    visitorId: getAnonymousVisitorId()
   };
 
   fetch("/api/track-visit", {

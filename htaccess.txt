@@ -18,12 +18,13 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteRule ^index\.html$ app.php [L]
   RewriteRule ^index\.php$ app.php [L]
   RewriteRule ^llms\.txt$ api/llms.php [L]
-
-  # Route API endpoints to PHP scripts on shared hosting
   RewriteRule ^api/ping$ api/ping.php [L]
   RewriteRule ^api/merchant-feed\.xml$ api/merchant-feed.php [L]
+
+  # Route API endpoints to PHP scripts on shared hosting
   RewriteRule ^api/send-sms$ api/send-sms.php [L]
   RewriteRule ^api/send-bulk-sms$ api/send-bulk-sms.php [L]
+  RewriteRule ^api/sms-balance$ api/sms-balance.php [L]
   RewriteRule ^api/confirm-order$ api/confirm-order.php [L]
   RewriteRule ^api/send-email$ api/send-email.php [L]
   RewriteRule ^api/send-push$ api/send-push.php [L]

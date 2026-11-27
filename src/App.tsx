@@ -11,7 +11,6 @@ import React, {
   ChangeEvent,
 } from "react";
 import axios from 'axios';
-import { Helmet } from 'react-helmet-async';
 import ShopList from './components/ShopList';
 import {
   initTracking,
@@ -25,11 +24,16 @@ import {
   getOrderTrackingSignals,
   trackPlatformVisit,
   detectTrafficSource,
+  trackProductView,
 } from './utils/tracking';
 import { getAdminAuthHeaders } from './utils/adminAuth';
 import { findMatchingAdminRecord, resolveAdminAccess } from './utils/adminRole';
 import { persistCustomerOrderSafely } from './utils/checkoutOrder';
-import { buildProductStructuredData } from './utils/productSchema';
+import { reconcileOrderStock, orderNeedsStockSync, STOCK_LEDGER_CONFIG } from './utils/stockLedger';
+import { isDashboardPath, dashboardTabFromPath, dashboardPathForTab } from './utils/dashboardRoute';
+import { orderImageRef, slimVariants, slimColorsSizes, approxDocBytes, ORDER_DOC_SAFE_BYTES } from './utils/orderSnapshot';
+import { prepareCampaignForSave, campaignLink } from './utils/campaign';
+import { applySeo, buildCategorySeo, buildHomeSeo, buildPrivateSeo, buildProductSeo } from './seo/seo';
 import type { CompleteIncompleteOrderPayload } from './components/admin/IncompleteOrderModal';
 import {
   CourierFraudReport,
@@ -204,12 +208,14 @@ import { ProductSkeleton } from './components/ProductSkeleton';
 import { ProductCard } from './components/ProductCard';
 import ZoomableImage from './components/ui/ZoomableImage';
 import toast, { Toaster } from 'react-hot-toast';
-import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, getProductIdFromUrl, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug, findSubcategoryBySlug, findSubcategoryFromProductsOrCategory, saveProductsToCache, safeSetLocalStorage, safeGetLocalStorage } from './utils/helpers';
+import { getOrderLocalDateString, formatOrderGroupDate, toBengaliNumber, getYouTubeEmbedUrl, cleanLatex, sumValues, getProductPath, getProductIdFromUrl, findProductBySlugOrId, slugify, getCategoryPath, getCategorySlug, findCategoryBySlug, getCategorySlugsFromLocation, findSubcategoryBySlug, findSubcategoryFromProductsOrCategory, saveProductsToCache, safeSetLocalStorage, safeGetLocalStorage, restoreProxyImages } from './utils/helpers';
 import { FlashSaleCountdown } from './components/FlashSaleCountdown';
 import { useUIContext } from './context/UIContext';
 import { useAuthContext } from './context/AuthContext';
 import { useCartContext } from "./context/CartContext";
 import { useProductContext } from "./context/ProductContext";
+import { cleanLegacyDistrict } from './utils/orderDistrict';
+
 
 // Notification sound URL
 const NOTIF_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3";
@@ -229,7 +235,7 @@ const notifyAdminsOnNewOrder = async (orderId: string, total: number) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          title: "নতুন অর্ডার এসেএসেছে!",
+          title: "নতুন অর্ডার এসেছে!",
           body: `অর্ডার #${String(orderId).slice(-6).toUpperCase()} - ৳${total}`,
           link: "/admin"
         })
@@ -651,7 +657,7 @@ function App() {
                 smsName: directSmsName,
                 price: getProductPrice(item.product, item.quantity),
                 buyingPrice: item.product.buyingPrice || 0,
-                image: item.product.image,
+                image: orderImageRef(item.product.id, item.product.image),
                 isComingSoon: !!item.product.isComingSoon,
               },
               smsName: directSmsName,
@@ -672,7 +678,7 @@ function App() {
           status: "pending",
           createdAt: serverTimestamp(),
           customerEmail: checkoutEmail || user?.email || "",
-          district: checkoutDistrict || (checkoutArea === "inside" ? "Dhaka" : "Outside Dhaka"),
+          district: checkoutDistrict || "",
           thana: thana || "",
           userId: user?.uid || "guest",
           attribution: getStoredAttribution(),
@@ -680,38 +686,10 @@ function App() {
           purchaseTracked: false,
         };
         try {
-          // Create order first; only moderators/admins update product stock directly from client
-          const stockTasks = checkoutItems.map((item) => () => {
-            const pId = item.product.id;
-            const reqQty = Number(item.quantity) || 1;
-            const currentProd = products.find(p => p.id === pId) || item.product;
-            const updatePayload: any = {
-              salesCount: increment(reqQty)
-            };
-
-            if (currentProd?.variants && Array.isArray(currentProd.variants) && currentProd.variants.length > 0) {
-              const updatedVariants = currentProd.variants.map((v: any) => {
-                const isMatch = (!item.color || v.name === item.color) && (!item.size || v.size === item.size);
-                if (isMatch) {
-                  return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - reqQty) };
-                }
-                return v;
-              });
-              const newTotalStock = updatedVariants.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
-              updatePayload.variants = updatedVariants;
-              updatePayload.stock = Math.max(0, newTotalStock);
-            } else {
-              const currentStock = Math.max(0, Number(currentProd?.stock) || 0);
-              updatePayload.stock = Math.max(0, currentStock - reqQty);
-            }
-
-            return updateDoc(doc(db, "products", pId), updatePayload);
-          });
-
+          // Stock is taken by the stock ledger in the admin panel (customers cannot write products).
           await persistCustomerOrderSafely({
             writeOrder: () => setDoc(doc(db, "orders", orderId), newOrder),
-            stockTasks,
-            canClientUpdateStock: isAdmin,
+            canClientUpdateStock: false,
           });
           
           // Send confirmation email via PHP endpoint
@@ -880,36 +858,10 @@ function App() {
             purchaseTracked: false,
           };
 
-          // Concurrently create order and decrement stock in Firestore
-          const item = orderData.items[0];
-          const pId = item.product.id;
-          const reqQty = Number(item.quantity) || 1;
-          const currentProd = products.find(p => p.id === pId) || item.product;
-
-          const updatePayload: any = {
-            salesCount: increment(reqQty)
-          };
-
-          if (currentProd?.variants && Array.isArray(currentProd.variants) && currentProd.variants.length > 0) {
-            const updatedVariants = currentProd.variants.map((v: any) => {
-              const isMatch = (!item.color || v.name === item.color) && (!item.size || v.size === item.size);
-              if (isMatch) {
-                return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - reqQty) };
-              }
-              return v;
-            });
-            const newTotalStock = updatedVariants.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
-            updatePayload.variants = updatedVariants;
-            updatePayload.stock = Math.max(0, newTotalStock);
-          } else {
-            const currentStock = Math.max(0, Number(currentProd?.stock) || 0);
-            updatePayload.stock = Math.max(0, currentStock - reqQty);
-          }
-
+          // Stock is taken by the stock ledger in the admin panel (customers cannot write products).
           await persistCustomerOrderSafely({
             writeOrder: () => setDoc(doc(db, "orders", orderData.orderId), orderData),
-            stockTasks: [() => updateDoc(doc(db, "products", pId), updatePayload)],
-            canClientUpdateStock: isAdmin,
+            canClientUpdateStock: false,
           });
           
           // Send confirmation email via PHP endpoint
@@ -1031,43 +983,99 @@ function App() {
   const [reportTimeframe, setReportTimeframe] = useState<string>("28d");
   
     const handleQuickEditOrderItems = (order: any) => {
+      const rawItems = JSON.parse(JSON.stringify(Array.isArray(order?.items) ? order.items : []));
+      const normalizedItems = rawItems.map((it: any) => {
+        const qty = Math.max(1, Number(it?.quantity) || 1);
+        const rawPrice = Number(it?.price);
+        const uPrice = Number.isFinite(rawPrice) && rawPrice > 0
+          ? rawPrice
+          : (Number(getProductPrice(it?.product, qty)) || 0);
+        return {
+          ...it,
+          name: it?.name || it?.product?.name || 'Product',
+          quantity: qty,
+          price: uPrice,
+          color: it?.color && it.color !== 'N/A' ? it.color : '',
+          size: it?.size && it.size !== 'N/A' ? it.size : '',
+        };
+      });
+      const fallbackSubtotal = normalizedItems.reduce(
+        (acc: number, curr: any) => acc + (Number(curr.price) || 0) * (Number(curr.quantity) || 1),
+        0,
+      );
+      const initialSubtotal = order?.subtotal !== undefined && order?.subtotal !== null
+        ? Number(order.subtotal)
+        : (fallbackSubtotal > 0
+            ? fallbackSubtotal
+            : Math.max(0, (Number(order?.total) || 0) - (Number(order?.deliveryCharge) || 0) + (Number(order?.discount) || 0)));
+      const inferredArea: 'inside' | 'outside' =
+        order?.deliveryArea === 'inside' || order?.deliveryArea === 'outside'
+          ? order.deliveryArea
+          : (String(order?.district || '').includes('ঢাকা') && !String(order?.district || '').includes('বাইরে')) ||
+            String(order?.address || '').toLowerCase().includes('dhaka')
+          ? 'inside'
+          : 'outside';
+
       setSelectedOrderForDetails(order);
       setEditingOrderData({
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        address: order.address,
-        items: JSON.parse(JSON.stringify(Array.isArray(order?.items) ? order.items : []))
+        customerName: order.customerName || "",
+        customerPhone: order.customerPhone || "",
+        address: order.address || "",
+        district: cleanLegacyDistrict(order.district),
+        deliveryArea: inferredArea,
+        items: normalizedItems,
+        subtotal: initialSubtotal,
+        discount: Number(order.discount || 0),
+        deliveryCharge: Number(order.deliveryCharge || 0),
+        totalWeight: order.totalWeight !== undefined && order.totalWeight !== null ? Number(order.totalWeight) : 0.5,
       });
       setIsEditingOrder(true);
     };
     const handleUpdateOrderDetails = async () => {
-    if (!selectedOrderForDetails || !editingOrderData.customerName || !editingOrderData.customerPhone || !editingOrderData.address) return;
+    if (!selectedOrderForDetails || !editingOrderData.customerName || !editingOrderData.customerPhone || !editingOrderData.address) {
+      toast.error("কাস্টমারের নাম, ফোন ও ঠিকানা আবশ্যক");
+      return;
+    }
+    if (Array.isArray(editingOrderData.items) && editingOrderData.items.length === 0) {
+      toast.error("অর্ডারে কমপক্ষে ১টি প্রোডাক্ট যোগ করুন");
+      return;
+    }
     try {
-      const updatedItems = editingOrderData.items || selectedOrderForDetails.items || [];
-      
-      let subtotal = editingOrderData.subtotal !== undefined
-        ? Number(editingOrderData.subtotal)
-        : Number(selectedOrderForDetails.subtotal);
-      
-      if (!Number.isFinite(subtotal) || subtotal <= 0) {
-        subtotal = updatedItems.reduce((acc: number, curr: any) => {
-          const uPrice = Number(curr?.price) > 0 ? Number(curr.price) : (Number(getProductPrice(curr.product, curr.quantity)) || 0);
-          return acc + (uPrice * (Number(curr.quantity) || 1));
-        }, 0);
-      }
-      
-      const deliveryCharge = Number(editingOrderData.deliveryCharge !== undefined ? editingOrderData.deliveryCharge : (selectedOrderForDetails.deliveryCharge || 0));
-      const discount = Number(editingOrderData.discount !== undefined ? editingOrderData.discount : (selectedOrderForDetails.discount || 0));
-      const totalWeight = Number(editingOrderData.totalWeight !== undefined ? editingOrderData.totalWeight : (selectedOrderForDetails.totalWeight || 0.5));
+      const updatedItems = (editingOrderData.items || selectedOrderForDetails.items || []).map((it: any) => {
+        const qty = Math.max(1, Number(it?.quantity) || 1);
+        const uPrice = Number(it?.price) >= 0 ? Number(it.price) : (Number(getProductPrice(it?.product, qty)) || 0);
+        return {
+          ...it,
+          name: it?.name || it?.product?.name || 'Product',
+          quantity: qty,
+          price: uPrice,
+          color: it?.color ? String(it.color).trim() : 'N/A',
+          size: it?.size ? String(it.size).trim() : 'N/A',
+        };
+      });
+
+      const computedFromItems = updatedItems.reduce((acc: number, curr: any) => {
+        return acc + ((Number(curr?.price) || 0) * (Number(curr?.quantity) || 1));
+      }, 0);
+
+      const subtotal = editingOrderData.subtotal !== undefined && editingOrderData.subtotal !== null
+        ? Math.max(0, Number(editingOrderData.subtotal) || 0)
+        : computedFromItems;
+
+      const deliveryCharge = Math.max(0, Number(editingOrderData.deliveryCharge !== undefined ? editingOrderData.deliveryCharge : (selectedOrderForDetails.deliveryCharge || 0)) || 0);
+      const discount = Math.max(0, Number(editingOrderData.discount !== undefined ? editingOrderData.discount : (selectedOrderForDetails.discount || 0)) || 0);
+      const totalWeight = Math.max(0, Number(editingOrderData.totalWeight !== undefined ? editingOrderData.totalWeight : (selectedOrderForDetails.totalWeight || 0.5)) || 0);
       const total = Math.max(0, subtotal - discount + deliveryCharge);
       const codAmount = (selectedOrderForDetails.codAmount === undefined || selectedOrderForDetails.codAmount === selectedOrderForDetails.total)
         ? total
         : selectedOrderForDetails.codAmount;
 
-      const patch = {
-        customerName: editingOrderData.customerName,
-        customerPhone: editingOrderData.customerPhone,
-        address: editingOrderData.address,
+      const patch: Record<string, any> = {
+        customerName: String(editingOrderData.customerName).trim(),
+        customerPhone: String(editingOrderData.customerPhone).trim(),
+        address: String(editingOrderData.address).trim(),
+        district: String(editingOrderData.district ?? selectedOrderForDetails.district ?? "").trim(),
+        deliveryArea: editingOrderData.deliveryArea || selectedOrderForDetails.deliveryArea || "outside",
         items: updatedItems,
         subtotal,
         discount,
@@ -1150,11 +1158,18 @@ function App() {
   }, [searchInput]);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const productsPerPage = 15;
+  const productsPerPage = 20; // divisible by 2, 4 and 5 columns: no lone card on the last row
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedCategory, searchQuery, activeCampaign, isTrendingFilterActive]);
+  // Choosing a category or searching leaves the campaign.
+  useEffect(() => {
+    if (!activeCampaign) return;
+    if ((selectedCategory && selectedCategory !== "all" && selectedCategory !== "All") || searchQuery) {
+      setActiveCampaign(null);
+    }
+  }, [selectedCategory, searchQuery]);
   // Use effects for URL handling
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1172,6 +1187,9 @@ function App() {
         setSelectedCategory("all");
         setSelectedSubcategory("all");
         setSearchInput("");
+      } else if (!activeCampaign) {
+        toast("এই অফারটি এখন চালু নেই। আমাদের অন্য পণ্যগুলো দেখুন।", { icon: "ℹ️" });
+        window.history.replaceState({}, "", "/");
       }
     }
     if (categoryParam) {
@@ -1392,6 +1410,7 @@ function App() {
       category: activeProd.category,
       brand: activeProd.brand,
     });
+    trackProductView(activeProd.id);
   }, [isProductDetailsOpen, selectedProduct?.id, landingProduct?.id]);
 
   useEffect(() => {
@@ -1458,56 +1477,57 @@ function App() {
     return () => clearTimeout(delayDebounceFn);
   }, [inlineOrderPhone]);
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
+    const activeTrackedItems = checkoutItems.length > 0 ? checkoutItems : cartItems;
+    const syncCartIncompleteOrder = () => {
       let sessionId = localStorage.getItem("ishopbd_session_id");
       if (!sessionId) {
         sessionId = "cart_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9);
         localStorage.setItem("ishopbd_session_id", sessionId);
       }
-      if (cartItems.length > 0) {
-        const totalAmt = cartItems.reduce((sum: number, item: any) => sum + (getProductPrice(item.product, item.quantity) * item.quantity), 0);
-        
+      if (activeTrackedItems.length > 0) {
+        const totalAmt = activeTrackedItems.reduce((sum: number, item: any) => sum + (getProductPrice(item.product, item.quantity) * item.quantity), 0);
+
         // Auto-resolve best available phone number
         const resolvedPhone = (
-          checkoutPhone?.trim() || 
-          userProfile?.phone?.trim() || 
-          user?.phoneNumber?.trim() || 
-          (savedProfiles?.[0]?.phone ? savedProfiles[0].phone.trim() : "") || 
+          checkoutPhone?.trim() ||
+          userProfile?.phone?.trim() ||
+          user?.phoneNumber?.trim() ||
+          (savedProfiles?.[0]?.phone ? savedProfiles[0].phone.trim() : "") ||
           ""
         ).trim();
 
         // Auto-resolve best available customer name
         const resolvedName = (
-          checkoutName?.trim() || 
-          userProfile?.displayName?.trim() || 
-          userProfile?.name?.trim() || 
-          user?.displayName?.trim() || 
-          (savedProfiles?.[0]?.name ? savedProfiles[0].name.trim() : "") || 
-          (user?.email ? user.email.split("@")[0] : "") || 
+          checkoutName?.trim() ||
+          userProfile?.displayName?.trim() ||
+          userProfile?.name?.trim() ||
+          user?.displayName?.trim() ||
+          (savedProfiles?.[0]?.name ? savedProfiles[0].name.trim() : "") ||
+          (user?.email ? user.email.split("@")[0] : "") ||
           ""
         ).trim();
 
         // Auto-resolve best available address
         const resolvedAddress = (
-          checkoutAddress?.trim() || 
-          userProfile?.address?.trim() || 
-          (savedProfiles?.[0]?.address ? savedProfiles[0].address.trim() : "") || 
+          checkoutAddress?.trim() ||
+          userProfile?.address?.trim() ||
+          (savedProfiles?.[0]?.address ? savedProfiles[0].address.trim() : "") ||
           ""
         ).trim();
 
         const resolvedDistrict = checkoutDistrict || userProfile?.district || savedProfiles?.[0]?.district || "";
         const resolvedThana = checkoutThana || userProfile?.thana || savedProfiles?.[0]?.thana || "";
-        const cleanDigits = resolvedPhone.replace(/\D/g, '');
+        const cleanDigits = normalizeBdPhone(resolvedPhone);
         const hasPhone = cleanDigits.length >= 6;
 
         if (hasPhone) {
           setDoc(doc(db, "incomplete_orders", sessionId), {
-            phone: resolvedPhone,
+            phone: cleanDigits,
             name: resolvedName || "অজ্ঞাত ক্রেতা",
             address: resolvedAddress,
             district: resolvedDistrict,
             thana: resolvedThana,
-            items: cartItems.map((item: any) => ({
+            items: activeTrackedItems.map((item: any) => ({
               id: item.product.id,
               name: item.product.name,
               price: getProductPrice(item.product, item.quantity),
@@ -1519,19 +1539,28 @@ function App() {
             totalAmount: totalAmt,
             updatedAt: serverTimestamp(),
             date: new Date().toLocaleString("bn-BD"),
-            type: "cart_checkout",
+            type: checkoutItems.length > 0 && cartItems.length === 0 ? "buy_now_checkout" : "cart_checkout",
             sessionId: sessionId,
             smsSent: false
           }, { merge: true }).catch(console.error);
-        } else {
-          deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
         }
-      } else {
-        deleteDoc(doc(db, "incomplete_orders", sessionId)).catch(() => {});
       }
-    }, 200);
-    return () => clearTimeout(timeoutId);
-  }, [cartItems, checkoutPhone, checkoutName, checkoutAddress, checkoutDistrict, checkoutThana, userProfile, user, savedProfiles]);
+    };
+
+    const timeoutId = setTimeout(syncCartIncompleteOrder, 200);
+    const handleVisibilityOrHide = () => {
+      if (document.visibilityState === 'hidden') {
+        syncCartIncompleteOrder();
+      }
+    };
+    window.addEventListener('pagehide', syncCartIncompleteOrder);
+    document.addEventListener('visibilitychange', handleVisibilityOrHide);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('pagehide', syncCartIncompleteOrder);
+      document.removeEventListener('visibilitychange', handleVisibilityOrHide);
+    };
+  }, [cartItems, checkoutItems, checkoutPhone, checkoutName, checkoutAddress, checkoutDistrict, checkoutThana, userProfile, user, savedProfiles]);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -1823,10 +1852,22 @@ checkoutWarningText: "প্রিয় গ্রাহক, ক্যাশ অন
     const saved = localStorage.getItem("ishopbd_blacklist");
     return saved ? JSON.parse(saved) : [];
   });
-  const [courierReports, setCourierReports] = useState<Record<string, CourierFraudReport>>({});
+  const [courierReports, setCourierReports] = useState<Record<string, CourierFraudReport>>(() => {
+    try {
+      const saved = localStorage.getItem("ishopbd_courier_reports_v1");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch {}
+    return {};
+  });
   const courierReportsRef = useRef<Record<string, CourierFraudReport>>({});
   useEffect(() => {
     courierReportsRef.current = courierReports;
+    try {
+      localStorage.setItem("ishopbd_courier_reports_v1", JSON.stringify(courierReports));
+    } catch {}
   }, [courierReports]);
   const autoCheckedCourierPhonesRef = useRef<Set<string>>(new Set());
   const autoCheckPausedUntilRef = useRef<number>(0);
@@ -1941,6 +1982,15 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   const [isAppDownloadModalOpen, setIsAppDownloadModalOpen] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isMobileCategoryDrawerOpen, setIsMobileCategoryDrawerOpen] = useState(false);
+  // Mobile: search box is hidden until the search icon in the category bar is tapped
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  useEffect(() => {
+    if (isMobileSearchOpen) {
+      setTimeout(() => (document.getElementById("mobile-search-input") as HTMLInputElement | null)?.focus(), 50);
+    }
+  }, [isMobileSearchOpen]);
+  const [activeCategoryNavDropdown, setActiveCategoryNavDropdown] = useState<string | null>(null);
+  const [categoryPopupLeft, setCategoryPopupLeft] = useState(8);
   // Optimized helper to get customer stats based on phone
   const customerStatsMap = useMemo(() => {
     const stats: Record<string, { delivered: number; cancelled: number; isBlacklisted: boolean; total: number }> = {};
@@ -2240,11 +2290,11 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         const resolvedDistrict = inlineOrderDistrict || userProfile?.district || savedProfiles?.[0]?.district || "";
         const resolvedThana = inlineOrderThana || userProfile?.thana || savedProfiles?.[0]?.thana || "";
 
-        const cleanInlinePhone = resolvedPhone.replace(/\D/g, '');
+        const cleanInlinePhone = normalizeBdPhone(resolvedPhone);
         if (cleanInlinePhone.length >= 6) {
           const itemPrice = getProductPrice(selectedProduct, tempSelectedQty);
           setDoc(doc(db, "incomplete_orders", inlineSessionId), {
-            phone: resolvedPhone,
+            phone: cleanInlinePhone,
             name: resolvedName || "অজ্ঞাত ক্রেতা",
             address: resolvedAddress,
             district: resolvedDistrict,
@@ -2265,24 +2315,22 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             sessionId: inlineSessionId,
             smsSent: false
           }, { merge: true }).catch(console.error);
-        } else {
-          deleteDoc(doc(db, "incomplete_orders", inlineSessionId)).catch(() => {});
         }
       }
-    }, 400);
+    }, 250);
     return () => clearTimeout(timeoutId);
   }, [inlineOrderPhone, inlineOrderName, inlineOrderAddress, inlineOrderDistrict, inlineOrderThana, selectedProduct, tempSelectedQty, tempSelectedColor, tempSelectedSize, userProfile, user, savedProfiles]);
 
   // Landing Page Order Tracker
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const cleanLandingPhone = (landingPhone || '').replace(/\D/g, '');
+    const syncLandingIncompleteOrder = () => {
+      const cleanLandingPhone = normalizeBdPhone(landingPhone || '');
       const landingSessionId = localStorage.getItem("ishopbd_landing_session_id") || ("landing_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 9));
       localStorage.setItem("ishopbd_landing_session_id", landingSessionId);
 
       if (landingProduct && cleanLandingPhone.length >= 6) {
         setDoc(doc(db, "incomplete_orders", landingSessionId), {
-          phone: landingPhone.trim(),
+          phone: cleanLandingPhone,
           name: landingName && landingName.trim().length > 0 ? landingName.trim() : "অজ্ঞাত ক্রেতা",
           address: landingAddress && landingAddress.trim().length > 0 ? landingAddress.trim() : "",
           district: landingDistrict || "",
@@ -2301,11 +2349,22 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           sessionId: landingSessionId,
           smsSent: false
         }, { merge: true }).catch(console.error);
-      } else {
-        deleteDoc(doc(db, "incomplete_orders", landingSessionId)).catch(() => {});
       }
-    }, 800);
-    return () => clearTimeout(timeoutId);
+    };
+
+    const timeoutId = setTimeout(syncLandingIncompleteOrder, 300);
+    const handleVisibilityOrHide = () => {
+      if (document.visibilityState === 'hidden') {
+        syncLandingIncompleteOrder();
+      }
+    };
+    window.addEventListener('pagehide', syncLandingIncompleteOrder);
+    document.addEventListener('visibilitychange', handleVisibilityOrHide);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('pagehide', syncLandingIncompleteOrder);
+      document.removeEventListener('visibilitychange', handleVisibilityOrHide);
+    };
   }, [landingPhone, landingName, landingAddress, landingDistrict, landingThana, landingProduct]);
   const [wholesaleSizeQty, setWholesaleSizeQty] = useState<Record<string, number>>({});
   const [isDeliveryInfoOpen, setIsDeliveryInfoOpen] = useState(false);
@@ -2737,177 +2796,20 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   }, [searchQuery, products, siteConfig?.isAiEnabled]);
 
   // SEO: Dynamic URL, Meta Tags, Open Graph, Schema.org
+  // Page titles, descriptions, canonical links and structured data: one source of truth (src/seo/seo.ts).
   useEffect(() => {
-    const SITE_NAME = "i SHOP BD";
-    const SITE_URL = "https://ishopbd.com";
-    const SITE_DESC = "বাংলাদেশের সেরা অনলাইন শপিং | গ্যাজেট, ইলেকট্রনিক্স, হোম এক্সেসরিজ সবচেয়ে কম দামে দ্রুত হোম ডেলিভারি।";
-    const DEFAULT_OG_IMAGE = `${SITE_URL}/logo.png`;
-
-    const setMeta = (selector: string, attr: string, value: string) => {
-      let el = document.querySelector(selector) as HTMLMetaElement | null;
-      if (!el) {
-        el = document.createElement('meta');
-        const parts = selector.match(/\[(\w+)="([^"]+)"\]/);
-        if (parts) el.setAttribute(parts[1], parts[2]);
-        document.head.appendChild(el);
-      }
-      el.setAttribute(attr, value);
-    };
-
-    const setLink = (rel: string, href: string) => {
-      let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
-      if (!el) { el = document.createElement('link'); el.setAttribute('rel', rel); document.head.appendChild(el); }
-      el.setAttribute('href', href);
-    };
-
-    const setJsonLd = (id: string, data: object | null) => {
-      let script = document.getElementById(id);
-      if (data === null) { if (script) script.remove(); return; }
-      if (!script) {
-        script = document.createElement('script');
-        script.setAttribute('type', 'application/ld+json');
-        script.setAttribute('id', id);
-        document.head.appendChild(script);
-      }
-      script.textContent = JSON.stringify(data);
-    };
-
-    const stripHtml = (html: string) => (html || '').replace(/<[^>]*>?/gm, '').trim();
-
+    const path = typeof window !== "undefined" ? window.location.pathname : "/";
+    if (/^\/dashboard(\/|$)/i.test(path)) return;
     if (isCheckoutOpen) {
-      // === CHECKOUT PAGE ===
-      document.title = `Checkout | ${SITE_NAME}`;
-      setMeta('meta[name="description"]', 'content', `Complete your order at ${SITE_NAME}. Fast delivery across Bangladesh.`);
-      setMeta('meta[property="og:title"]', 'content', `Checkout | ${SITE_NAME}`);
-      setMeta('meta[property="og:description"]', 'content', `Complete your order at ${SITE_NAME}.`);
-      setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
-      setLink('canonical', SITE_URL);
-      setJsonLd('seo-json-ld', null);
-      setJsonLd('seo-breadcrumb-ld', null);
-
+      applySeo(buildPrivateSeo("Checkout"));
     } else if (selectedProduct && isProductDetailsOpen) {
-      // === PRODUCT DETAIL PAGE ===
-      const productName = selectedProduct.name || '';
-      const productDesc = stripHtml(selectedProduct.description || '');
-      const productPrice = selectedProduct.price || 0;
-      const productImage = selectedProduct.image || DEFAULT_OG_IMAGE;
-      const productUrl = `${SITE_URL}${getProductPath(selectedProduct)}`;
-      const inStock = (selectedProduct.stock || 0) > 0;
-
-      // Title with Bangladesh keywords for Google ranking
-      document.title = `${productName} Price in Bangladesh | ${SITE_NAME}`;
-
-      // Meta description
-      const autoDesc = productDesc
-        ? `${productDesc.substring(0, 120)} | Price: ৳${productPrice} in Bangladesh. Buy online at ${SITE_NAME} with fast home delivery.`
-        : `Buy ${productName} at best price in Bangladesh ৳${productPrice}. Fast home delivery. Shop now at ${SITE_NAME}.`;
-      setMeta('meta[name="description"]', 'content', autoDesc.substring(0, 160));
-
-      // Keywords
-      setMeta('meta[name="keywords"]', 'content', 
-        `${productName}, ${productName} price in Bangladesh, ${productName} price in BD, ${productName} buy online Bangladesh, ${productName} দাম বাংলাদেশ, i SHOP BD, ishopbd`
-      );
-
-      // Open Graph
-      setMeta('meta[property="og:type"]', 'content', 'product');
-      setMeta('meta[property="og:title"]', 'content', `${productName} Price in Bangladesh | ${SITE_NAME}`);
-      setMeta('meta[property="og:description"]', 'content', autoDesc.substring(0, 200));
-      setMeta('meta[property="og:image"]', 'content', productImage);
-      setMeta('meta[property="og:url"]', 'content', productUrl);
-      setMeta('meta[property="product:price:amount"]', 'content', String(productPrice));
-      setMeta('meta[property="product:price:currency"]', 'content', 'BDT');
-
-      // Twitter Card
-      setMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
-      setMeta('meta[name="twitter:title"]', 'content', `${productName} Price in Bangladesh | ${SITE_NAME}`);
-      setMeta('meta[name="twitter:description"]', 'content', autoDesc.substring(0, 200));
-      setMeta('meta[name="twitter:image"]', 'content', productImage);
-
-      // Canonical
-      setLink('canonical', productUrl);
-
-      // Schema.org Product JSON-LD
-      setJsonLd('seo-json-ld', buildProductStructuredData({
-        id: selectedProduct.id,
-        name: productName,
-        description: productDesc || `${productName} available at best price in Bangladesh.`,
-        image: [productImage, ...(selectedProduct.images || [])].filter(Boolean),
-        url: productUrl,
-        brand: selectedProduct.brand || SITE_NAME,
-        mpn: selectedProduct.code || selectedProduct.id,
-        price: Number(productPrice || 0),
-        inStock,
-        isFreeDelivery: Boolean(selectedProduct.isFreeDelivery),
-        weight: Number(selectedProduct.weight || 0),
-        createdAt: selectedProduct.createdAt,
-        rating: Number(selectedProduct.rating || 0),
-        reviewCount: Number(selectedProduct.reviewCount || 0),
-      }));
-
-      // BreadcrumbList Schema
-      const prodCatSlug = selectedProduct.category ? getCategorySlug(selectedProduct.category) : '';
-      setJsonLd('seo-breadcrumb-ld', {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        "itemListElement": [
-          { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
-          ...(selectedProduct.category ? [{ "@type": "ListItem", "position": 2, "name": selectedProduct.category, "item": `${SITE_URL}/category/${prodCatSlug}` }] : []),
-          { "@type": "ListItem", "position": selectedProduct.category ? 3 : 2, "name": productName, "item": productUrl }
-        ]
-      });
-
-    } else if (selectedCategory && selectedCategory.toLowerCase() !== 'all') {
-      // === CATEGORY & SUBCATEGORY PAGE ===
-      const catSlug = getCategorySlug(selectedCategory);
-      const isSub = selectedSubcategory && selectedSubcategory.toLowerCase() !== 'all';
-      const targetPath = getCategoryPath(selectedCategory, selectedSubcategory);
-      const categoryUrl = `${SITE_URL}${targetPath}`;
-      const pageTitle = isSub 
-        ? `${selectedSubcategory} - ${selectedCategory} Price in Bangladesh | ${SITE_NAME}`
-        : `${selectedCategory} Price in Bangladesh | ${SITE_NAME}`;
-      const pageDesc = isSub
-        ? `Buy authentic ${selectedSubcategory} (${selectedCategory}) at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`
-        : `Buy ${selectedCategory} products at best price in Bangladesh. Fast home delivery. Shop online at ${SITE_NAME}.`;
-
-      document.title = pageTitle;
-      setMeta('meta[name="description"]', 'content', pageDesc);
-      setMeta('meta[name="keywords"]', 'content', `${isSub ? selectedSubcategory + ', ' : ''}${selectedCategory}, ${selectedCategory} price in Bangladesh, ${selectedCategory} price in BD, buy online Bangladesh, i SHOP BD`);
-      setMeta('meta[property="og:type"]', 'content', 'website');
-      setMeta('meta[property="og:title"]', 'content', pageTitle);
-      setMeta('meta[property="og:description"]', 'content', pageDesc);
-      setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
-      setMeta('meta[property="og:url"]', 'content', categoryUrl);
-      setLink('canonical', categoryUrl);
-      setJsonLd('seo-json-ld', null);
-      setJsonLd('seo-breadcrumb-ld', {
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        "itemListElement": [
-          { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
-          { "@type": "ListItem", "position": 2, "name": selectedCategory, "item": `${SITE_URL}/category/${catSlug}` },
-          ...(isSub ? [{ "@type": "ListItem", "position": 3, "name": selectedSubcategory, "item": categoryUrl }] : [])
-        ]
-      });
-
+      applySeo(buildProductSeo(selectedProduct));
+    } else if (selectedCategory && selectedCategory.toLowerCase() !== "all") {
+      applySeo(buildCategorySeo(selectedCategory, selectedSubcategory, products));
     } else {
-      // === HOMEPAGE ===
-      document.title = `${SITE_NAME} | Best Online Shopping in Bangladesh`;
-      setMeta('meta[name="description"]', 'content', SITE_DESC);
-      setMeta('meta[name="keywords"]', 'content', 'i SHOP BD, আই শপ বিডি, ishopbd, online shopping Bangladesh, best price Bangladesh, gadgets Bangladesh, electronics BD, home delivery Bangladesh, rechargeable fan price BD, air cooler price Bangladesh');
-      setMeta('meta[property="og:type"]', 'content', 'website');
-      setMeta('meta[property="og:title"]', 'content', `${SITE_NAME} | Best Online Shopping in Bangladesh`);
-      setMeta('meta[property="og:description"]', 'content', SITE_DESC);
-      setMeta('meta[property="og:image"]', 'content', DEFAULT_OG_IMAGE);
-      setMeta('meta[property="og:url"]', 'content', SITE_URL);
-      setMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
-      setMeta('meta[name="twitter:title"]', 'content', `${SITE_NAME} | Best Online Shopping in Bangladesh`);
-      setMeta('meta[name="twitter:description"]', 'content', SITE_DESC);
-      setMeta('meta[name="twitter:image"]', 'content', DEFAULT_OG_IMAGE);
-      setLink('canonical', SITE_URL);
-      setJsonLd('seo-json-ld', null);
-      setJsonLd('seo-breadcrumb-ld', null);
+      applySeo(buildHomeSeo(products));
     }
-  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen, selectedCategory, selectedSubcategory]);
+  }, [selectedProduct, isProductDetailsOpen, isCheckoutOpen, selectedCategory, selectedSubcategory, products]);
   useEffect(() => {
     // Process redirect result for mobile OAuth (Google / Facebook)
     getRedirectResult(auth)
@@ -3096,6 +2998,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     if (isQuotaExceeded) return;
     
     if (!isAdmin && !isMasterAdmin) {
+      // A campaign link (e.g. from an ad) needs the campaign straight away; everyone else can wait.
+      const isCampaignLink =
+        window.location.pathname.startsWith("/campaign/") || new URLSearchParams(window.location.search).has("campaign");
       const timer = setTimeout(() => {
         getDocs(collection(db, "campaigns")).then(snapshot => {
           const data = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Campaign);
@@ -3103,7 +3008,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         }).catch(err => {
           handleFirestoreError(err, OperationType.GET, "campaigns");
         });
-      }, 2500);
+      }, isCampaignLink ? 0 : 2500);
       return () => clearTimeout(timer);
     }
     const unsubCampaigns = onSnapshot(collection(db, "campaigns"), (snapshot) => {
@@ -3227,6 +3132,9 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     const fetchFreshCats = () => {
       getDocs(collection(db, "categories")).then(snap => {
         const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as Category);
+        // An empty answer usually means "offline / not reached yet" - keep the cached categories instead of
+        // wiping the whole category bar.
+        if (data.length === 0 && snap.metadata.fromCache) return;
         setCategories(data);
         if (categorySlug) {
           const matched = findCategoryBySlug(data, categorySlug);
@@ -3483,6 +3391,8 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   // Synchronize URL and History when React State changes (User actions)
   useEffect(() => {
     if (products.length === 0) return;
+    // The admin panel owns the address bar while it is open (/dashboard/...).
+    if (isAdminOpen || dashboardBootRef.current) return;
     const path = window.location.pathname;
     const isCheckoutParam = new URLSearchParams(window.location.search).get("checkout") === "true";
     
@@ -3503,18 +3413,30 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       if (path !== targetPath || isCheckoutParam || window.location.search.includes('p=')) {
         window.history.pushState({ p: selectedProduct.id }, "", targetPath);
       }
+    } else if (activeCampaign?.slug && (!selectedCategory || selectedCategory === "all" || selectedCategory === "All")) {
+      // An open campaign keeps its own address, so the link can be shared, refreshed and used with Back.
+      const targetPath = `/campaign/${encodeURIComponent(activeCampaign.slug)}`;
+      if (path !== targetPath || window.location.search.includes("campaign=")) {
+        window.history.pushState({ campaign: activeCampaign.slug }, "", targetPath);
+      }
     } else if (selectedCategory && selectedCategory !== "all" && selectedCategory !== "All") {
       const targetPath = getCategoryPath(selectedCategory, selectedSubcategory);
       if (path !== targetPath || isCheckoutParam || window.location.search.includes('category=') || window.location.search.includes('subcategory=')) {
         window.history.pushState({ category: selectedCategory, subcategory: selectedSubcategory }, "", targetPath);
       }
     } else {
+      // A category link whose category is not known yet (category list still loading): keep the
+      // address as it is. Changing it to "/" and back made the page jump home and then to the
+      // category, and added extra Back steps.
+      if (categories.length === 0 && getCategorySlugsFromLocation(path, window.location.search)) return;
+      // Same for a campaign link while campaigns are still loading.
+      if (!activeCampaign && campaigns.length === 0 && (path.startsWith("/campaign/") || window.location.search.includes("campaign="))) return;
       // User is on Home page
       if (path !== "/" || window.location.search.length > 0) {
         window.history.pushState({}, "", "/");
       }
     }
-  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, selectedSubcategory, products.length, completedOrderReceipt]);
+  }, [isProductDetailsOpen, selectedProduct, isCheckoutOpen, selectedCategory, selectedSubcategory, products.length, completedOrderReceipt, isAdminOpen, categories.length, activeCampaign, campaigns.length]);
 
   // Handle browser Back / Forward buttons smoothly
   useEffect(() => {
@@ -3601,19 +3523,83 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     "analytics" | "orders" | "products" | "categories" | "settings" | "refunds" | "users" | "support" | "campaigns" | "incomplete_orders" | "bulk_sms" | "profit_analysis"
   >("analytics");
 
+  // ---- /dashboard link: the admin panel has its own address, so a refresh keeps you on it ----
+  // /dashboard/orders, /dashboard/pre-orders, /dashboard/incomplete-orders, /dashboard/products ...
+  const dashboardBootRef = useRef<boolean>(isDashboardPath(window.location.pathname));
+  const isAdminRef = useRef(false);
+  const isMasterAdminRef = useRef(false);
   useEffect(() => {
-    // Automatic background batch courier checking is disabled to preserve daily API quota (10/day limit).
-    // Checks are only executed on-demand when clicking the "Check" button.
-    return;
+    isAdminRef.current = isAdmin;
+    isMasterAdminRef.current = isMasterAdmin;
+  }, [isAdmin, isMasterAdmin]);
+
+  const openDashboardFromUrl = (pathname: string) => {
+    const fromUrl = dashboardTabFromPath(pathname);
+    if (isMasterAdminRef.current) {
+      setAdminTab((fromUrl?.tab || "analytics") as any);
+      setShowOnlyPreOrders(Boolean(fromUrl?.preOrders));
+    } else {
+      setAdminTab("support");
+    }
+    setIsAdminOpen(true);
+  };
+
+  // On first load of /dashboard: wait for sign-in and admin access, then open the panel.
+  useEffect(() => {
+    if (!dashboardBootRef.current || !authReady) return;
+    if (!user) {
+      dashboardBootRef.current = false;
+      window.history.replaceState({}, "", "/");
+      setIsAuthModalOpen(true);
+      return;
+    }
+    if (isAdmin) {
+      dashboardBootRef.current = false;
+      openDashboardFromUrl(window.location.pathname);
+      return;
+    }
+    // Admin access loads a moment after sign-in; give it time before giving up.
+    const timer = window.setTimeout(() => {
+      if (!dashboardBootRef.current || isAdminRef.current) return;
+      dashboardBootRef.current = false;
+      window.history.replaceState({}, "", "/");
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [authReady, user, isAdmin, isMasterAdmin]);
+
+  // Keep the address bar in step with the panel and its tab.
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (isAdminOpen) {
+      const target = dashboardPathForTab(adminTab, showOnlyPreOrders);
+      if (path !== target) {
+        if (isDashboardPath(path)) window.history.replaceState({ dashboard: true }, "", target);
+        else window.history.pushState({ dashboard: true }, "", target);
+      }
+    } else if (isDashboardPath(path) && !dashboardBootRef.current) {
+      window.history.replaceState({}, "", "/");
+    }
+  }, [isAdminOpen, adminTab, showOnlyPreOrders]);
+
+  // Browser back / forward into or out of /dashboard.
+  useEffect(() => {
+    const onPop = () => {
+      const path = window.location.pathname;
+      if (isDashboardPath(path)) {
+        if (isAdminRef.current) openDashboardFromUrl(path);
+      } else {
+        setIsAdminOpen(false);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    // Only hydrate previously saved courier reports from server cache (cacheOnly: true).
+    // Never trigger automatic live Steadfast API checks; live checks happen only when the admin clicks Check/Refresh.
     if (!isAdminOpen || !isAdminVerified) return;
     if (adminTab !== "orders" && adminTab !== "incomplete_orders") return;
-
-    const nowMs = Date.now();
-    if (nowMs < autoCheckPausedUntilRef.current) {
-      const waitMs = Math.min(autoCheckPausedUntilRef.current - nowMs + 1500, 5 * 60 * 1000 + 2000);
-      const cooldownTimer = setTimeout(() => setAutoCourierRetryTick((t) => t + 1), waitMs);
-      return () => clearTimeout(cooldownTimer);
-    }
 
     const candidateSource =
       adminTab === "orders"
@@ -3629,110 +3615,39 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     if (pendingPhones.length === 0) return;
 
     let isCancelled = false;
-    let followupTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const fetchVisibleCourierStats = async () => {
-      setLoadingCourierReports(prev => {
-        const next = { ...prev };
-        pendingPhones.forEach(p => { next[p] = true; });
-        return next;
-      });
+    const loadSavedCourierCacheOnly = async () => {
       try {
         const headers = await getAdminAuthHeaders(false);
+        const batchRes = await axios.post(
+          "/api/courier/steadfast/fraud/batch",
+          { phones: pendingPhones, cacheOnly: true },
+          { headers },
+        );
+        const rawResults = batchRes.data?.results;
         const updates: Record<string, CourierFraudReport> = {};
-        let isRateLimited = false;
-        let fetchedLiveCount = 0;
-
-        try {
-          const batchRes = await axios.post("/api/courier/steadfast/fraud/batch", { phones: pendingPhones }, { headers });
-          if (batchRes.data?.rateLimited) {
-            isRateLimited = true;
-            autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
-          }
-          fetchedLiveCount = Array.isArray(batchRes.data?.fetchedPhones) ? batchRes.data.fetchedPhones.length : 0;
-
-          const rawResults = batchRes.data?.results;
-          if (rawResults && typeof rawResults === "object") {
-            for (const [phoneKey, val] of Object.entries(rawResults)) {
-              const parsed = parseClientCourierFraudReport({ success: true, data: val });
-              if (parsed) {
-                updates[phoneKey] = parsed;
-                autoCheckedCourierPhonesRef.current.add(phoneKey);
-              }
+        if (rawResults && typeof rawResults === "object") {
+          for (const [phoneKey, val] of Object.entries(rawResults)) {
+            const parsed = parseClientCourierFraudReport({ success: true, data: val });
+            if (parsed) {
+              updates[phoneKey] = parsed;
             }
-          }
-
-          const batchErrors = batchRes.data?.errors;
-          if (batchErrors && typeof batchErrors === "object") {
-            for (const [errPhone, errMsg] of Object.entries(batchErrors)) {
-              const msgLower = String(errMsg || "").toLowerCase();
-              if (!msgLower.includes("rate limit") && !msgLower.includes("429") && !msgLower.includes("missing")) {
-                autoCheckedCourierPhonesRef.current.add(errPhone);
-              }
-            }
-          }
-        } catch (batchErr: any) {
-          const status = batchErr?.response?.status;
-          if (status === 429) {
-            isRateLimited = true;
-            autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
-          } else if (status === 404 || status === 405) {
-            const fallbackTargets = pendingPhones.slice(0, 3);
-            await Promise.all(
-              fallbackTargets.map(async (p) => {
-                if (isCancelled) return;
-                try {
-                  const singleRes = await axios.get(`/api/courier/steadfast/fraud/${encodeURIComponent(p)}`, { headers });
-                  const parsed = parseClientCourierFraudReport(singleRes.data);
-                  if (parsed) {
-                    updates[p] = parsed;
-                    autoCheckedCourierPhonesRef.current.add(p);
-                    fetchedLiveCount++;
-                  }
-                } catch (singleErr: any) {
-                  if (singleErr?.response?.status === 429) {
-                    isRateLimited = true;
-                    autoCheckPausedUntilRef.current = Date.now() + 5 * 60 * 1000;
-                  }
-                }
-              })
-            );
           }
         }
-
+        pendingPhones.forEach((p) => autoCheckedCourierPhonesRef.current.add(p));
         if (!isCancelled && Object.keys(updates).length > 0) {
-          setCourierReports(prev => ({ ...prev, ...updates }));
-        }
-
-        if (!isCancelled) {
-          const remainingCount = pendingPhones.filter(
-            (p) => !updates[p] && !autoCheckedCourierPhonesRef.current.has(p),
-          ).length;
-          if (isRateLimited) {
-            followupTimer = setTimeout(() => setAutoCourierRetryTick((t) => t + 1), 5 * 60 * 1000 + 2000);
-          } else if (remainingCount > 0 && fetchedLiveCount > 0) {
-            followupTimer = setTimeout(() => setAutoCourierRetryTick((t) => t + 1), 3500);
-          }
+          setCourierReports((prev) => ({ ...prev, ...updates }));
         }
       } catch (err) {
-        console.warn("Background courier rate fetch skipped:", err);
-      } finally {
-        if (!isCancelled) {
-          setLoadingCourierReports(prev => {
-            const next = { ...prev };
-            pendingPhones.forEach(p => { next[p] = false; });
-            return next;
-          });
-        }
+        console.warn("Saved courier cache hydration skipped:", err);
       }
     };
 
-    fetchVisibleCourierStats();
+    loadSavedCourierCacheOnly();
     return () => {
       isCancelled = true;
-      if (followupTimer) clearTimeout(followupTimer);
     };
-  }, [isAdminOpen, isAdminVerified, adminTab, filteredOrders, incompleteOrders, adminOrdersLimit, autoCourierRetryTick]);
+  }, [isAdminOpen, isAdminVerified, adminTab, filteredOrders, incompleteOrders, adminOrdersLimit]);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(
     null,
   );
@@ -3976,7 +3891,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     });
     let unsubIncompleteOrders = () => {};
     if (isAdmin) {
-      const incOrdersQuery = query(collection(db, "incomplete_orders"), limit(150));
+      const incOrdersQuery = query(collection(db, "incomplete_orders"), orderBy("updatedAt", "desc"), limit(200));
       unsubIncompleteOrders = onSnapshot(incOrdersQuery, (snapshot) => {
         const list = snapshot.docs.map(d => {
           const data = d.data() as any;
@@ -4007,6 +3922,110 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
       unsubIncompleteOrders();
     };
   }, [user, isAdmin, isQuotaExceeded]);
+  // Stock ledger: when the ledger was switched on. Orders created before this are left alone.
+  const [stockLedgerStartedAtMs, setStockLedgerStartedAtMs] = useState<number | null>(null);
+  const stockLedgerStartRef = useRef<number | null>(null);
+  useEffect(() => {
+    stockLedgerStartRef.current = stockLedgerStartedAtMs;
+  }, [stockLedgerStartedAtMs]);
+  useEffect(() => {
+    if (!user || !isAdmin || isQuotaExceeded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ref = doc(db, STOCK_LEDGER_CONFIG.collection, STOCK_LEDGER_CONFIG.id);
+        const snap = await getDoc(ref);
+        let startedAtMs = Number(snap.exists() ? (snap.data() as any)?.startedAtMs : 0) || 0;
+        if (!startedAtMs) {
+          startedAtMs = Date.now();
+          await setDoc(ref, { startedAtMs, startedAt: new Date(startedAtMs).toISOString() }, { merge: true });
+        }
+        if (!cancelled) setStockLedgerStartedAtMs(startedAtMs);
+      } catch (err) {
+        console.warn("Stock ledger is off (could not read or create its start date)", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isAdmin, isQuotaExceeded]);
+
+  // Keep stock in step with orders: take it for live orders, give it back for cancelled, returned
+  // (including courier cancels) and deleted ones. Each order is handled in a transaction, so it is
+  // never counted twice even with several admin devices open.
+  const stockSyncBusyRef = useRef<Set<string>>(new Set());
+  const stockSyncFailedAtRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!isAdmin || !stockLedgerStartedAtMs || !Array.isArray(orderHistory) || orderHistory.length === 0) return;
+    const now = Date.now();
+    const pending = orderHistory.filter((o: any) => {
+      if (!o?.id || stockSyncBusyRef.current.has(String(o.id))) return false;
+      const failedAt = stockSyncFailedAtRef.current.get(String(o.id));
+      if (failedAt && now - failedAt < 60_000) return false;
+      return orderNeedsStockSync(o, stockLedgerStartedAtMs);
+    });
+    if (pending.length === 0) return;
+    pending.forEach((o: any) => stockSyncBusyRef.current.add(String(o.id)));
+    (async () => {
+      for (const o of pending) {
+        const id = String(o.id);
+        try {
+          await reconcileOrderStock(db, id, { ledgerStartedAtMs: stockLedgerStartedAtMs });
+          stockSyncFailedAtRef.current.delete(id);
+        } catch (err) {
+          stockSyncFailedAtRef.current.set(id, Date.now());
+          console.warn(`Stock sync failed for order ${id}`, err);
+        } finally {
+          stockSyncBusyRef.current.delete(id);
+        }
+      }
+    })();
+  }, [orderHistory, isAdmin, stockLedgerStartedAtMs]);
+
+  // Back / Forward return you to where you were on each page (e.g. halfway down the home page)
+  // instead of the top. The app swaps views without a page load, so the browser cannot do this itself.
+  const scrollMemoryRef = useRef<Map<string, number>>(new Map());
+  const restoringScrollRef = useRef(false);
+  useEffect(() => {
+    try {
+      if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+    } catch {}
+    const keyNow = () => window.location.pathname + window.location.search;
+    let raf = 0;
+    const onScroll = () => {
+      if (restoringScrollRef.current) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => scrollMemoryRef.current.set(keyNow(), window.scrollY));
+    };
+    let restoreTimer: number | undefined;
+    const onPop = () => {
+      const target = scrollMemoryRef.current.get(keyNow());
+      if (!target || target <= 0) return;
+      restoringScrollRef.current = true;
+      let tries = 0;
+      const attempt = () => {
+        tries += 1;
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        // Wait (up to ~1 s) until the page is tall enough again, then jump straight there.
+        if (maxScroll >= target - 2 || tries >= 20) {
+          window.scrollTo({ top: Math.min(target, Math.max(0, maxScroll)), behavior: "instant" as ScrollBehavior });
+          restoringScrollRef.current = false;
+          return;
+        }
+        restoreTimer = window.setTimeout(attempt, 50);
+      };
+      requestAnimationFrame(() => requestAnimationFrame(attempt));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("popstate", onPop);
+      cancelAnimationFrame(raf);
+      if (restoreTimer) window.clearTimeout(restoreTimer);
+    };
+  }, []);
+
   // Background Poller for Abandoned Carts Auto SMS
   useEffect(() => {
     if (!isAdmin || siteConfig?.isReminderSmsEnabled === false) return; // Only run when admin is logged in & reminders enabled
@@ -4124,7 +4143,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   };
   const handleAdminImageUpload = async (
     e: ChangeEvent<HTMLInputElement>,
-    type: "product" | "banner" | "campaign" = "product",
+    type: "product" | "banner" | "banner-mobile" | "campaign" = "product",
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -4149,12 +4168,15 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
             image: dataUrl,
           }));
         } else {
+          // "banner" = computer image, "banner-mobile" = separate phone image
+          const field = type === "banner-mobile" ? "mobileImage" : "image";
           if (editingBanner) {
-            setEditingBanner((prev: any) => ({ ...(prev || {}), image: dataUrl }));
+            setEditingBanner((prev: any) => ({ ...(prev || {}), [field]: dataUrl }));
           } else {
-            setNewBanner((prev: any) => ({ ...(prev || {}), image: dataUrl }));
+            setNewBanner((prev: any) => ({ ...(prev || {}), [field]: dataUrl }));
           }
         }
+        e.target.value = ""; // allow choosing the same file again
       };
       reader.readAsDataURL(compressedFile);
     } catch (error) {
@@ -4180,6 +4202,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
           title: editingBanner.title || "",
           subtitle: editingBanner.subtitle || "",
           image: editingBanner.image,
+          mobileImage: editingBanner.mobileImage || "",
           type: editingBanner.type || "hero",
           objectPosition: editingBanner.objectPosition || "50% 50%",
           linkedProductId: editingBanner.linkedProductId || "",
@@ -4547,7 +4570,7 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
     });
   };
   const deleteCampaign = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this campaign?")) return;
+    if (!confirm("এই ক্যাম্পেইনটি মুছে ফেলবেন? লিংকটি আর কাজ করবে না।")) return;
     try {
       await deleteDoc(doc(db, "campaigns", id));
       toast.success("Campaign deleted");
@@ -4557,43 +4580,29 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
   };
   const saveCampaign = async (e: FormEvent) => {
     e.preventDefault();
-    if (!editingCampaign?.name || !editingCampaign?.slug) {
-      toast.error("সঠিক Slug প্রয়োজন (শুধুমাত্র ছোট অক্ষর, সংখ্যা এবং ড্যাশ)");
+    const prepared = prepareCampaignForSave(editingCampaign as any, campaigns as any);
+    if (prepared.ok === false) {
+      toast.error((prepared as { ok: false; error: string }).error);
       return;
     }
-    
-    // Validation
-    if (!editingCampaign?.name) {
-      toast.error("ক্যাম্পেইন নাম প্রয়োজন");
-      return;
-    }
-    if (!editingCampaign?.slug || !/^[a-z0-9-]+$/.test(editingCampaign.slug)) {
-      toast.error("সঠিক Slug প্রয়োজন (শুধুমাত্র ছোট অক্ষর, সংখ্যা এবং ড্যাশ)");
-      return;
-    }
-    // Banner image is optional
-    const image = editingCampaign?.image || "";
-    // Generate slug from name if not provided (though we required it)
-    const slug = editingCampaign.slug.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+    const data = (prepared as Extract<typeof prepared, { ok: true }>).data;
     try {
-      const campaignData = {
-        ...editingCampaign,
-        slug,
-        updatedAt: new Date().toISOString(),
-        isActive: editingCampaign.isActive !== undefined ? editingCampaign.isActive : true,
-        productIds: editingCampaign.productIds || [],
-      };
-      
-      if (editingCampaign.id) {
-        await updateDoc(doc(db, "campaigns", editingCampaign.id), campaignData);
-        toast.success("Campaign updated successfully");
+      if (editingCampaign?.id) {
+        await updateDoc(doc(db, "campaigns", editingCampaign.id), data);
       } else {
-        await addDoc(collection(db, "campaigns"), {
-          ...campaignData,
-          createdAt: new Date().toISOString(),
-        });
-        toast.success("Campaign created successfully");
+        await addDoc(collection(db, "campaigns"), { ...data, createdAt: new Date().toISOString() });
       }
+      const link = campaignLink(data.slug);
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(link);
+        copied = true;
+      } catch {}
+      toast.success(
+        `${editingCampaign?.id ? "ক্যাম্পেইন আপডেট হয়েছে" : "ক্যাম্পেইন তৈরি হয়েছে"}${copied ? " · লিংক কপি হয়েছে" : ""}\n${link}`,
+        { duration: 5000 },
+      );
+      if (!data.isActive) toast("এটি এখন Draft: চালু না করা পর্যন্ত কাস্টমার লিংকটি দেখতে পাবে না।", { icon: "ℹ️" });
       setEditingCampaign(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, "campaigns");
@@ -4786,6 +4795,22 @@ const maps: any = { "Charger Fan": { bn: "চার্জার ফ্যান"
         return;
       }
       if (editingProduct.id) {
+        // PHOTO SAFETY: the product list is loaded in "lean" form where real photos are replaced by
+        // /api/product-image/... links. Saving those links back used to OVERWRITE the real photo in
+        // Firestore (6 products lost their main photo this way). Put the stored photo back for every
+        // field that still holds such a link before writing.
+        try {
+          const storedSnap = await getDoc(doc(db, "products", editingProduct.id));
+          const stored: any = storedSnap.exists() ? storedSnap.data() : null;
+          if (stored) {
+            const restored = restoreProxyImages(productData, stored);
+            productData.image = restored.image;
+            productData.images = restored.images;
+            productData.variants = restored.variants;
+          }
+        } catch (photoErr) {
+          console.warn("Could not verify stored product photos before saving", photoErr);
+        }
         await updateDoc(doc(db, "products", editingProduct.id), productData);
         await touchProductsTimestamp();
         
@@ -6714,7 +6739,7 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
               name: landingProduct.name + pkgName,
               smsName: (landingProduct.smsName || '').trim(),
               price: subtotal,
-              image: landingProduct.image || ""
+              image: orderImageRef(landingProduct.id, landingProduct.image)
             },
             smsName: (landingProduct.smsName || '').trim(),
             quantity: 1
@@ -6920,8 +6945,13 @@ let message = `আসসালামু আলাইকুম, আমি ${shopN
     const conf = window.confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি চিরতরে ডিলিট করতে চান? এই কাজ আর ফেরত নেওয়া যাবে না।");
     if (!conf) return;
     try {
+      // Give back any stock the order still holds and delete it, in one transaction.
+      await reconcileOrderStock(db, String(id), {
+        ledgerStartedAtMs: stockLedgerStartRef.current,
+        release: true,
+        deleteOrder: true,
+      });
       setOrderHistory((prev) => prev.filter((o) => String(o.id) !== String(id)));
-      await deleteDoc(doc(db, "orders", String(id)));
       toast.success("অর্ডারটি চিরতরে ডিলিট করা হয়েছে।");
     } catch (err: any) {
       alert("ডিলিট করতে সমস্যা হয়েছে: " + err.message);
@@ -7093,6 +7123,7 @@ const handleSaveQuickEdit = async () => {
     ) => {
       const orderId = Date.now().toString();
       const shortId = String(orderId).slice(-6).toUpperCase();
+      const isAdminCreated = Boolean(incompleteOrder?.__createdByAdmin);
       const isPreOrder = payload.items.some((item) => Boolean(item.isComingSoon || item.product?.isComingSoon));
       const newOrder: any = {
         orderId,
@@ -7120,10 +7151,10 @@ const handleSaveQuickEdit = async () => {
               smsName: directSmsName,
               price: item.unitPrice,
               buyingPrice: item.buyingPrice || currentProd?.buyingPrice || 0,
-              image: item.image || currentProd?.image || "",
-              colors: currentProd?.colors || [],
-              sizes: (currentProd as any)?.sizes || [],
-              variants: currentProd?.variants || [],
+              // Photo link and option names only: inline photo data would exceed Firestore's 1 MB limit.
+              image: orderImageRef(item.productId || currentProd?.id, item.image || currentProd?.image),
+              ...slimColorsSizes(currentProd),
+              variants: slimVariants(currentProd?.variants),
               isComingSoon: Boolean(item.isComingSoon || currentProd?.isComingSoon),
             },
             smsName: directSmsName,
@@ -7139,43 +7170,21 @@ const handleSaveQuickEdit = async () => {
         customerEmail: incompleteOrder?.customerEmail || incompleteOrder?.email || "",
         district: payload.district || incompleteOrder?.district || "",
         userId: incompleteOrder?.userId || "guest",
-        source: "incomplete_order_recovered",
-        recoveredFromIncompleteId: incompleteOrder?.id || null,
+        // Orders taken by phone from the admin panel are marked so they can be told apart.
+        source: isAdminCreated ? "admin_phone_order" : "incomplete_order_recovered",
+        orderType: isAdminCreated ? "phone_order" : undefined,
+        createdByAdmin: isAdminCreated ? (user?.email || user?.uid || "admin") : undefined,
+        recoveredFromIncompleteId: isAdminCreated ? null : incompleteOrder?.id || null,
         purchaseTracked: payload.status === "confirmed",
       };
 
-      const stockPromises = payload.items
-        .filter((item) => Boolean(item.productId) && products.some((p) => p.id === item.productId))
-        .map((item) => {
-          const currentProd = products.find((p) => p.id === item.productId)!;
-          const reqQty = Math.max(1, Number(item.quantity) || 1);
-          const updatePayload: any = {
-            salesCount: increment(reqQty),
-          };
-          if (Array.isArray(currentProd.variants) && currentProd.variants.length > 0) {
-            const updatedVariants = currentProd.variants.map((v: any) => {
-              const isMatch = (!item.color || v.name === item.color) && (!item.size || v.size === item.size);
-              if (isMatch) {
-                return { ...v, stock: Math.max(0, (Number(v.stock) || 0) - reqQty) };
-              }
-              return v;
-            });
-            const newTotalStock = updatedVariants.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
-            updatePayload.variants = updatedVariants;
-            updatePayload.stock = Math.max(0, newTotalStock);
-          } else {
-            const currentStock = Math.max(0, Number(currentProd.stock) || 0);
-            updatePayload.stock = Math.max(0, currentStock - reqQty);
-          }
-          return updateDoc(doc(db, "products", currentProd.id), updatePayload).catch(() => {});
-        });
+      // Stock is taken by the stock ledger as soon as the order appears in the admin list.
+      if (approxDocBytes(newOrder) > ORDER_DOC_SAFE_BYTES) {
+        throw new Error("অর্ডারটি অনেক বড় হয়ে গেছে। পণ্য কয়েকটি আলাদা অর্ডারে ভাগ করে দিন।");
+      }
+      await setDoc(doc(db, "orders", orderId), newOrder);
 
-      await Promise.all([
-        setDoc(doc(db, "orders", orderId), newOrder),
-        ...stockPromises,
-      ]);
-
-      if (incompleteOrder?.id) {
+      if (incompleteOrder?.id && !isAdminCreated) {
         await deleteDoc(doc(db, "incomplete_orders", incompleteOrder.id)).catch(() => {});
         setIncompleteOrders((prev) => prev.filter((item) => item.id !== incompleteOrder.id));
       }
@@ -7671,29 +7680,6 @@ ${productNames}
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden relative pb-16 md:pb-0">
       <React.Suspense fallback={null}>
-      <Helmet>
-        {selectedCategory && selectedCategory !== "all" && selectedCategory !== "All" ? (
-          <>
-            <title>{`${selectedCategory} Price in Bangladesh - ${selectedCategory} কিনুন সেরা দামে | i SHOP BD`}</title>
-            <meta name="description" content={`সেরা দামে আসল ${selectedCategory} কিনুন i SHOP BD থেকে। 100% অথেনটিক গ্যাজেট, অফিসিয়াল ওয়ারেন্টি ও ক্যাশ অন হোম ডেলিভারি!`} />
-            <link rel="canonical" href={`https://ishopbd.com${getCategoryPath(selectedCategory)}`} />
-            <meta property="og:title" content={`${selectedCategory} Price in Bangladesh | i SHOP BD`} />
-            <meta property="og:description" content={`সেরা দামে আসল ${selectedCategory} কিনুন i SHOP BD থেকে। 100% অথেনটিক গ্যাজেট ও ক্যাশ অন হোম ডেলিভারি!`} />
-            <meta property="og:url" content={`https://ishopbd.com${getCategoryPath(selectedCategory)}`} />
-          </>
-        ) : (
-          <>
-            <title>i SHOP BD (আই শপ বিডি) - Online Gadgets, Charger Fan & Electronics Shopping in BD</title>
-            <meta name="description" content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের বিশ্বস্ত গ্যাজেট ও ইলেকট্রনিক্স শপ। চার্জার ফ্যান, পাওয়ার ব্যাংক, স্মার্ট ওয়াচ, হেডফোন সহ প্রিমিয়াম গ্যাজেট সেরা দামে কিনুন।" />
-            <link rel="canonical" href="https://ishopbd.com/" />
-          </>
-        )}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="icon" type="image/png" sizes="48x48" href="/icon-48x48.png" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
-        <link rel="apple-touch-icon" href="/icon-192x192.png" />
-        <link rel="shortcut icon" href="/favicon.ico" />
-      </Helmet>
       <Toaster position="top-right" reverseOrder={false} />
       {/* Bulk Action Floating Bar */}
       <AnimatePresence>
@@ -7738,7 +7724,7 @@ ${productNames}
                   setSelectedOrderIds([]);
                   e.target.value = "";
                 }}
-                className="bg-indigo-600 text-white px-3 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all outline-none cursor-pointer"
+                className="bg-secondary text-white px-3 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all outline-none cursor-pointer"
               >
                 <option value="">স্ট্যাটাস...</option>
                 <option value="pending">পেন্ডিং</option>
@@ -7781,7 +7767,7 @@ ${productNames}
         </motion.div>
       )}
       {/* 1. Header */}
-      <header className="sticky top-0 z-50 bg-cream/90 backdrop-blur-md shadow-sm transition-all duration-300">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-line transition-all duration-300">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
           {/* Brand Logo */}
           <div className="flex items-center gap-2 shrink-0">
@@ -7835,14 +7821,14 @@ ${productNames}
                   <Camera size={18} />
                 </button>
               )}
-              <button className="cursor-pointer absolute right-0 top-0 bottom-0 px-6 bg-primary text-white hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center">
+              <button className="cursor-pointer absolute right-0 top-0 bottom-0 px-6 bg-secondary text-white hover:bg-navy transition-all active:scale-95 flex items-center justify-center">
                 <Search size={18} />
               </button>
             </form>
             {isAiSearching && (
-              <div className="absolute right-24 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded-full z-10 border border-indigo-100 animate-pulse">
-                <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" />
-                <span className="text-[8px] font-bold text-indigo-600">AI Searching...</span>
+              <div className="absolute right-24 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-secondary/5 px-2 py-0.5 rounded-full z-10 border border-secondary/10 animate-pulse">
+                <div className="w-1.5 h-1.5 bg-secondary rounded-full animate-bounce" />
+                <span className="text-[8px] font-bold text-secondary">AI Searching...</span>
               </div>
             )}
 
@@ -7990,8 +7976,8 @@ ${productNames}
             </div>
           </div>
         </div>
-        {/* Mobile Search Bar - Prominent & Touch-friendly */}
-        <div className="px-4 pb-2.5 md:hidden">
+        {/* Mobile Search Bar - opens from the search icon in the category bar (stays open while there is a query) */}
+        <div className={`px-4 pb-2.5 md:hidden ${isMobileSearchOpen || searchInput ? "" : "hidden"}`}>
           <div className="relative flex items-center w-full">
             <div className="relative flex items-center w-full bg-white border border-gray-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 rounded-full shadow-2xs transition-all overflow-hidden">
               <div className="pl-3.5 pr-2 text-gray-400 flex items-center pointer-events-none">
@@ -8074,230 +8060,195 @@ ${productNames}
             )}
           </div>
         </div>
-        {/* Mobile Category List (Scrollable pills) */}
-        {!activeCampaign && !campaignParam && (
-          <div className="border-t border-gray-200/60 md:hidden bg-cream overflow-hidden">
-            <div className="flex overflow-x-auto no-scrollbar py-2.5 px-4 gap-2 scroll-smooth">
-              <button
-                onClick={() => {
-                  setSelectedCategory("all");
-                  setSelectedSubcategory("all");
-                  setCurrentPage(1);
-                  setIsProductDetailsOpen(false);
-                  setSelectedProduct(null);
-                }}
-                className={`cursor-pointer whitespace-nowrap text-xs font-bold transition-all px-3.5 py-1.5 rounded-full touch-manipulation active:scale-95 ${
-                  selectedCategory === "all"
-                    ? "bg-primary text-white shadow-sm shadow-primary/20"
-                    : "text-gray-600 bg-white border border-gray-200/80 hover:bg-gray-100"
-                }`}
-              >
-                {t("সবগুলো", "All")}
-              </button>
-              {categories.map((cat) => (
-                <a
-                  key={cat.id}
-                  href={getCategoryPath(cat.name)}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setSelectedCategory(cat.name);
-                    setSelectedSubcategory("all");
-                    setCurrentPage(1);
-                    setIsProductDetailsOpen(false);
-                    setSelectedProduct(null);
-                  }}
-                  className={`cursor-pointer whitespace-nowrap text-xs font-bold transition-all px-3.5 py-1.5 rounded-full touch-manipulation active:scale-95 ${
-                    selectedCategory === cat.name
-                      ? "bg-primary text-white shadow-sm shadow-primary/20"
-                      : "text-gray-600 bg-white border border-gray-200/80 hover:bg-gray-100"
-                  }`}
-                >
-                  {tc(cat.name)}
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* Mobile Subcategory List */}
-        {!activeCampaign && !campaignParam && selectedCategory !== "all" && (() => {
-          const selCatObj = categories.find(c => c.name === selectedCategory);
-          const subcats = selCatObj?.subcategories || [];
-          if (subcats.length === 0) return null;
-          return (
-            <div className="border-t border-gray-100/50 md:hidden bg-gray-50/50 overflow-hidden">
-              <div className="flex overflow-x-auto no-scrollbar py-2 px-4 gap-2 scroll-smooth">
-                <a
-                  href={getCategoryPath(selectedCategory)}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setSelectedSubcategory("all");
-                    setCurrentPage(1);
-                    setIsProductDetailsOpen(false);
-                    setSelectedProduct(null);
-                    window.history.pushState({ category: selectedCategory, subcategory: "all" }, "", getCategoryPath(selectedCategory));
-                  }}
-                  className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
-                    selectedSubcategory === "all"
-                      ? "bg-primary text-white shadow-sm"
-                      : "text-gray-500 bg-white border border-gray-100 hover:bg-gray-50"
-                  }`}
-                >
-                  All
-                </a>
-                {subcats.map((sub, idx) => {
-                  const subPath = getCategoryPath(selectedCategory, sub);
-                  return (
-                    <a
-                      key={idx}
-                      href={subPath}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setSelectedSubcategory(sub);
-                        setCurrentPage(1);
-                        setIsProductDetailsOpen(false);
-                        setSelectedProduct(null);
-                        window.history.pushState({ category: selectedCategory, subcategory: sub }, "", subPath);
-                      }}
-                      className={`whitespace-nowrap text-xs font-bold transition-all px-3 py-1.5 rounded-full ${
-                        selectedSubcategory === sub
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-gray-500 bg-white border border-gray-100 hover:bg-gray-50"
-                      }`}
-                    >
-                      {sub}
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
       </header>
-      {/* 2. Category Menu - Hide on Mobile since it's integrated in header now */}
-      {!activeCampaign && !campaignParam && (
-        <nav className="bg-gray-50/10 border-y border-gray-200/80 hidden md:block">
-          <div className="container mx-auto px-4">
-            <div className="flex divide-x divide-gray-200/80 border-x border-gray-200/80 w-full">
-              <button
-                onClick={() => {
-                  setSelectedCategory("all");
-                  setSelectedSubcategory("all");
-                  setSearchInput("");
-                  setSearchQuery("");
-                  setCurrentPage(1);
-                  setIsProductDetailsOpen(false);
-                  setSelectedProduct(null);
-                  window.history.pushState({}, "", "/");
-                }}
-                className={`flex-1 px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                  selectedCategory === "all"
-                    ? "bg-white text-primary"
-                    : "text-gray-600 hover:bg-white/80 hover:text-primary"
+      {/* 2. Category bar.
+          Home page: Home + every category (▾ opens a small popup with its subcategories).
+          Inside a category: ONLY  Home / Category ▾ / Subcategory  - the name is shown once, here.
+          Other categories come back when Home is tapped. */}
+      {!activeCampaign && !campaignParam && (() => {
+        const inCategory = selectedCategory !== "all";
+        const goHome = () => {
+          setSelectedCategory("all");
+          setSelectedSubcategory("all");
+          setSearchInput("");
+          setSearchQuery("");
+          setCurrentPage(1);
+          setIsProductDetailsOpen(false);
+          setSelectedProduct(null);
+          setActiveCategoryNavDropdown(null);
+          window.history.pushState({}, "", "/");
+        };
+        const goTo = (catName: string, sub: string = "all") => {
+          const path = sub === "all" ? getCategoryPath(catName) : getCategoryPath(catName, sub);
+          setSelectedCategory(catName);
+          setSelectedSubcategory(sub);
+          setSearchInput("");
+          setSearchQuery("");
+          setCurrentPage(1);
+          setIsProductDetailsOpen(false);
+          setSelectedProduct(null);
+          setActiveCategoryNavDropdown(null);
+          window.history.pushState({ category: catName, subcategory: sub }, "", path);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+        const openPopupFor = (catName: string, el: HTMLElement) => {
+          if (activeCategoryNavDropdown === catName) {
+            setActiveCategoryNavDropdown(null);
+            return;
+          }
+          const navEl = el.closest("nav");
+          const navRect = navEl?.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          const popupWidth = 224;
+          const maxLeft = (navRect?.width || window.innerWidth) - popupWidth - 8;
+          setCategoryPopupLeft(Math.max(8, Math.min(r.left - (navRect?.left || 0), maxLeft)));
+          setActiveCategoryNavDropdown(catName);
+        };
+        const popupCat = categories.find((c: any) => c.name === activeCategoryNavDropdown);
+        const popupSubs: string[] = popupCat?.subcategories || [];
+        const activeCatObj = categories.find((c: any) => c.name === selectedCategory);
+        const activeSubs: string[] = activeCatObj?.subcategories || [];
+        const cell = "shrink-0 px-3.5 md:px-6 py-2 text-xs md:text-sm font-bold transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer";
+
+        return (
+          <nav className="bg-white border-b border-line relative z-30 m-0">
+            <div className="container mx-auto px-0 md:px-4 flex">
+              <div
+                className={`flex flex-1 min-w-0 divide-x divide-gray-200/80 border-x border-gray-200/80 w-full ${
+                  inCategory ? "" : "overflow-x-auto no-scrollbar scroll-smooth"
                 }`}
               >
-                {t("সবগুলো", "All")}
-              </button>
-              {categories.map((cat) => {
-                const subcats = cat.subcategories || [];
-                return (
-                  <div key={cat.id} className="flex-1 relative group flex">
-                    <a
-                      href={getCategoryPath(cat.name)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setSelectedCategory(cat.name);
-                        setSelectedSubcategory("all");
-                        setSearchInput("");
-                        setSearchQuery("");
-                        setCurrentPage(1);
-                        setIsProductDetailsOpen(false);
-                        setSelectedProduct(null);
-                        window.history.pushState({ category: cat.name, subcategory: "all" }, "", getCategoryPath(cat.name));
-                      }}
-                      className={`cursor-pointer w-full px-6 py-2 text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
-                        selectedCategory === cat.name
-                          ? "bg-white text-primary"
-                          : "text-gray-600 hover:bg-white/80 hover:text-primary"
+                <button
+                  type="button"
+                  onClick={goHome}
+                  className={`${cell} ${inCategory ? "" : "md:flex-1"} ${
+                    selectedCategory === "all" ? "bg-primary/5 text-primary" : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                  }`}
+                  aria-label={t("হোম", "Home")}
+                >
+                  <Home size={18} className="shrink-0" />
+                </button>
+
+                {inCategory ? (
+                  <>
+                    {/* Current category - tap to switch subcategory */}
+                    <button
+                      type="button"
+                      onClick={(e) => (activeSubs.length > 0 ? openPopupFor(selectedCategory, e.currentTarget) : goTo(selectedCategory))}
+                      className={`${cell} ${
+                        selectedSubcategory === "all" ? "text-primary" : "text-secondary hover:text-primary"
                       }`}
+                      aria-expanded={activeCategoryNavDropdown === selectedCategory}
                     >
-                      {tc(cat.name)}
-                      {subcats.length > 0 && (
-                        <ChevronDown size={14} className="transition-transform group-hover:rotate-180 duration-300" />
+                      {tc(selectedCategory)}
+                      {activeSubs.length > 0 && (
+                        <ChevronDown
+                          size={14}
+                          className={`transition-transform duration-200 ${activeCategoryNavDropdown === selectedCategory ? "rotate-180" : ""}`}
+                        />
                       )}
-                    </a>
-                    
-                    {subcats.length > 0 && (
-                      <div className="absolute left-1/2 -translate-x-1/2 top-full pt-2 w-56 opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300 ease-out z-[999]">
-                        <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-gray-100 shadow-xl p-2.5 flex flex-col gap-1 ring-1 ring-black/5">
-                          <a
-                            href={getCategoryPath(cat.name)}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setSelectedCategory(cat.name);
-                              setSelectedSubcategory("all");
-                              setSearchInput("");
-                              setSearchQuery("");
-                              setCurrentPage(1);
-                              setIsProductDetailsOpen(false);
-                              setSelectedProduct(null);
-                              window.history.pushState({ category: cat.name, subcategory: "all" }, "", getCategoryPath(cat.name));
-                            }}
-                            className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
-                              selectedCategory === cat.name && selectedSubcategory === "all"
-                                ? "bg-primary/5 text-primary"
-                                : "text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            All {tc(cat.name)}
-                          </a>
-                          <div className="h-[1px] bg-gray-100 my-1" />
-                          {subcats.map((sub, sIdx) => {
-                            const subPath = getCategoryPath(cat.name, sub);
-                            return (
-                              <a
-                                key={sIdx}
-                                href={subPath}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  setSelectedCategory(cat.name);
-                                  setSelectedSubcategory(sub);
-                                  setSearchInput("");
-                                  setSearchQuery("");
-                                  setCurrentPage(1);
-                                  setIsProductDetailsOpen(false);
-                                  setSelectedProduct(null);
-                                  window.history.pushState({ category: cat.name, subcategory: sub }, "", subPath);
-                                }}
-                                className={`text-left text-xs font-bold px-3 py-2 rounded-xl transition-all ${
-                                  selectedCategory === cat.name && selectedSubcategory === sub
-                                    ? "bg-primary/5 text-primary"
-                                    : "text-gray-700 hover:bg-gray-50"
-                                }`}
-                              >
-                                {sub}
-                              </a>
-                            );
-                          })}
-                        </div>
-                      </div>
+                    </button>
+                    {selectedSubcategory && selectedSubcategory !== "all" && (
+                      <span className="min-w-0 flex items-center px-3.5 md:px-6 py-2 text-xs md:text-sm font-extrabold text-primary">
+                        <span className="truncate">{selectedSubcategory}</span>
+                      </span>
                     )}
-                  </div>
-                );
-              })}
+                    <span className="flex-1" aria-hidden="true" />
+                  </>
+                ) : (
+                  categories.map((cat: any) => {
+                    const subcats: string[] = cat.subcategories || [];
+                    const isOpen = activeCategoryNavDropdown === cat.name;
+                    return (
+                      <div key={cat.id} className="shrink-0 md:flex-1 flex items-stretch">
+                        <a
+                          href={getCategoryPath(cat.name)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            goTo(cat.name);
+                          }}
+                          className={`${cell} flex-1 ${subcats.length > 0 ? "pr-1.5 md:pr-2" : ""} text-gray-700 hover:bg-gray-50 hover:text-primary`}
+                        >
+                          {tc(cat.name)}
+                        </a>
+                        {subcats.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => openPopupFor(cat.name, e.currentTarget.parentElement as HTMLElement)}
+                            className={`pl-0.5 pr-2.5 md:pr-3 cursor-pointer transition-colors ${isOpen ? "text-primary" : "text-gray-400 hover:text-primary"}`}
+                            aria-label={`${cat.name} subcategories`}
+                            aria-expanded={isOpen}
+                          >
+                            <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {/* Mobile search toggle (desktop keeps its search box in the header) */}
+              <button
+                type="button"
+                onClick={() => setIsMobileSearchOpen((v) => !v)}
+                className={`md:hidden shrink-0 w-12 flex items-center justify-center border-l border-gray-200/80 transition-colors cursor-pointer touch-manipulation ${
+                  isMobileSearchOpen ? "bg-primary text-white" : "text-secondary hover:text-primary"
+                }`}
+                aria-label={t("পণ্য খুঁজুন", "Search products")}
+                aria-expanded={isMobileSearchOpen}
+                title={t("পণ্য খুঁজুন", "Search products")}
+              >
+                {isMobileSearchOpen ? <X size={18} /> : <Search size={18} />}
+              </button>
             </div>
-          </div>
-        </nav>
-      )}
+
+            {/* Subcategory popup (rendered outside the scrolling bar so it is never cut off) */}
+            {popupCat && popupSubs.length > 0 && (
+              <>
+                <div className="fixed inset-0 z-[998]" onClick={() => setActiveCategoryNavDropdown(null)} aria-hidden="true" />
+                <div
+                  className="absolute top-full mt-1 w-56 z-[999] bg-white rounded-2xl border border-line shadow-[0_16px_40px_-12px_rgba(38,34,90,0.28)] p-1.5"
+                  style={{ left: categoryPopupLeft }}
+                  role="menu"
+                >
+                  {["all", ...popupSubs].map((sub) => {
+                    const active = selectedCategory === popupCat.name && (selectedSubcategory || "all") === sub;
+                    const label = sub === "all" ? `${t("সব", "All")} ${tc(popupCat.name)}` : sub;
+                    return (
+                      <a
+                        key={sub}
+                        href={sub === "all" ? getCategoryPath(popupCat.name) : getCategoryPath(popupCat.name, sub)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          goTo(popupCat.name, sub);
+                        }}
+                        role="menuitem"
+                        className={`flex items-center justify-between text-left text-[13px] font-bold px-3 py-2.5 rounded-xl transition-colors ${
+                          active ? "bg-primary/10 text-primary" : "text-secondary hover:bg-gray-50 hover:text-primary"
+                        }`}
+                      >
+                        <span className="truncate">{label}</span>
+                        {active && <Check size={14} className="shrink-0" />}
+                      </a>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </nav>
+        );
+      })()}
       {/* 3. Hero Banner Slider (Natural Aspect Ratio, No Crop, No Zoom) */}
       {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && !isBannersResolved && heroBanners.length === 0 && (
-        <section className="container mx-auto px-4 mt-4">
-          <div className="w-full aspect-[16/7] max-h-[420px] rounded-2xl md:rounded-3xl bg-gray-100 animate-pulse border border-gray-100" />
+        <section className="container mx-auto px-0 md:px-4 mt-0">
+          <div className="w-full aspect-[16/7] max-h-[420px] rounded-b-2xl md:rounded-b-3xl bg-gray-100 animate-pulse" />
         </section>
       )}
       {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && !campaignParam && selectedCategory === "all" && heroBanners.length > 0 && (
-        <section className="container mx-auto px-4 mt-4 relative group">
+        <section className="container mx-auto px-0 md:px-4 mt-0 relative group">
+          {/* Banner sits flush under the category bar: square top corners, rounded bottom corners */}
           <div 
-            className="w-full relative overflow-hidden rounded-2xl md:rounded-3xl shadow-xl border border-gray-100 bg-gray-50 select-none"
+            className="w-full relative overflow-hidden rounded-b-2xl md:rounded-b-3xl md:border md:border-t-0 md:border-line bg-white select-none"
             onMouseEnter={() => setIsBannerHovered(true)}
             onMouseLeave={() => setIsBannerHovered(false)}
           >
@@ -8313,6 +8264,10 @@ ${productNames}
               return (
                 <div className="w-full h-auto pointer-events-none select-none invisible" aria-hidden="true">
                   <picture className="w-full h-auto block">
+                    {/* Phone banner (optional): taller image uploaded separately for phones */}
+                    {activeBanner?.mobileImage && (
+                      <source media="(max-width: 767px)" srcSet={activeBanner.mobileImage} />
+                    )}
                     {isDefault && (
                       <source
                         type="image/webp"
@@ -8403,6 +8358,9 @@ ${productNames}
                     : rawBannerImg;
                   return (
                     <picture className="w-full h-full block">
+                      {banner?.mobileImage && (
+                        <source media="(max-width: 767px)" srcSet={banner.mobileImage} />
+                      )}
                       {isDefaultHero && (
                         <source
                           type="image/webp"
@@ -8513,91 +8471,7 @@ ${productNames}
           </div>
         </section>
       )}
-      {(selectedCategory !== "all" ||
-        (selectedSubcategory && selectedSubcategory !== "all") ||
-        selectedBrand !== "all" ||
-        searchQuery) && (
-        <div className="container mx-auto px-4 mt-6">
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-wrap items-center gap-3 bg-cream p-4 rounded-2xl border border-gray-100"
-          >
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              Filters:
-            </span>
-            {selectedCategory !== "all" && (
-              <span className="bg-primary/5 text-primary text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-primary/10 shadow-sm">
-                Category: {selectedCategory}
-                <button
-                  onClick={() => {
-                    setSelectedCategory("all");
-                    setSelectedSubcategory("all");
-                    window.history.pushState({}, "", "/");
-                  }}
-                  className="hover:bg-primary/10 p-0.5 rounded-md transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {selectedSubcategory && selectedSubcategory !== "all" && (
-              <span className="bg-primary text-white text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 shadow-sm">
-                Subcategory: {selectedSubcategory}
-                <button
-                  onClick={() => {
-                    setSelectedSubcategory("all");
-                    const targetPath = getCategoryPath(selectedCategory);
-                    window.history.pushState({ category: selectedCategory, subcategory: "all" }, "", targetPath);
-                  }}
-                  className="hover:bg-white/20 p-0.5 rounded-md transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {selectedBrand !== "all" && (
-              <span className="bg-blue-50 text-blue-600 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-blue-100 shadow-sm">
-                Brand: {selectedBrand}
-                <button
-                  onClick={() => setSelectedBrand("all")}
-                  className="hover:bg-blue-100 p-0.5 rounded-md transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {searchQuery && (
-              <span className="bg-white text-gray-600 text-[10px] font-black px-3 py-2 rounded-xl flex items-center gap-2 border border-gray-200 shadow-sm">
-                Search: {searchQuery}
-                <button
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearchQuery("");
-                  }}
-                  className="hover:bg-gray-100 p-0.5 rounded-md transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            <button
-              onClick={() => {
-                setSelectedCategory("all");
-                setSelectedSubcategory("all");
-                setSelectedBrand("all");
-                setSearchInput("");
-                setSearchQuery("");
-                window.history.pushState({}, "", "/");
-              }}
-              className="text-[10px] font-bold text-gray-400 hover:text-primary transition-colors underline decoration-dotted ml-auto"
-            >
-              Reset All
-            </button>
-          </motion.div>
-        </div>
-      )}
-      <main className={isProductDetailsOpen ? "w-full flex-1 flex flex-col min-h-[800px]" : isCheckoutOpen ? "w-full bg-[#f4f6f8] flex-1 flex flex-col min-h-[800px]" : "container mx-auto px-4 py-8 flex-1 flex flex-col min-h-[800px]"}>
+      <main className={isProductDetailsOpen ? "w-full flex-1 flex flex-col min-h-[800px]" : isCheckoutOpen ? "w-full bg-[#f4f6f8] flex-1 flex flex-col min-h-[800px]" : "container mx-auto px-4 pt-5 pb-8 md:pt-8 flex-1 flex flex-col min-h-[800px]"}>
         <Suspense fallback={<div className="flex-1 flex flex-col items-center justify-center min-h-[400px]"><div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" /></div>}>
           {isCampaignLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]">
@@ -8609,7 +8483,14 @@ ${productNames}
           ) : isProductDetailsOpen && selectedProduct ? (
             <ProductDetails {...{ products, selectedProduct, setIsProductDetailsOpen, handleLikeProduct, likedProducts, ZoomableImage, modalDisplayImage, setModalDisplayImage, setUserInteractedWithGallery, getProductPrice, tempSelectedQty, colorValError, setTempSelectedColor, setColorValError, tempSelectedColor, sizeValError, setTempSelectedSize, setSizeValError, tempSelectedSize, setTempSelectedQty, Minus, handleInlineOrderSubmit, inlineOrderPhone, setInlineOrderPhone, setInlinePhoneFocused, inlinePhoneFocused, savedProfiles, selectSavedProfile, inlineOrderName, setInlineOrderName, isInlineDistrictOpen, inlineDistrictSearch, inlineOrderDistrict, setInlineDistrictSearch, setIsInlineDistrictOpen, InlineDistrictModal, isInlineThanaOpen, inlineThanaSearch, inlineOrderThana, setInlineThanaSearch, setIsInlineThanaOpen, districtThanaMap, setInlineOrderThana, inlineOrderAddress, setInlineOrderAddress, inlineOrderNote, setInlineOrderNote, availableRewardPoints, isApplyingRewardPoints, setIsApplyingRewardPoints, inlineOrderSuccess, validateSelections, addToCartInternal, siteConfig, isInlineOrderProcessing, getDeliveryCharge, inlineOrderArea, setWholesaleSizeQty, sumValues, wholesaleSizeQty, isInlineDistrictOpenWholesale, inlineDistrictSearchWholesale, ALL_DISTRICTS, setInlineOrderDistrict, setInlineOrderArea, isInlineThanaOpenWholesale, inlineThanaSearchWholesale, cleanLatex, activeReviews, isReviewsLoading, setReviewForm, reviewForm, user, handleReviewImageUpload, submitReview, isSubmittingReview, relatedProducts, t, ProductCard, openProductDetails, handleBuyNow, isProductDetailsOpen }} />
           ) : (
-            <ShopList {...{ brands, categories, activeCampaign, cleanLatex, setActiveCampaign, Home, selectedCategory, searchQuery, isTrendingFilterActive, newArrivals, t, ProductCard, openProductDetails, handleBuyNow, handleLikeProduct, likedProducts, featuredProducts, featuredScrollRef, handleFeaturedScroll, featuredScrollPercent, setFeaturedScrollPercent, handleFeaturedSliderChange, isProductDetailsOpen, flashSaleProducts, selectedBrand, minPrice, maxPrice, setIsTrendingFilterActive, setSelectedCategory, setSearchInput, setSelectedBrand, setMinPrice, setMaxPrice, setIsFilterMenuOpen, isFilterMenuOpen, sortBy, setSortBy, FilterMenuModal, isLoading, productsPerPage, ProductSkeleton, filteredProducts, PackageOpen, currentPage, setCurrentPage }} />
+            <>
+              <h1 className="sr-only">
+                {selectedCategory && selectedCategory.toLowerCase() !== "all"
+                  ? `${selectedSubcategory && selectedSubcategory.toLowerCase() !== "all" ? `${selectedSubcategory} – ` : ""}${selectedCategory} Price in Bangladesh`
+                  : "iShopBD (আই শপ বিডি) – Online Shopping in Bangladesh"}
+              </h1>
+              <ShopList {...{ brands, categories, activeCampaign, cleanLatex, setActiveCampaign, Home, selectedCategory, searchQuery, isTrendingFilterActive, newArrivals, t, ProductCard, openProductDetails, handleBuyNow, handleLikeProduct, likedProducts, featuredProducts, featuredScrollRef, handleFeaturedScroll, featuredScrollPercent, setFeaturedScrollPercent, handleFeaturedSliderChange, isProductDetailsOpen, flashSaleProducts, selectedBrand, minPrice, maxPrice, setIsTrendingFilterActive, setSelectedCategory, setSearchInput, setSelectedBrand, setMinPrice, setMaxPrice, setIsFilterMenuOpen, isFilterMenuOpen, sortBy, setSortBy, FilterMenuModal, isLoading, productsPerPage, ProductSkeleton, filteredProducts, PackageOpen, currentPage, setCurrentPage, selectedSubcategory, setSelectedSubcategory, setIsMobileCategoryDrawerOpen }} />
+            </>
           )}
         </Suspense>
       </main>
@@ -8652,14 +8533,11 @@ ${productNames}
           if (catProducts.length === 0) return null;
           
           return (
-            <section key={cat.id} className="mb-10 container mx-auto px-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-6 rounded-full bg-primary"></span>
-                  <h3 className="text-xl md:text-2xl font-black text-secondary">
-                    {tc(cat.name)}
-                  </h3>
-                </div>
+            <section key={cat.id} className="mb-8 container mx-auto px-4">
+              <div className="flex items-end justify-between gap-3 mb-3 md:mb-4">
+                <h3 className="text-lg md:text-2xl font-extrabold text-secondary">
+                  {tc(cat.name)}
+                </h3>
                 <button
                   onClick={() => {
                     setSelectedCategory(cat.name);
@@ -8675,7 +8553,7 @@ ${productNames}
               </div>
 
               {/* Multi-layer Product Grid (2-3 rows / layers on mobile & desktop) */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 md:gap-4">
                 {catProducts.slice(0, 10).map((product) => (
                   <div key={product.id} className="w-full">
                     <ProductCard 
@@ -8713,21 +8591,20 @@ ${productNames}
         })}
         {/* Delivery Policy Notice */}
         {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
-          <div className="mb-6 container mx-auto px-4">
-            <div className="bg-red-100/50 rounded-2xl p-6 border-2 border-dashed border-primary/30">
-              <div className="flex flex-col md:flex-row items-center gap-6">
-                <div className="bg-primary text-white p-4 rounded-full animate-bounce flex-shrink-0">
-                  <Award size={32} />
+          <div className="mb-4 container mx-auto px-4">
+            <div className="bg-white rounded-2xl p-4 md:p-5 border border-line border-l-4 border-l-primary">
+              <div className="flex items-start gap-3 md:gap-4">
+                <div className="bg-primary/10 text-primary p-2.5 rounded-xl flex-shrink-0">
+                  <Award size={22} />
                 </div>
                 <div>
-                  <h4 className="text-xl font-bold text-secondary mb-2 text-center md:text-left">
+                  <h4 className="text-base md:text-lg font-extrabold text-secondary mb-1">
                     {t("ডেলিভারি ও পেমেন্ট পলিসি", "Important Delivery & Payment Policy")}
                   </h4>
-                  <p className="text-sm text-gray-700 leading-relaxed text-center md:text-left">
+                  <p className="text-sm text-muted leading-relaxed">
                     {t("আমাদের প্রতিটি ডেলিভারি খুব যত্ন সহকারে করা হয়। তবে নিরাপত্তার কারণে,", "Every delivery of ours is done with extreme care. However, for security purposes,")}
-                    <span className="font-bold text-red-600">
-                      
-                      {t("দয়া করে ডেলিভারি ম্যানের সামনে বসে পণ্য আনবকরা বা চেক করুন?", "please unbox or check the product while sitting in front of the delivery man.")}
+                    {" "}<span className="font-bold text-secondary">
+                      {t("দয়া করে ডেলিভারি ম্যানের সামনে পণ্য আনবক্স করে চেক করে নিন।", "please unbox and check the product in front of the delivery man.")}
                     </span>
                   </p>
                 </div>
@@ -8738,62 +8615,62 @@ ${productNames}
         {/* Trust Badge / Feature Bar */}
         {!isProductDetailsOpen && !isCheckoutOpen && !activeCampaign && (
           <div className="mb-10 container mx-auto px-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-4">
               {/* Delivery Charge */}
               <button
                 onClick={() => setIsDeliveryInfoOpen(true)}
-                className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all group text-left"
+                className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-3 md:px-4 md:py-4 hover:border-secondary/30 transition-colors group text-left"
               >
-                <div className="text-primary flex-shrink-0">
-                  <Truck size={28} />
+                <div className="text-secondary bg-cream w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Truck size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-secondary group-hover:text-primary transition-colors">
+                  <p className="text-[13px] md:text-sm font-extrabold text-secondary leading-tight group-hover:text-primary transition-colors">
                     Delivery Charge
                   </p>
-                  <p className="text-[10px] font-bold text-gray-400">
+                  <p className="text-[11px] font-medium text-muted leading-snug mt-0.5">
                     Inside Dhaka ৳80 | Outside ৳120
                   </p>
                 </div>
               </button>
               {/* 100% Authentic */}
-              <div className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="text-primary flex-shrink-0">
-                  <Award size={28} />
+              <div className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-3 md:px-4 md:py-4">
+                <div className="text-secondary bg-cream w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Award size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-secondary">
+                  <p className="text-[13px] md:text-sm font-extrabold text-secondary leading-tight">
                     100% Authentic
                   </p>
-                  <p className="text-[10px] font-bold text-gray-400">
+                  <p className="text-[11px] font-medium text-muted leading-snug mt-0.5">
                     Guaranteed Quality
                   </p>
                 </div>
               </div>
               {/* Secure Payment */}
-              <div className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="text-primary flex-shrink-0">
-                  <CreditCard size={28} />
+              <div className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-3 md:px-4 md:py-4">
+                <div className="text-secondary bg-cream w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <CreditCard size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-secondary">
+                  <p className="text-[13px] md:text-sm font-extrabold text-secondary leading-tight">
                     Secure Payment
                   </p>
-                  <p className="text-[10px] font-bold text-gray-400">
+                  <p className="text-[11px] font-medium text-muted leading-snug mt-0.5">
                     Bkash / Nagad / Card / Cash
                   </p>
                 </div>
               </div>
               {/* 24/7 Support */}
-              <div className="flex items-center gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="text-primary flex-shrink-0">
-                  <Headset size={28} />
+              <div className="flex items-center gap-3 bg-white border border-line rounded-2xl px-3 py-3 md:px-4 md:py-4">
+                <div className="text-secondary bg-cream w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Headset size={20} />
                 </div>
                 <div>
-                  <p className="text-sm font-black text-secondary">
+                  <p className="text-[13px] md:text-sm font-extrabold text-secondary leading-tight">
                     Customer Support
                   </p>
-                  <p className="text-[10px] font-bold text-gray-400">
+                  <p className="text-[11px] font-medium text-muted leading-snug mt-0.5">
                     Dedicated Helpline Service
                   </p>
                 </div>
@@ -8975,6 +8852,7 @@ ${productNames}
             courierReports={courierReports}
             loadingCourierReports={loadingCourierReports}
             checkCourierReport={checkCourierReport}
+            products={products}
           />
         )}
       </AnimatePresence>
@@ -8993,7 +8871,7 @@ ${productNames}
                 setAdminTab(isMasterAdmin ? "analytics" : "orders");
                 setIsAdminOpen(true);
               }}
-              className="w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
+              className="w-14 h-14 bg-secondary hover:bg-navy text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center relative group overflow-hidden border-2 border-white/20 cursor-pointer"
               title="Support & Orders"
             >
               <Headset size={28} strokeWidth={2.5} />
@@ -9002,7 +8880,7 @@ ${productNames}
                   {(supportChats.filter(c => c.unreadByAdmin).length + orderHistory.filter(o => o.status === "pending").length)}
                 </span>
               )}
-              <span className="absolute right-full mr-3 bg-indigo-700 text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              <span className="absolute right-full mr-3 bg-navy text-white px-2.5 py-1 rounded-lg text-xs font-bold shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                 সাপোর্ট ও মেসেঞ্জার
               </span>
             </button>

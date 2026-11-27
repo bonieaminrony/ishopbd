@@ -33,7 +33,7 @@ export const FlashSaleCountdown = ({ products }: { products: Product[] }) => {
       <div className="flex flex-col items-center group">
         <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl w-14 h-14 md:w-16 md:h-16 flex items-center justify-center shadow-lg text-2xl md:text-3xl overflow-hidden transition-all duration-300 group-hover:bg-white/20 group-hover:scale-105">
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50"></div>
-          <span className="relative z-10 drop-shadow-md">{formatTime(days)}</span>
+          <span className="relative z-10 price-num drop-shadow-md">{formatTime(days)}</span>
         </div>
         <span className="text-[9px] md:text-[10px] text-white/95 mt-2 uppercase font-black tracking-wider text-center">দিন (DAYS)</span>
       </div>
@@ -43,7 +43,7 @@ export const FlashSaleCountdown = ({ products }: { products: Product[] }) => {
       <div className="flex flex-col items-center group">
         <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl w-14 h-14 md:w-16 md:h-16 flex items-center justify-center shadow-lg text-2xl md:text-3xl overflow-hidden transition-all duration-300 group-hover:bg-white/20 group-hover:scale-105">
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50"></div>
-          <span className="relative z-10 drop-shadow-md">{formatTime(hours)}</span>
+          <span className="relative z-10 price-num drop-shadow-md">{formatTime(hours)}</span>
         </div>
         <span className="text-[9px] md:text-[10px] text-white/95 mt-2 uppercase font-black tracking-wider text-center">ঘণ্টা (HRS)</span>
       </div>
@@ -53,7 +53,7 @@ export const FlashSaleCountdown = ({ products }: { products: Product[] }) => {
       <div className="flex flex-col items-center group">
         <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl w-14 h-14 md:w-16 md:h-16 flex items-center justify-center shadow-lg text-2xl md:text-3xl overflow-hidden transition-all duration-300 group-hover:bg-white/20 group-hover:scale-105">
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50"></div>
-          <span className="relative z-10 drop-shadow-md">{formatTime(minutes)}</span>
+          <span className="relative z-10 price-num drop-shadow-md">{formatTime(minutes)}</span>
         </div>
         <span className="text-[9px] md:text-[10px] text-white/95 mt-2 uppercase font-black tracking-wider text-center">মিনিট (MIN)</span>
       </div>
@@ -63,7 +63,7 @@ export const FlashSaleCountdown = ({ products }: { products: Product[] }) => {
       <div className="flex flex-col items-center group">
         <div className="relative bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl w-14 h-14 md:w-16 md:h-16 flex items-center justify-center shadow-lg text-2xl md:text-3xl overflow-hidden transition-all duration-300 group-hover:bg-white/20 group-hover:scale-105">
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50"></div>
-          <span className="relative z-10 drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]">{formatTime(seconds)}</span>
+          <span className="relative z-10 price-num drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]">{formatTime(seconds)}</span>
         </div>
         <span className="text-[9px] md:text-[10px] text-white/95 mt-2 uppercase font-black tracking-wider text-center">সেকেন্ড (SEC)</span>
       </div>

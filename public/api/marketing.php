@@ -29,7 +29,7 @@ if ($action === 'public-config' && $method === 'GET') {
         ],
         'tiktok' => [
             'enabled' => $data['tiktok']['enabled'] ?? true,
-            'pixelId' => !empty($data['tiktok']['pixelId']) ? $data['tiktok']['pixelId'] : 'DBPHK73C77U4J2JR78JG',
+            'pixelId' => !empty($data['tiktok']['pixelId']) ? $data['tiktok']['pixelId'] : 'DC0TOGBC77U7MFIGUL5G',
         ],
         'google' => [
             'enabled' => $data['google']['enabled'] ?? true,

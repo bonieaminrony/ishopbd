@@ -37,28 +37,52 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// --- RATE LIMITING: Max 10 attempts per IP per minute ---
-session_start();
-$clientIP = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-$clientIP = trim(explode(',', $clientIP)[0]);
-
-$rateLimitKey = 'admin_verify_rate_' . md5($clientIP);
+// --- RATE LIMITING: Max 10 attempts per IP per minute, 5 wrong passwords -> 15 min lockout ---
+// Stored in a server-side file keyed by the real connection IP. The old version kept the counter
+// in the PHP session (a cookie) and trusted X-Forwarded-For, so an attacker could reset it on
+// every request by dropping the cookie or changing the header and guess passwords without limit.
+$clientIP = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$rateFile = sys_get_temp_dir() . '/ishopbd_admin_verify_' . md5($clientIP) . '.json';
 $rateWindow   = 60;
 $rateMaxCalls = 10;
+$maxFails     = 5;
+$lockSeconds  = 900;
 
 $now = time();
-if (!isset($_SESSION[$rateLimitKey])) {
-    $_SESSION[$rateLimitKey] = ['count' => 0, 'start' => $now];
+$rateData = ['count' => 0, 'start' => $now, 'fails' => 0, 'lockedUntil' => 0];
+if (file_exists($rateFile)) {
+    $saved = json_decode((string)@file_get_contents($rateFile), true);
+    if (is_array($saved)) $rateData = array_merge($rateData, $saved);
 }
-$rateData = &$_SESSION[$rateLimitKey];
+if (($rateData['lockedUntil'] ?? 0) > $now) {
+    http_response_code(429);
+    echo json_encode(["success" => false, "message" => "Too many failed attempts. Try again in " . ($rateData['lockedUntil'] - $now) . " seconds."]);
+    exit;
+}
 if ($now - $rateData['start'] > $rateWindow) {
-    $rateData = ['count' => 0, 'start' => $now];
+    $rateData['count'] = 0;
+    $rateData['start'] = $now;
 }
 $rateData['count']++;
+@file_put_contents($rateFile, json_encode($rateData), LOCK_EX);
 if ($rateData['count'] > $rateMaxCalls) {
     http_response_code(429);
     echo json_encode(["success" => false, "message" => "Too many attempts. Please wait a moment."]);
     exit;
+}
+
+function recordAdminVerifyResult($rateFile, $rateData, $success, $maxFails, $lockSeconds) {
+    if ($success) {
+        $rateData['fails'] = 0;
+        $rateData['lockedUntil'] = 0;
+    } else {
+        $rateData['fails'] = ($rateData['fails'] ?? 0) + 1;
+        if ($rateData['fails'] >= $maxFails) {
+            $rateData['lockedUntil'] = time() + $lockSeconds;
+            $rateData['fails'] = 0;
+        }
+    }
+    @file_put_contents($rateFile, json_encode($rateData), LOCK_EX);
 }
 
 // --- ENV READER ---
@@ -115,9 +139,11 @@ if (empty($masterPassword)) {
 }
 
 if ($isMasterEmail && hash_equals($masterPassword, $inputPassword)) {
+    recordAdminVerifyResult($rateFile, $rateData, true, $maxFails, $lockSeconds);
     echo json_encode(["success" => true, "type" => "master"]);
     exit;
 }
+recordAdminVerifyResult($rateFile, $rateData, false, $maxFails, $lockSeconds);
 
 // --- NORMAL ADMIN: password is checked client-side against Firestore (already hashed or plain in DB) ---
 // This endpoint only handles master password verification.

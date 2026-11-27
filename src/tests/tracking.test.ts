@@ -372,17 +372,17 @@ describe("Frontend Hybrid Tracking Engine (Browser + /api/track-event)", () => {
     expect(serverPurchase.userData.phone).toBe("01712345678");
   });
 
-  it("avoids duplicate TikTok load/page when pixel DBPHK73C77U4J2JR78JG is pre-loaded in HTML head", async () => {
+  it("avoids duplicate TikTok load/page when pixel DC0TOGBC77U7MFIGUL5G is pre-loaded in HTML head", async () => {
     const loadSpy = vi.fn();
     const pageSpy = vi.fn();
     const trackSpy = vi.fn();
     (window as any).ttq = {
-      _i: { DBPHK73C77U4J2JR78JG: [] },
+      _i: { DC0TOGBC77U7MFIGUL5G: [] },
       load: loadSpy,
       page: pageSpy,
       track: trackSpy,
     };
-    (window as any).__ishopbdTtqHeadPagePixel = "DBPHK73C77U4J2JR78JG";
+    (window as any).__ishopbdTtqHeadPagePixel = "DC0TOGBC77U7MFIGUL5G";
 
     vi.stubGlobal(
       "fetch",
@@ -391,7 +391,7 @@ describe("Frontend Hybrid Tracking Engine (Browser + /api/track-event)", () => {
 
     const cfg = await initTracking();
     expect(cfg.tiktok.enabled).toBe(true);
-    expect(cfg.tiktok.pixelId).toBe("DBPHK73C77U4J2JR78JG");
+    expect(cfg.tiktok.pixelId).toBe("DC0TOGBC77U7MFIGUL5G");
     expect(loadSpy).not.toHaveBeenCalled();
     expect(pageSpy).not.toHaveBeenCalled();
 

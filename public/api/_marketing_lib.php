@@ -216,7 +216,7 @@ function marketingGetDefaultConfig() {
         ],
         'tiktok' => [
             'enabled' => true,
-            'pixelId' => 'DBPHK73C77U4J2JR78JG',
+            'pixelId' => 'DC0TOGBC77U7MFIGUL5G',
             'accessToken' => '',
             'testEventCode' => '',
             'eventsApiEnabled' => true,
@@ -423,12 +423,16 @@ function marketingVerifyFirebaseJwtLocal($idToken, $projectId) {
     return [
         'localId' => $sub,
         'email' => $claims['email'] ?? '',
+        'emailVerified' => !empty($claims['email_verified']),
     ];
 }
 
 function marketingVerifyIsAdmin($allowModerator = false) {
-    $host = strtolower($_SERVER['HTTP_HOST'] ?? '');
-    if (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false) {
+    // Local development bypass. Uses the real connection address, NOT the Host header:
+    // the Host header is chosen by the client, so "Host: localhost" sent to the live server
+    // used to grant full admin access (bulk SMS, courier booking, API keys) to anyone.
+    $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+    if ($remoteAddr === '127.0.0.1' || $remoteAddr === '::1') {
         return true;
     }
 
@@ -478,7 +482,8 @@ function marketingVerifyIsAdmin($allowModerator = false) {
                 'ishopbd.online@gmail.com',
                 'ifilmbd2025@gmail.com',
             ];
-            if (in_array($email, $masterEmails, true) || in_array($cleanEmail, $masterEmails, true)) {
+            // Master email must be verified (same rule as firestore.rules isMaster()).
+            if (!empty($user['emailVerified']) && in_array($email, $masterEmails, true)) {
                 return true;
             }
 

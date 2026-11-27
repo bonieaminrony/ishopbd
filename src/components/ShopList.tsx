@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Helmet } from 'react-helmet-async';
 import { FlashSaleCountdown } from './FlashSaleCountdown';
-import { Zap, ChevronRight, Star, X, LayoutGrid, ChevronDown, ChevronLeft } from 'lucide-react';
+import { Zap, ChevronRight, Star, X, LayoutGrid, ChevronDown, ChevronLeft, Menu, Check, ArrowRight } from 'lucide-react';
+import { getCategoryPath } from '../utils/helpers';
 
 export interface ShopListProps {
   activeCampaign: any;
@@ -50,6 +50,9 @@ export interface ShopListProps {
   setCurrentPage: any;
   brands: any;
   categories: any;
+  selectedSubcategory?: any;
+  setSelectedSubcategory?: any;
+  setIsMobileCategoryDrawerOpen?: any;
 }
 
 export default function ShopList(props: ShopListProps) {
@@ -99,50 +102,53 @@ export default function ShopList(props: ShopListProps) {
     setCurrentPage,
     categories,
     brands,
+    selectedSubcategory,
+    setSelectedSubcategory,
+    setIsMobileCategoryDrawerOpen,
   } = props;
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   return (
     <>
-      {activeCampaign && (
-        <div className="container mx-auto px-4 mb-6">
-          {activeCampaign.image ? (
-            <div className="relative overflow-hidden rounded-2xl md:rounded-3xl shadow-md border border-gray-100 bg-gray-50 mb-4">
-              <img
-                loading="eager"
-                decoding="async"
-                src={activeCampaign.image}
-                className="w-full h-auto block max-h-[420px] object-cover"
-                alt={activeCampaign.name}
-              />
-            </div>
-          ) : (
-            <div className="relative overflow-hidden rounded-2xl md:rounded-3xl bg-gradient-to-r from-primary via-rose-600 to-amber-600 text-white p-6 sm:p-10 mb-4 shadow-lg">
-              <div className="max-w-2xl">
-                <span className="inline-block bg-white/20 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2.5">
-                  🔥 স্পেশাল ক্যাম্পেইন
-                </span>
-                <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tight font-ador mb-2">
-                  {activeCampaign.name}
-                </h1>
-                {activeCampaign.description && (
-                  <p className="text-sm sm:text-base text-white/90 font-medium font-ador max-w-xl">
-                    {cleanLatex(activeCampaign.description || "")}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
+      {/* Campaign page: the banner if the campaign has one, otherwise straight to its products. */}
+      {activeCampaign?.image && (
+        <div className="container mx-auto px-1 sm:px-4 mb-4">
+          <div className="relative overflow-hidden rounded-2xl md:rounded-3xl shadow-md border border-gray-100 bg-gray-50">
+            <img
+              loading="eager"
+              decoding="async"
+              src={activeCampaign.image}
+              className="w-full h-auto block max-h-[420px] object-cover"
+              alt={activeCampaign.name}
+            />
+          </div>
         </div>
       )}
         {/* 4.5 Featured Section (Only on Homepage) */}
         {selectedCategory === "all" && !searchQuery && !activeCampaign && !isTrendingFilterActive && (
-          <div className="space-y-6 mb-6">
+          <div className="mb-8">
             {/* Featured Products Grid */}
             {isLoading && featuredProducts.length === 0 ? (
               <section className="mb-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
+                    <h3 className="text-lg md:text-2xl font-extrabold text-secondary">
                       {t("জনপ্রিয় পণ্য", "Popular Products")}
                     </h3>
                   </div>
@@ -158,10 +164,10 @@ export default function ShopList(props: ShopListProps) {
                 </div>
               </section>
             ) : featuredProducts.length > 0 ? (
-              <section className="mb-6">
+              <section>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xl md:text-2xl font-bold text-secondary">
+                    <h3 className="text-lg md:text-2xl font-extrabold text-secondary">
                       {t("জনপ্রিয় পণ্য", "Popular Products")}
                     </h3>
                   </div>
@@ -212,58 +218,26 @@ export default function ShopList(props: ShopListProps) {
                     <ChevronRight size={20} />
                   </button>
                 </div>
-                {/* Scroll Indicator for Featured Products */}
-                {featuredProducts.length > (window.innerWidth < 768 ? 2 : 4) && (
-                  <div className="hidden md:flex mt-6 px-4 flex-col items-center gap-2">
-                    <input 
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={featuredScrollPercent}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        setFeaturedScrollPercent(val);
-                        handleFeaturedSliderChange(val);
-                      }}
-                      className="w-full max-w-[200px] h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-primary"
-                    />
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                      {t("আরও দেখতে টেনে আনুন", "Slide to see more")}
-                    </p>
-                  </div>
-                )}
               </section>
             ) : null}
           </div>
         )}
         {/* Flash Sale Section */}
         {!isProductDetailsOpen && !activeCampaign && flashSaleProducts.length > 0 && (
-          <section id="flash-sale-section" className="mb-10 relative p-[2px] rounded-[2.6rem] overflow-hidden shadow-2xl shadow-red-500/10 transform-gpu">
-            {/* Running Border Effect Background */}
-            <div className="absolute inset-[-200%] bg-[conic-gradient(from_0deg,#f00b24_0%,#ff3d54_25%,transparent_40%,#f00b24_50%,#ff3d54_75%,transparent_90%,#f00b24_100%)] animate-[spin_4s_linear_infinite] origin-center pointer-events-none z-0"></div>
-            
-            {/* Inner Content Card */}
-            <div className="relative w-full bg-white rounded-[2.5rem] overflow-hidden z-10 flex flex-col transform-gpu">
-              {/* Red Countdown Header Container */}
-              <div className="bg-[#f00b24] p-6 md:p-8 text-white relative overflow-hidden flex flex-col items-center justify-center gap-4 shadow-xl transform-gpu">
-                {/* Animated Background Overlay */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-                <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl transform translate-x-20 -translate-y-20"></div>
-                
-                <div className="flex items-center gap-2 relative z-10 animate-text-zoom">
-                  <Zap className="text-yellow-300 fill-yellow-300 drop-shadow-[0_0_10px_rgba(253,224,71,0.8)]" size={32} />
-                  <h3 className="text-3xl md:text-4xl font-black italic tracking-widest text-white drop-shadow-md">
-                    FLASHSALE
+          <section id="flash-sale-section" className="mb-8 rounded-3xl overflow-hidden bg-white border border-line">
+            <div className="flex flex-col">
+              {/* Flash sale header: deep crimson band with countdown */}
+              <div className="bg-primary px-4 py-4 md:px-6 md:py-5 text-white flex flex-col md:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="text-amber-300 fill-amber-300" size={26} />
+                  <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+                    {t("ফ্ল্যাশ সেল", "Flash Sale")}
                   </h3>
                 </div>
-                
-                {/* Centered Countdown Timer */}
-                <div className="relative z-10 w-full flex justify-center mt-1">
-                  <FlashSaleCountdown products={flashSaleProducts} />
-                </div>
+                <FlashSaleCountdown products={flashSaleProducts} />
               </div>
               {/* White Cards Container */}
-              <div className="bg-white p-4 md:p-6 relative group">
+              <div className="bg-white p-3 md:p-5 relative group">
                 {/* Left Arrow Button */}
                 <button
                   type="button"
@@ -319,84 +293,285 @@ export default function ShopList(props: ShopListProps) {
         )}
         {/* 5. Product Display (General) */}
         <div id="product-display-section" className="mb-6 min-h-[400px]">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <h3 className="text-xl md:text-2xl font-bold border-l-4 border-primary pl-3 text-secondary">
-                {isTrendingFilterActive 
-                  ? t("ট্রেন্ডিং প্রোডাক্টস", "Trending Products")
-                  : activeCampaign 
-                    ? activeCampaign.name 
-                    : selectedCategory !== "all" 
-                      ? selectedCategory
-                      : selectedBrand !== "all"
-                        ? selectedBrand
-                        : searchQuery
-                          ? t("সার্চ রেজাল্ট", "Search Results")
-                          : t("সকল প্রোডাক্ট", "All Products")}
-              </h3>
-              {(isTrendingFilterActive || selectedCategory !== "all" || searchQuery || selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
-                <button 
-                  onClick={() => {
-                    setIsTrendingFilterActive(false);
-                    setSelectedCategory("all");
-                    setSearchInput("");
-                    setSelectedBrand("all");
-                    setMinPrice("");
-                    setMaxPrice("");
-                  }}
-                  className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-full transition-all flex items-center gap-2 text-xs font-bold"
-                  title={t("ফিল্টার মুছুন", "Clear Filter")}
-                >
-                  <X size={14} /> {t("মুছুন", "Clear")}
-                </button>
-              )}
-            </div>
-            {!activeCampaign ? (
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                {/* Filter Toggle */}
-                <button
-                  onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-sm font-bold whitespace-nowrap ${
-                    isFilterMenuOpen || selectedBrand !== "all" || minPrice !== "" || maxPrice !== ""
-                      ? "bg-primary text-white border-primary shadow-lg shadow-primary/20"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-primary"
-                  }`}
-                >
-                  <LayoutGrid size={18} />
-                  {t("ফিল্টার", "Filters")}
-                  {(selectedBrand !== "all" || minPrice !== "" || maxPrice !== "") && (
-                    <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                  )}
-                </button>
-                {/* Quick Sort Dropdown */}
-                <div className="relative group">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="appearance-none bg-white border border-gray-200 text-gray-600 px-4 py-2 pr-10 rounded-xl text-sm font-bold focus:outline-none focus:border-primary cursor-pointer hover:border-primary transition-all shadow-sm"
-                  >
-                    <option value="newest">{t("নতুনগুলো আগে", "Newest Arrivals")}</option>
-                    <option value="price_low">{t("দাম: কম থেকে বেশি", "Price: Low to High")}</option>
-                    <option value="price_high">{t("দাম: বেশি থেকে কম", "Price: High to Low")}</option>
-                    <option value="popularity">{t("জনপ্রিয়তা", "Popularity")}</option>
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-            ) : (
+          {/* Breadcrumb - Clean & Minimal like Rivo Fashion */}
+          {!activeCampaign && selectedCategory === "all" && (selectedBrand !== "all" || searchQuery) && (
+            <nav className="flex items-center gap-1.5 text-xs text-gray-500 mb-3 overflow-x-auto no-scrollbar py-1">
               <button
                 type="button"
                 onClick={() => {
-                  setActiveCampaign(null);
+                  setSelectedCategory("all");
+                  if (setSelectedSubcategory) setSelectedSubcategory("all");
+                  setSelectedBrand("all");
+                  setSearchInput("");
                   window.history.pushState({}, "", "/");
                 }}
-                className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-primary bg-white hover:bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl transition-all shadow-xs"
+                className="hover:text-primary transition-colors whitespace-nowrap cursor-pointer font-medium"
               >
-                <Home size={14} />
-                <span>সাইটের সব পণ্য দেখুন</span>
+                {t("হোম", "Home")}
               </button>
-            )}
+              <span className="text-gray-300 font-light">/</span>
+
+              {selectedCategory !== "all" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedSubcategory && selectedSubcategory !== "all") {
+                        if (setSelectedSubcategory) setSelectedSubcategory("all");
+                        window.history.pushState(
+                          { category: selectedCategory, subcategory: "all" },
+                          "",
+                          getCategoryPath(selectedCategory)
+                        );
+                      } else {
+                        setSelectedCategory("all");
+                        if (setSelectedSubcategory) setSelectedSubcategory("all");
+                        window.history.pushState({}, "", "/");
+                      }
+                    }}
+                    className={`hover:text-primary transition-colors whitespace-nowrap cursor-pointer ${
+                      !selectedSubcategory || selectedSubcategory === "all"
+                        ? "font-bold text-gray-900 pointer-events-none"
+                        : "font-medium text-gray-500 hover:underline"
+                    }`}
+                  >
+                    {selectedCategory}
+                  </button>
+
+                  {selectedSubcategory && selectedSubcategory !== "all" && (
+                    <>
+                      <span className="text-gray-300 font-light">/</span>
+                      <span className="font-bold text-gray-900 whitespace-nowrap">
+                        {selectedSubcategory}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : selectedBrand !== "all" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory("all")}
+                    className="font-medium text-gray-500 hover:text-primary whitespace-nowrap cursor-pointer"
+                  >
+                    {t("ব্র্যান্ড", "Brand")}
+                  </button>
+                  <span className="text-gray-300 font-light">/</span>
+                  <span className="font-bold text-gray-900 whitespace-nowrap">{selectedBrand}</span>
+                </>
+              ) : searchQuery ? (
+                <>
+                  <span className="font-medium text-gray-500 whitespace-nowrap">{t("অনুসন্ধান", "Search")}</span>
+                  <span className="text-gray-300 font-light">/</span>
+                  <span className="font-bold text-gray-900 whitespace-nowrap">"{searchQuery}"</span>
+                </>
+              ) : null}
+            </nav>
+          )}
+
+          {/* Minimal Header with Hamburger Category Dropdown Trigger and Count (not on a campaign page) */}
+          {!activeCampaign && (
+          <div className="flex flex-row items-center justify-between gap-3 mb-3 pb-2 border-b border-gray-100">
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Category & Sort Dropdown Popover Trigger (≡) */}
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className={`p-1.5 -ml-1 rounded-lg transition-colors cursor-pointer shrink-0 flex items-center justify-center ${
+                    isMenuOpen
+                      ? "bg-gray-100 text-gray-900"
+                      : "text-gray-900 hover:bg-gray-100"
+                  }`}
+                  title={t("ক্যাটাগরি ও ফিল্টার", "Categories & Filters")}
+                  aria-label="Toggle Categories and Filters"
+                  aria-expanded={isMenuOpen}
+                >
+                  <Menu size={22} className="stroke-[2.5]" />
+                </button>
+
+                {/* Rivo Fashion Style Dropdown Popover (No background blur) */}
+                <AnimatePresence>
+                  {isMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute left-0 top-full mt-2 w-64 sm:w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 p-2.5 text-left"
+                    >
+                      {/* CATEGORIES Section */}
+                      <div className="mb-2">
+                        <div className="px-3 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                          CATEGORIES
+                        </div>
+                        <div className="space-y-0.5 max-h-56 overflow-y-auto no-scrollbar">
+                          {/* All Products */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategory("all");
+                              if (setSelectedSubcategory) setSelectedSubcategory("all");
+                              window.history.pushState({}, "", "/");
+                              setIsMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                              selectedCategory === "all"
+                                ? "bg-primary text-white font-bold shadow-sm"
+                                : "text-gray-800 hover:bg-gray-50 font-medium"
+                            }`}
+                          >
+                            <span>{t("সকল প্রোডাক্ট", "All Products")}</span>
+                            {selectedCategory === "all" && <Check size={14} className="stroke-[2.5]" />}
+                          </button>
+
+                          {/* List Categories & Subcategories */}
+                          {categories?.map((cat: any) => {
+                            const isCatActive = selectedCategory === cat.name;
+                            const subcats: string[] = cat.subcategories || [];
+
+                            return (
+                              <div key={cat.id} className="space-y-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCategory(cat.name);
+                                    if (setSelectedSubcategory) setSelectedSubcategory("all");
+                                    window.history.pushState({ category: cat.name, subcategory: "all" }, "", getCategoryPath(cat.name));
+                                    setIsMenuOpen(false);
+                                  }}
+                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                                    isCatActive && (!selectedSubcategory || selectedSubcategory === "all")
+                                      ? "bg-primary text-white font-bold shadow-sm"
+                                      : "text-gray-800 hover:bg-gray-50 font-medium"
+                                  }`}
+                                >
+                                  <span className="truncate">{cat.name}</span>
+                                  {isCatActive && (!selectedSubcategory || selectedSubcategory === "all") && (
+                                    <Check size={14} className="stroke-[2.5]" />
+                                  )}
+                                </button>
+
+                                {/* If category is active and has subcategories, display subcategories */}
+                                {isCatActive && subcats.length > 0 && (
+                                  <div className="pl-3 space-y-0.5 border-l-2 border-gray-100 ml-2 my-0.5">
+                                    {subcats.map((sub: string, sIdx: number) => {
+                                      const isSubActive = selectedSubcategory === sub;
+                                      const subPath = getCategoryPath(cat.name, sub);
+                                      return (
+                                        <button
+                                          key={sIdx}
+                                          type="button"
+                                          onClick={() => {
+                                            if (setSelectedSubcategory) setSelectedSubcategory(sub);
+                                            window.history.pushState({ category: cat.name, subcategory: sub }, "", subPath);
+                                            setIsMenuOpen(false);
+                                          }}
+                                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer ${
+                                            isSubActive
+                                              ? "bg-primary text-white font-bold shadow-sm"
+                                              : "text-gray-700 hover:bg-gray-50 font-medium"
+                                          }`}
+                                        >
+                                          <span className="truncate">{sub}</span>
+                                          {isSubActive && <Check size={12} className="stroke-[2.5]" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* Home Page Link */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategory("all");
+                              if (setSelectedSubcategory) setSelectedSubcategory("all");
+                              window.history.pushState({}, "", "/");
+                              setIsMenuOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs text-gray-800 hover:bg-gray-50 font-medium transition-colors cursor-pointer"
+                          >
+                            <span>{t("হোম পেজ", "Home Page")}</span>
+                            <ArrowRight size={13} className="text-gray-400" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <hr className="my-2 border-gray-100" />
+
+                      {/* SORT BY PRICE Section */}
+                      <div>
+                        <div className="px-3 py-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                          SORT BY PRICE
+                        </div>
+                        <div className="space-y-0.5">
+                          {[
+                            { value: "newest", label: t("Featured / Newest", "Featured") },
+                            { value: "price_low", label: t("Price: Low to High", "Price: Low to High") },
+                            { value: "price_high", label: t("Price: High to Low", "Price: High to Low") },
+                            { value: "popularity", label: t("Highest Rated / Popularity", "Highest Rated") },
+                          ].map((opt) => {
+                            const isSortActive = sortBy === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => {
+                                  setSortBy(opt.value as any);
+                                  setIsMenuOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                                  isSortActive
+                                    ? "bg-primary text-white font-bold shadow-sm"
+                                    : "text-gray-800 hover:bg-gray-50 font-medium"
+                                }`}
+                              >
+                                <span>{opt.label}</span>
+                                {isSortActive && <Check size={14} className="stroke-[2.5]" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {!isTrendingFilterActive && !activeCampaign && selectedCategory !== "all" ? (
+                <p className="text-sm font-semibold text-muted">
+                  {filteredProducts.length} {t("টি পণ্য", filteredProducts.length === 1 ? "product" : "products")}
+                </p>
+              ) : (
+              <h3 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 truncate flex items-baseline gap-1.5">
+                <span>
+                  {isTrendingFilterActive 
+                    ? t("ট্রেন্ডিং প্রোডাক্টস", "Trending Products")
+                    : activeCampaign 
+                      ? activeCampaign.name 
+                      : (selectedSubcategory && selectedSubcategory !== "all")
+                        ? selectedSubcategory
+                        : selectedCategory !== "all" 
+                          ? selectedCategory
+                          : selectedBrand !== "all"
+                            ? selectedBrand
+                            : searchQuery
+                              ? t("সার্চ রেজাল্ট", "Search Results")
+                              : t("সকল প্রোডাক্ট", "All Products")}
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-gray-400">
+                  ({filteredProducts.length})
+                </span>
+              </h3>
+              )}
+            </div>
+
           </div>
+          )}
           {/* Expanded Filter Menu */}
           <AnimatePresence>
             {isFilterMenuOpen && <FilterMenuModal {...{ t, minPrice, setMinPrice, maxPrice, setMaxPrice, brands, setSelectedBrand, selectedBrand, setIsFilterMenuOpen, isFilterMenuOpen }} />}
@@ -427,7 +602,7 @@ export default function ShopList(props: ShopListProps) {
           </div>
           )}
           {filteredProducts.length > productsPerPage && (
-            <div className="mt-12 flex justify-center items-center gap-2 flex-wrap">
+            <div className="mt-8 flex justify-center items-center gap-2 flex-wrap">
               <motion.button
                 whileHover={currentPage !== 1 ? { scale: 1.02, x: -2 } : {}}
                 whileTap={currentPage !== 1 ? { scale: 0.98 } : {}}

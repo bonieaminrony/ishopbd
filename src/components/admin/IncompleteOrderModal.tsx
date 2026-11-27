@@ -9,6 +9,7 @@ import {
   Phone,
   Plus,
   RefreshCcw,
+  Search,
   ShoppingBag,
   Trash2,
   Truck,
@@ -23,6 +24,7 @@ import {
   isPhoneLoadingInRecord,
   normalizeBdPhone,
 } from '../../utils/courierDisplay';
+import { cleanLegacyDistrict } from '../../utils/orderDistrict';
 
 export interface EditableIncompleteItem {
   productId: string;
@@ -70,6 +72,8 @@ export interface IncompleteOrderModalProps {
   loadingCourierReports?: Record<string, boolean>;
   checkCourierReport?: (phone: string, forceRefresh?: boolean) => void;
   siteConfig?: any;
+  /** 'create' = a new order taken by phone; 'verify' (default) = finishing an incomplete order. */
+  mode?: 'verify' | 'create';
   onCompleteOrder: (
     incompleteOrder: any,
     payload: CompleteIncompleteOrderPayload,
@@ -103,28 +107,35 @@ export function inferDeliveryArea(order: any, addressText: string): 'inside' | '
   }
   const district = String(order?.district || '').trim();
   const combined = `${district} ${addressText}`.toLowerCase();
-  if (combined.includes('ঢাকা জেলা (বাইরে)')) return 'outside';
+  if (combined.includes('ঢাকা জেলা (বাইরে)') || combined.includes('outside dhaka')) return 'outside';
   if (district.includes('ঢাকা') || combined.includes('dhaka')) return 'inside';
   return 'outside';
 }
 
+/**
+ * Same rules as the website checkout (CartContext.getDeliveryCharge): free-delivery products make it
+ * free; a product's own delivery fee replaces the area rate; 70 inside Dhaka, 130 outside; +20 per kg
+ * after the first kg (weights above 50 are grams).
+ */
 export function computeSuggestedDeliveryCharge(
-  items: Pick<EditableIncompleteItem, 'quantity' | 'weight' | 'isFreeDelivery'>[],
+  items: (Pick<EditableIncompleteItem, 'quantity' | 'weight' | 'isFreeDelivery'> & { product?: any })[],
   area: 'inside' | 'outside',
 ): number {
-  if (items.some((it) => it.isFreeDelivery)) return 0;
-  const totalWeight = items.reduce(
-    (sum, it) => sum + Number(it.weight || 0) * Math.max(1, Number(it.quantity) || 1),
-    0,
-  );
-  const ceilWeight = Math.ceil(totalWeight);
-  if (area === 'inside') {
-    return totalWeight <= 1 ? 70 : 70 + (ceilWeight - 1) * 20;
-  }
-  return totalWeight <= 1 ? 130 : 130 + (ceilWeight - 1) * 20;
+  if (items.some((it) => it.isFreeDelivery || it.product?.isFreeDelivery)) return 0;
+  const customFees = items
+    .map((it) => it.product?.deliveryCharge)
+    .filter((v) => v !== undefined && v !== null && v !== '' && !isNaN(Number(v)) && Number(v) > 0)
+    .map(Number);
+  const base = customFees.length > 0 ? Math.max(...customFees) : area === 'inside' ? 70 : 130;
+  const totalWeight = items.reduce((sum, it) => {
+    let w = Number(it.weight ?? it.product?.weight ?? 0) || 0;
+    if (w > 50) w = w / 1000;
+    return sum + w * Math.max(1, Number(it.quantity) || 1);
+  }, 0);
+  return base + (totalWeight > 1 ? Math.ceil(totalWeight - 1) * 20 : 0);
 }
 
-function extractProductOptions(matchedProduct: any, rawItem: any) {
+export function extractProductOptions(matchedProduct: any, rawItem: any) {
   const colors = new Set<string>();
   const sizes = new Set<string>();
 
@@ -163,7 +174,7 @@ function extractProductOptions(matchedProduct: any, rawItem: any) {
 }
 
 function buildCombinedAddress(order: any): string {
-  const parts = [order?.address, order?.thana, order?.district]
+  const parts = [order?.address, order?.thana, cleanLegacyDistrict(order?.district)]
     .map((p) => String(p || '').trim())
     .filter(Boolean);
   const uniqueParts: string[] = [];
@@ -186,8 +197,14 @@ export default function IncompleteOrderModal({
   loadingCourierReports,
   checkCourierReport,
   siteConfig,
+  mode = 'verify',
   onCompleteOrder,
 }: IncompleteOrderModalProps) {
+  const isCreate = mode === 'create';
+  const [productQuery, setProductQuery] = useState('');
+  const [isProductListOpen, setIsProductListOpen] = useState(false);
+  // Until the delivery charge is typed by hand, it follows the products and the area.
+  const [deliveryTouched, setDeliveryTouched] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -262,15 +279,18 @@ export default function IncompleteOrderModal({
     setCustomerName(sanitizeIncompleteCustomerName(order.name || order.customerName));
     setCustomerPhone(sanitizeIncompletePhone(order.phone || order.customerPhone));
     setAddress(initialAddress);
-    setDistrict(String(order.district || ''));
+    setDistrict(cleanLegacyDistrict(order.district));
     setDeliveryArea(inferredArea);
     setDeliveryCharge(initialDelivery);
     setDiscount(Math.max(0, Number(order.discount) || 0));
     setCustomTotal(null);
     setPaymentMethod('cod');
     setTransId('');
-    setStatus('pending');
+    setStatus(isCreate ? 'confirmed' : 'pending');
     setNote(String(order.note || ''));
+    setProductQuery('');
+    setIsProductListOpen(false);
+    setDeliveryTouched(order.deliveryCharge !== undefined && order.deliveryCharge !== null);
     setSendSms(siteConfig?.isSmsConfirmEnabled !== false);
     setItems(initialItems);
     setCustomColorMode({});
@@ -348,6 +368,14 @@ export default function IncompleteOrderModal({
         };
       }),
     );
+    if (!deliveryTouched) {
+      setDeliveryCharge(
+        computeSuggestedDeliveryCharge(
+          items.map((it, i) => (i === idx ? { ...it, quantity: nextQty } : it)),
+          deliveryArea,
+        ),
+      );
+    }
     setCustomTotal(null);
   };
 
@@ -357,9 +385,10 @@ export default function IncompleteOrderModal({
     setCustomTotal(null);
   };
 
-  const handleAddProduct = () => {
-    if (!selectedAddProductId) return;
-    const prod = products.find((p) => p?.id === selectedAddProductId);
+  const handleAddProduct = (productId?: string) => {
+    const pickId = productId || selectedAddProductId;
+    if (!pickId) return;
+    const prod = products.find((p) => p?.id === pickId);
     if (!prod) return;
     const unitPrice = getProductPrice ? Number(getProductPrice(prod, 1)) : Number(prod.price || 0);
     const newItem = buildEditableItem({
@@ -370,18 +399,26 @@ export default function IncompleteOrderModal({
       quantity: 1,
       image: prod.image || prod.images?.[0] || '',
     });
+    // Pre-select the colour / size when the product has only one.
+    if (newItem.availableColors.length === 1) newItem.color = newItem.availableColors[0];
+    if (newItem.availableSizes.length === 1) newItem.size = newItem.availableSizes[0];
     const nextItems = [...items, newItem];
     setItems(nextItems);
+    if (!deliveryTouched) setDeliveryCharge(computeSuggestedDeliveryCharge(nextItems, deliveryArea));
     setCustomTotal(null);
     setSelectedAddProductId('');
+    setProductQuery('');
+    setIsProductListOpen(false);
   };
 
   const handleRemoveItem = (idx: number) => {
-    if (items.length <= 1) {
+    if (items.length <= 1 && !isCreate) {
       toast.error('অর্ডারে কমপক্ষে একটি পণ্য থাকতে হবে।');
       return;
     }
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    const nextItems = items.filter((_, i) => i !== idx);
+    setItems(nextItems);
+    if (!deliveryTouched) setDeliveryCharge(computeSuggestedDeliveryCharge(nextItems, deliveryArea));
     setCustomTotal(null);
   };
 
@@ -437,31 +474,48 @@ export default function IncompleteOrderModal({
   };
 
   const activeProducts = products.filter((p) => p && !p.deleted);
+  const productMatches = (() => {
+    const q = productQuery.trim().toLowerCase();
+    const list = q
+      ? activeProducts.filter((p) =>
+          [p.name, p.code, p.smsName, p.brand, p.category]
+            .filter(Boolean)
+            .some((v: any) => String(v).toLowerCase().includes(q)),
+        )
+      : activeProducts;
+    return list.slice(0, 8);
+  })();
+  const stockOf = (p: any) =>
+    Array.isArray(p?.variants) && p.variants.length > 0
+      ? p.variants.reduce((sum: number, v: any) => sum + (Number(v?.stock) || 0), 0)
+      : Number(p?.stock) || 0;
 
   return (
     <div
       className="fixed inset-0 z-[260] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
-      onClick={onClose}
+      onClick={isCreate ? undefined : onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Verify and Complete Incomplete Order"
+        aria-label={isCreate ? 'Create Order' : 'Verify and Complete Incomplete Order'}
         className="bg-white rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl border border-gray-100 my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-5 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <CheckCircle2 size={22} />
+            <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+              {isCreate ? <Plus size={22} /> : <CheckCircle2 size={22} />}
             </div>
             <div className="min-w-0">
               <h3 className="text-base sm:text-lg font-black text-gray-900 truncate">
-                অসম্পূর্ণ অর্ডার যাচাই ও সম্পন্ন করুন
+                {isCreate ? 'Create Order' : 'অসম্পূর্ণ অর্ডার যাচাই ও সম্পন্ন করুন'}
               </h3>
               <p className="text-[11px] text-gray-500 font-medium">
-                কাস্টমার তথ্য, সাইজ, কালার, পরিমাণ, ডেলিভারি চার্জ ও মূল্য পরিবর্তন করে অর্ডার প্লেস করুন
+                {isCreate
+                  ? 'ফোনে আসা অর্ডার: পণ্য খুঁজে যোগ করুন, কাস্টমারের তথ্য দিন, তারপর অর্ডার করুন'
+                  : 'কাস্টমার তথ্য, সাইজ, কালার, পরিমাণ, ডেলিভারি চার্জ ও মূল্য পরিবর্তন করে অর্ডার প্লেস করুন'}
               </p>
             </div>
           </div>
@@ -477,7 +531,7 @@ export default function IncompleteOrderModal({
 
         <form onSubmit={handleSubmit} className="p-5 space-y-5">
           {/* Customer & Steadfast Verification Card */}
-          <div className="bg-gradient-to-br from-emerald-50/70 via-white to-slate-50 border border-emerald-200/70 rounded-2xl p-4 space-y-3">
+          <div className="bg-gray-50/70 border border-gray-200/80 rounded-2xl p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Truck size={15} className="text-emerald-600" />
@@ -627,7 +681,7 @@ export default function IncompleteOrderModal({
                   aria-label="District"
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
-                  placeholder="যেমন: ঢাকা"
+                  placeholder="জেলার নাম লিখুন"
                   className="w-full px-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 />
               </div>
@@ -689,7 +743,7 @@ export default function IncompleteOrderModal({
                           ).toLocaleString()}
                         </p>
                       </div>
-                      {items.length > 1 && (
+                      {(items.length > 1 || isCreate) && (
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
@@ -864,30 +918,72 @@ export default function IncompleteOrderModal({
               })}
             </div>
 
-            {/* Add Additional Product */}
+            {/* Add a product: search by name or code */}
             {activeProducts.length > 0 && (
-              <div className="flex items-center gap-2 pt-1">
-                <select
-                  aria-label="Add Product"
-                  value={selectedAddProductId}
-                  onChange={(e) => setSelectedAddProductId(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  <option value="">+ নতুন পণ্য যোগ করতে নির্বাচন করুন...</option>
-                  {activeProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (৳{p.price})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleAddProduct}
-                  disabled={!selectedAddProductId}
-                  className="px-3 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-black disabled:opacity-40 transition-colors cursor-pointer shrink-0"
-                >
-                  যোগ করুন
-                </button>
+              <div className="relative pt-1">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    aria-label="Search product to add"
+                    value={productQuery}
+                    onChange={(e) => {
+                      setProductQuery(e.target.value);
+                      setIsProductListOpen(true);
+                    }}
+                    onFocus={() => setIsProductListOpen(true)}
+                    onBlur={() => setIsProductListOpen(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (productMatches[0]) handleAddProduct(productMatches[0].id);
+                      } else if (e.key === 'Escape') {
+                        setIsProductListOpen(false);
+                      }
+                    }}
+                    placeholder={items.length === 0 ? 'পণ্যের নাম বা কোড লিখে খুঁজুন...' : '+ আরেকটি পণ্য যোগ করুন (নাম বা কোড)...'}
+                    className="w-full h-11 pl-9 pr-3 text-sm font-semibold bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                </div>
+                {isProductListOpen && (
+                  <div className="absolute left-0 right-0 mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-xl max-h-80 overflow-y-auto">
+                    {productMatches.length === 0 ? (
+                      <p className="px-3 py-4 text-xs text-gray-500 text-center">কোনো পণ্য পাওয়া যায়নি</p>
+                    ) : (
+                      productMatches.map((p) => {
+                        const st = stockOf(p);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleAddProduct(p.id)}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer"
+                          >
+                            <img
+                              src={p.image || p.images?.[0] || '/logo.webp'}
+                              alt=""
+                              className="w-10 h-10 rounded-lg object-cover border border-gray-100 shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = '/logo.webp';
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-gray-900 line-clamp-1">{p.name}</p>
+                              <p className="text-[10px] text-gray-500 font-mono">{p.code || p.category}</p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-extrabold text-gray-900">৳{p.price}</p>
+                              <p className={`text-[10px] font-bold ${st <= 0 ? 'tone-cancelled' : st <= 5 ? 'tone-returned' : 'tone-neutral'}`} style={{ color: 'var(--tone)' }}>
+                                {st <= 0 ? 'স্টক নেই' : `স্টক ${st}`}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -909,7 +1005,7 @@ export default function IncompleteOrderModal({
                     onClick={() => handleAreaSwitch('inside')}
                     className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
                       deliveryArea === 'inside'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        ? 'bg-primary text-white border-transparent shadow-xs'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -920,7 +1016,7 @@ export default function IncompleteOrderModal({
                     onClick={() => handleAreaSwitch('outside')}
                     className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
                       deliveryArea === 'outside'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        ? 'bg-primary text-white border-transparent shadow-xs'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -940,6 +1036,7 @@ export default function IncompleteOrderModal({
                   value={deliveryCharge}
                   onChange={(e) => {
                     setDeliveryCharge(Math.max(0, Number(e.target.value) || 0));
+                    setDeliveryTouched(true);
                     setCustomTotal(null);
                   }}
                   className="w-full px-3 py-2 text-xs font-black bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/30"
@@ -1107,7 +1204,7 @@ export default function IncompleteOrderModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/25 flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95 cursor-pointer"
+              className="h-11 px-5 rounded-xl text-sm font-black text-white bg-primary hover:opacity-90 shadow-sm flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -1115,7 +1212,7 @@ export default function IncompleteOrderModal({
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={15} /> অর্ডার প্লেস করুন (Place Order)
+                  <CheckCircle2 size={15} /> {isCreate ? 'অর্ডার তৈরি করুন (Create Order)' : 'অর্ডার প্লেস করুন (Place Order)'}
                 </>
               )}
             </button>

@@ -297,29 +297,40 @@ async function getCachedProducts(db?: FirebaseFirestore.Firestore): Promise<any[
 }
 
 // Transform products to lightweight representation: strip heavy base64 and landingConfig for fast catalog delivery
+// Short content hash of an image string. Used as ?v= so a changed photo gets a new URL
+// (busts browser "immutable" cache and the server-side img_cache on disk).
+function imageVersion(img: string): string {
+  return crypto.createHash('md5').update(img).digest('hex').slice(0, 10);
+}
+
 function toLeanProducts(products: any[]): any[] {
   if (!Array.isArray(products)) return [];
   return products.map((p: any) => {
     if (!p) return p;
     const lean: any = { ...p };
     delete lean.landingConfig;
+    const pid = encodeURIComponent(p.id || '');
     if (typeof lean.image === 'string' && lean.image.startsWith('data:')) {
-      lean.image = `/api/product-image/${p.id || ''}`;
+      lean.image = `/api/product-image/${pid}?v=${imageVersion(p.image)}`;
     }
     if (Array.isArray(lean.images)) {
+      // Map BEFORE filtering so the index always matches the position in the Firestore array
+      // (filtering first shifted indexes and served the wrong gallery photo).
       lean.images = lean.images
-        .filter((img: any) => typeof img === 'string' && img.trim().length > 0)
-        .map((img: string, idx: number) => {
+        .map((img: any, idx: number) => {
+          if (typeof img !== 'string' || img.trim().length === 0) return null;
           if (img.startsWith('data:')) {
-            return `/api/product-image/${p.id || ''}?index=${idx}`;
+            return `/api/product-image/${pid}?index=${idx}&v=${imageVersion(img)}`;
           }
           return img;
-        });
+        })
+        .filter((img: any) => typeof img === 'string');
     }
     if (Array.isArray(lean.variants)) {
-      lean.variants = lean.variants.map((v: any) => {
+      lean.variants = lean.variants.map((v: any, vIdx: number) => {
         if (v && typeof v.image === 'string' && v.image.startsWith('data:')) {
-          return { ...v, image: `/api/product-image/${p.id || ''}` };
+          // Previously every variant pointed at the main product photo, so colour variants lost their own photo.
+          return { ...v, image: `/api/product-image/${pid}?variant=${vIdx}&v=${imageVersion(v.image)}` };
         }
         return v;
       });
@@ -669,7 +680,7 @@ async function startServer() {
       res.setHeader("Pragma", "no-cache");
       const list = await getCachedBanners();
       if (list && list.length > 0) {
-        const signature = list.map(b => `${b.id}:${b.updatedAt || ''}:${b.image || ''}`).join('|');
+        const signature = list.map(b => `${b.id}:${b.updatedAt || ''}:${b.image || ''}:${b.mobileImage || ''}`).join('|');
         const etag = `"${crypto.createHash('md5').update(signature).digest('hex')}"`;
         res.setHeader("ETag", etag);
 
@@ -1928,7 +1939,8 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     }
 
     const phones = Array.isArray(req.body?.phones) ? req.body.phones : [];
-    const forceRefresh = req.body?.refresh === true || req.query?.refresh === "1" || req.query?.refresh === "true";
+    const cacheOnly = req.body?.cacheOnly === true || req.query?.cacheOnly === "1";
+    const forceRefresh = !cacheOnly && (req.body?.refresh === true || req.query?.refresh === "1" || req.query?.refresh === "true");
 
     if (phones.length === 0) {
       return res.status(400).json({ success: false, error: "phones array is required" });
@@ -1939,8 +1951,9 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         getDb: getFirestoreSafe,
         forceRefresh,
         maxPhones: 25,
-        maxLiveFetch: 4,
+        maxLiveFetch: cacheOnly ? 0 : 4,
         concurrency: 2,
+        ttlMs: Number.MAX_SAFE_INTEGER,
       });
 
       return res.json({
@@ -1968,6 +1981,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const { data } = await getSteadfastFraudReportCached(rawPhone, {
         getDb: getFirestoreSafe,
         forceRefresh,
+        ttlMs: Number.MAX_SAFE_INTEGER,
       });
 
       return res.json({
@@ -2014,7 +2028,10 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
             "ifilmbd2025@gmail.com"
           ];
           
-          if (masterEmails.includes(userEmail) || masterEmails.includes(cleanEmail)) {
+          // Same rule as firestore.rules isMaster(): the master email must be VERIFIED.
+          // Without this, anyone could sign up (email/password, unverified) with a master address
+          // that was never registered and get full admin access to keys/settings on the server.
+          if (decodedToken.email_verified === true && masterEmails.includes(userEmail)) {
             return true;
           }
 
@@ -2161,9 +2178,13 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
     inAppBrowser?: string;
     ipMasked?: string;
     referrer?: string;
+    kind?: 'visit' | 'product_view';
+    visitorId?: string;
   }
 
+  // Last 48 hours of visits (newest first). 50 entries was far too few for the 60-minute count.
   const recentVisitsBuffer: RecentVisitEntry[] = [];
+  const RECENT_VISITS_MAX = 5000;
 
   app.post("/api/track-visit", async (req, res) => {
     try {
@@ -2177,11 +2198,16 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         device = "desktop",
         inAppBrowser,
         isUnique = false,
-        referrer = ""
+        referrer = "",
+        kind: rawKind = "visit",
+        visitorId: rawVisitorId = ""
       } = req.body || {};
 
       const validSources = ["youtube", "tiktok", "facebook", "google", "direct"];
       const cleanSource = validSources.includes(source) ? source : "other";
+      // "visit" = page load, "product_view" = a product was opened (clicks per source)
+      const kind: 'visit' | 'product_view' = rawKind === 'product_view' ? 'product_view' : 'visit';
+      const visitorId = typeof rawVisitorId === 'string' ? rawVisitorId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 40) : '';
 
       const visitEntry: RecentVisitEntry = {
         id: Math.random().toString(36).substring(2, 9),
@@ -2191,11 +2217,16 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         device: device === "mobile" ? "mobile" : "desktop",
         inAppBrowser: typeof inAppBrowser === 'string' ? inAppBrowser.substring(0, 30) : undefined,
         ipMasked,
-        referrer: typeof referrer === 'string' ? referrer.substring(0, 150) : ""
+        referrer: typeof referrer === 'string' ? referrer.substring(0, 150) : "",
+        kind,
+        visitorId
       };
 
       recentVisitsBuffer.unshift(visitEntry);
-      if (recentVisitsBuffer.length > 50) recentVisitsBuffer.pop();
+      const cutoff48h = Date.now() - 48 * 3600 * 1000;
+      while (recentVisitsBuffer.length > RECENT_VISITS_MAX || (recentVisitsBuffer.length && recentVisitsBuffer[recentVisitsBuffer.length - 1].timestamp < cutoff48h)) {
+        recentVisitsBuffer.pop();
+      }
 
       // Dhaka time calculations (UTC+6)
       const now = new Date();
@@ -2204,7 +2235,15 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
       const dayOfWeek = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', weekday: 'short' }).format(now);
 
       const db = getFirestoreSafe ? getFirestoreSafe() : getFirestore();
-      if (db) {
+      if (db && kind === 'product_view') {
+        db.collection("traffic_daily").doc(dhakaDate).set({
+          date: dhakaDate,
+          dayOfWeek,
+          productViews: FieldValue.increment(1),
+          [`productViewsBySource.${cleanSource}`]: FieldValue.increment(1),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.warn("[TRAFFIC_TRACK] DB record warning:", err.message));
+      } else if (db) {
         const updateData: Record<string, any> = {
           date: dhakaDate,
           dayOfWeek,
@@ -2216,6 +2255,7 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         };
         if (isUnique) {
           updateData.uniqueVisitors = FieldValue.increment(1);
+          updateData[`uniqueBySource.${cleanSource}`] = FieldValue.increment(1);
         }
         db.collection("traffic_daily").doc(dhakaDate).set(updateData, { merge: true }).catch(err => {
           console.warn("[TRAFFIC_TRACK] DB record warning:", err.message);
@@ -2230,6 +2270,9 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
 
   app.get("/api/admin/traffic-stats", async (req, res) => {
     try {
+      if (!(await verifyIsAdmin(req))) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
       const db = getFirestoreSafe ? getFirestoreSafe() : getFirestore();
       let dailyDocs: any[] = [];
       if (db) {
@@ -2240,39 +2283,54 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         dailyDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }
 
+      // Real counts (no "at least 1"): people are counted by their anonymous visitor id
       const nowMs = Date.now();
-      // Active Shoppers: distinct visitors active within the last 5 minutes
-      const activeWindowMs = 5 * 60 * 1000;
-      const activeIps = new Set<string>();
-      recentVisitsBuffer.forEach(v => {
-        if (nowMs - v.timestamp < activeWindowMs) {
-          activeIps.add(v.ipMasked || v.id);
+      const keyOf = (v: RecentVisitEntry) => v.visitorId ? `v:${v.visitorId}` : `ip:${v.ipMasked || ''}|${v.device}|${v.id}`;
+      const active = new Set<string>();
+      const people60m = new Set<string>();
+      const people24h = new Set<string>();
+      let views60m = 0;
+      const sources24h: Record<string, number> = { facebook: 0, tiktok: 0, youtube: 0, google: 0, direct: 0, other: 0 };
+      for (const v of recentVisitsBuffer) {
+        const age = nowMs - v.timestamp;
+        const key = keyOf(v);
+        if (age < 5 * 60 * 1000) active.add(key);
+        if (age < 60 * 60 * 1000) {
+          people60m.add(key);
+          if ((v.kind || 'visit') === 'visit') views60m++;
         }
-      });
-      const activeVisitors = Math.max(1, activeIps.size);
-      const visits60m = recentVisitsBuffer.filter(v => nowMs - v.timestamp < 60 * 60 * 1000).length;
+        if (age < 24 * 3600 * 1000 && !people24h.has(key)) {
+          people24h.add(key);
+          const s = v.source in sources24h ? v.source : 'other';
+          sources24h[s] += 1;
+        }
+      }
+      const oldest = recentVisitsBuffer.length ? recentVisitsBuffer[recentVisitsBuffer.length - 1].timestamp : nowMs;
 
-      // 48 Hours volume: calculate from today + yesterday daily aggregates if available, fallback to buffer
-      const daily48hTotal = dailyDocs.slice(0, 2).reduce((acc: number, d: any) => acc + (Number(d.totalVisits || d.visits) || 0), 0);
-      const buffer48h = recentVisitsBuffer.filter(v => nowMs - v.timestamp < 48 * 3600 * 1000).length;
-      const visits48h = Math.max(daily48hTotal, buffer48h);
-
-      const sources48h: Record<string, number> = { facebook: 0, tiktok: 0, youtube: 0, google: 0, direct: 0, other: 0 };
-      recentVisitsBuffer.filter(v => nowMs - v.timestamp < 48 * 3600 * 1000).forEach(v => {
-        const s = v.source || 'direct';
-        sources48h[s] = (sources48h[s] || 0) + 1;
-      });
+      // Page views in the last 48 rolling hours, from the per-hour counters (Dhaka time)
+      const dailyByDate = new Map<string, any>(dailyDocs.map((d: any) => [d.date || d.id, d]));
+      let views48h = 0;
+      for (let h = 0; h < 48; h++) {
+        const t = new Date(nowMs - h * 3600 * 1000);
+        const dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(t);
+        const hr = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', hour: 'numeric', hour12: false }).format(t), 10) % 24;
+        const hourly = dailyByDate.get(dStr)?.hourly;
+        if (hourly) views48h += Number(hourly[hr] ?? hourly[String(hr)] ?? 0) || 0;
+      }
 
       res.json({
         success: true,
         daily: dailyDocs,
         recent: recentVisitsBuffer.slice(0, 50),
-        activeVisitors: activeVisitors,
+        activeVisitors: active.size,
         realtime: {
-          activeShoppers: activeVisitors,
-          last60Minutes: visits60m,
-          last48Hours: visits48h,
-          sources: sources48h
+          activeShoppers: active.size,
+          last60Minutes: people60m.size,
+          last60MinutesViews: views60m,
+          last24HoursVisitors: people24h.size,
+          last24HoursComplete: recentVisitsBuffer.length < RECENT_VISITS_MAX || oldest <= nowMs - 24 * 3600 * 1000,
+          last48Hours: views48h,
+          sources: sources24h
         }
       });
     } catch (error: any) {
@@ -2502,37 +2560,49 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
 
     try {
       let imageStr: string | undefined;
-      const index = req.query.index !== undefined ? parseInt(String(req.query.index), 10) : NaN;
-
-      // 0. Super Fast Path: Local Disk Cache in public/api/img_cache/
-      const imgCacheDir = path.join(process.cwd(), 'public', 'api', 'img_cache');
-      const candidates: string[] = [];
-      if (!isNaN(index)) {
-        candidates.push(`${productId}_idx${index}`, `${productId}_${index}`);
-      }
-      candidates.push(productId);
-
-      for (const base of candidates) {
-        for (const ext of ['.jpg', '.jpeg', '.webp', '.png']) {
-          const diskFile = path.join(imgCacheDir, `${base}${ext}`);
-          if (fs.existsSync(diskFile)) {
-            const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
-            res.setHeader("Content-Type", contentType);
-            res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
-            return res.sendFile(diskFile);
-          }
+      // Accept both ?index= (Node) and ?idx= (PHP) so URLs work on either backend
+      const rawIndex = req.query.index ?? req.query.idx;
+      const index = rawIndex !== undefined ? parseInt(String(rawIndex), 10) : NaN;
+      const variantIndex = req.query.variant !== undefined ? parseInt(String(req.query.variant), 10) : NaN;
+      const pickImage = (images?: any[], image?: any, variants?: any[]) => {
+        if (!isNaN(variantIndex) && Array.isArray(variants) && variants[variantIndex]?.image) {
+          return variants[variantIndex].image;
         }
-      }
+        if (!isNaN(index) && Array.isArray(images) && images[index]) return images[index];
+        return image;
+      };
 
-      // 1. Fast Path: In-Memory Product Cache
+      // 1. Fast Path: In-Memory Product Cache (always the current photo from Firestore)
       const prods = await getCachedProducts();
       const matched = prods.find(p => p.id === productId || (p.slug && p.slug === productId));
       if (matched) {
-        const rawCandidate = (!isNaN(index) && Array.isArray(matched.images) && matched.images[index])
-          ? matched.images[index]
-          : matched.image;
+        const rawCandidate = pickImage(matched.images, matched.image, matched.variants);
         if (rawCandidate && !String(rawCandidate).startsWith('/api/product-image/')) {
           imageStr = rawCandidate;
+        }
+      }
+
+      // 1b. Fallback: Local Disk Cache in public/api/img_cache/ (a copy of old live images).
+      // Only used when the product is not in memory, so a changed photo is never hidden by a stale file.
+      if (!imageStr && isNaN(variantIndex)) {
+        const imgCacheDir = path.join(process.cwd(), 'public', 'api', 'img_cache');
+        const safeId = String(productId).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const candidates: string[] = [];
+        if (!isNaN(index)) {
+          candidates.push(`${safeId}_idx${index}`, `${safeId}_${index}`);
+        } else {
+          candidates.push(safeId);
+        }
+        for (const base of candidates) {
+          for (const ext of ['.jpg', '.jpeg', '.webp', '.png']) {
+            const diskFile = path.join(imgCacheDir, `${base}${ext}`);
+            if (fs.existsSync(diskFile)) {
+              const contentType = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
+              res.setHeader("Content-Type", contentType);
+              res.setHeader("Cache-Control", "public, max-age=86400");
+              return res.sendFile(diskFile);
+            }
+          }
         }
       }
 
@@ -2543,7 +2613,12 @@ Return ONLY a valid JSON array of matching product IDs, e.g. ["prod-1", "prod-2"
         const url = `https://firestore.googleapis.com/v1/projects/i-shop-bd/databases/(default)/documents/products/${resolvedId}?key=${apiKey}`;
         const response = await axios.get(url, { timeout: 5000 }).catch(() => null);
         const data = response?.data;
-        if (data && data.fields) {
+        const variantImg = !isNaN(variantIndex)
+          ? data?.fields?.variants?.arrayValue?.values?.[variantIndex]?.mapValue?.fields?.image?.stringValue
+          : undefined;
+        if (variantImg) {
+          imageStr = variantImg;
+        } else if (data && data.fields) {
           if (!isNaN(index) && data.fields.images?.arrayValue?.values && data.fields.images.arrayValue.values[index]?.stringValue) {
             imageStr = data.fields.images.arrayValue.values[index].stringValue;
           } else if (data.fields.image?.stringValue) {

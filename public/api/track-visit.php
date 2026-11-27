@@ -49,6 +49,10 @@ $device = ($input['device'] ?? '') === 'mobile' ? 'mobile' : 'desktop';
 $inApp = !empty($input['inAppBrowser']) ? substr((string)$input['inAppBrowser'], 0, 30) : null;
 $isUnique = !empty($input['isUnique']);
 $referrer = substr((string)($input['referrer'] ?? ''), 0, 150);
+// "visit" = a page load, "product_view" = a product was opened (used for the click column per source)
+$kind = (($input['kind'] ?? 'visit') === 'product_view') ? 'product_view' : 'visit';
+// Anonymous random id kept in the visitor's browser: lets us count PEOPLE instead of guessing from IPs
+$visitorId = preg_replace('/[^a-zA-Z0-9_-]/', '', substr((string)($input['visitorId'] ?? ''), 0, 40));
 
 $nowMs = round(microtime(true) * 1000);
 
@@ -60,7 +64,9 @@ $visitEntry = [
     'device' => $device,
     'inAppBrowser' => $inApp,
     'ipMasked' => $ipMasked,
-    'referrer' => $referrer
+    'referrer' => $referrer,
+    'kind' => $kind,
+    'visitorId' => $visitorId
 ];
 
 // 1. Maintain Rolling Recent Visits Buffer (Traffic Activity Stream)
@@ -76,13 +82,13 @@ if (file_exists($bufferFile)) {
 
 array_unshift($visits, $visitEntry);
 
-// Retain last 48 hours or at most 500 visits
+// Retain last 48 hours or at most 5000 entries (500 was too few: busy hours fell out of the 60-minute count)
 $cutoffMs = $nowMs - (48 * 3600 * 1000);
 $filteredVisits = [];
 foreach ($visits as $v) {
     if (isset($v['timestamp']) && $v['timestamp'] >= $cutoffMs) {
         $filteredVisits[] = $v;
-        if (count($filteredVisits) >= 500) break;
+        if (count($filteredVisits) >= 5000) break;
     }
 }
 
@@ -127,6 +133,21 @@ if (!isset($dailyData[$dhakaDate])) {
     ];
 }
 
+$day = &$dailyData[$dhakaDate];
+if ($kind === 'product_view') {
+    // Product opened: counted separately, it is not a new visit
+    $day['productViews'] = ($day['productViews'] ?? 0) + 1;
+    if (!isset($day['productViewsBySource']) || !is_array($day['productViewsBySource'])) $day['productViewsBySource'] = [];
+    $day['productViewsBySource'][$cleanSource] = ($day['productViewsBySource'][$cleanSource] ?? 0) + 1;
+    $day['updatedAt'] = date('c');
+    unset($day);
+    if (count($dailyData) > 60) { krsort($dailyData); $dailyData = array_slice($dailyData, 0, 60, true); }
+    @file_put_contents($dailyFile, json_encode($dailyData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
+    echo json_encode(['success' => true]);
+    exit(0);
+}
+unset($day);
+
 $dailyData[$dhakaDate]['totalVisits']++;
 if (!isset($dailyData[$dhakaDate]['sources'][$cleanSource])) {
     $dailyData[$dhakaDate]['sources'][$cleanSource] = 0;
@@ -145,6 +166,11 @@ $dailyData[$dhakaDate]['devices'][$device]++;
 
 if ($isUnique) {
     $dailyData[$dhakaDate]['uniqueVisitors']++;
+    // Visitors (people) per source
+    if (!isset($dailyData[$dhakaDate]['uniqueBySource']) || !is_array($dailyData[$dhakaDate]['uniqueBySource'])) {
+        $dailyData[$dhakaDate]['uniqueBySource'] = [];
+    }
+    $dailyData[$dhakaDate]['uniqueBySource'][$cleanSource] = ($dailyData[$dhakaDate]['uniqueBySource'][$cleanSource] ?? 0) + 1;
 }
 $dailyData[$dhakaDate]['updatedAt'] = date('c');
 

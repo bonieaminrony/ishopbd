@@ -478,18 +478,26 @@ export default function AdminPanel(props: AdminPanelProps) {
     return Math.max(0, Number(p.stock) || 0);
   }, []);
 
+  // Black & gold admin theme: active only while the admin panel is open (see "ADMIN DASHBOARD" in index.css)
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (isAdminOpen) root.classList.add("admin-dark");
+    else root.classList.remove("admin-dark");
+    return () => root.classList.remove("admin-dark");
+  }, [isAdminOpen]);
+
   return (
     <>
       {isAdminOpen && (
-          <div className="fixed inset-0 z-[500] bg-gray-50 flex flex-col font-['Inter']">
+          <div className="fixed inset-0 z-[500] bg-gray-50 flex flex-col admin-shell">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="relative w-full h-full overflow-hidden flex flex-col md:flex-row bg-white"
+              className="relative w-full h-full overflow-hidden flex flex-col md:flex-row bg-white admin-shell"
             >
               {/* Admin Sidebar / Header */}
-              <div className="p-4 md:p-6 border-b md:border-b-0 md:border-r flex flex-col bg-gray-50 gap-6 md:w-[280px] shrink-0 md:h-full md:overflow-y-auto no-scrollbar">
+              <div className="admin-sidebar p-4 md:p-6 border-b md:border-b-0 md:border-r flex flex-col bg-gray-50 gap-6 md:w-[280px] shrink-0 md:h-full md:overflow-y-auto no-scrollbar">
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-primary text-white rounded-xl shadow-md shadow-primary/20">
@@ -543,7 +551,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         setShowOnlyPreOrders(true);
                         setAdminOrdersLimit(50);
                       }}
-                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && showOnlyPreOrders ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "orders" && showOnlyPreOrders ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
                       <Clock size={18} />
                       Pre Order ({orderHistory.filter(o => {
@@ -557,7 +565,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         setAdminTab("incomplete_orders");
                         setShowOnlyPreOrders(false);
                       }}
-                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "incomplete_orders" ? "bg-red-500 text-white shadow-md shadow-red-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "incomplete_orders" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
                       <ShoppingCart size={18} /> Incomplete ({activeIncompleteOrdersCount})
                     </button>
@@ -575,7 +583,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         setAdminTab("pos");
                         setShowOnlyPreOrders(false);
                       }}
-                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "pos" ? "bg-purple-600 text-white shadow-md shadow-purple-600/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                      className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "pos" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                     >
                       <ShoppingBag size={18} /> POS (Outlet)
                     </button>
@@ -616,7 +624,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </button>
                         <button
                           onClick={() => setAdminTab("low_stock")}
-                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "low_stock" ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "low_stock" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
                           <AlertCircle size={18} /> Low Stock ({products.filter((p: any) => !p.deleted && getEffectiveStock(p) <= 5).length})
                         </button>
@@ -640,7 +648,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         </button>
                         <button
                           onClick={() => setAdminTab("reviews")}
-                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "reviews" ? "bg-amber-500 text-white shadow-md shadow-amber-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                          className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "reviews" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                         >
                           <Star size={18} /> Reviews {(() => {
                             const pendingCount = (adminReviews || []).filter((r: any) => r.status === "pending").length;
@@ -656,7 +664,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                         {isMasterAdmin && (
                           <button
                             onClick={() => setAdminTab("profit_analysis")}
-                            className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "profit_analysis" ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
+                            className={`text-sm font-bold transition-all flex items-center justify-start gap-3 px-4 py-3 rounded-xl w-full ${adminTab === "profit_analysis" ? "bg-primary text-white shadow-md shadow-primary/20" : "text-gray-600 hover:bg-gray-200/50 hover:text-gray-900"}`}
                           >
                             <Wallet size={18} /> Accounts
                           </button>
@@ -722,11 +730,11 @@ export default function AdminPanel(props: AdminPanelProps) {
                       }}
                       className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                         (tab.id === "preorder" && showOnlyPreOrders) || (tab.id !== "preorder" && adminTab === tab.id && (tab.id !== "orders" || !showOnlyPreOrders))
-                          ? tab.id === "preorder" ? "bg-yellow-500 text-white shadow-md" : "bg-primary text-white shadow-md"
+                          ? "bg-primary text-white shadow-md"
                           : "bg-gray-50 text-gray-500 border border-gray-100"
                       }`}
                     >
-                      <tab.icon size={14} className={tab.id === "preorder" && !showOnlyPreOrders ? "text-yellow-500" : ""} /> {tab.label}
+                      <tab.icon size={14} className="" /> {tab.label}
                     </button>
                   ))}
                 </div>
@@ -743,6 +751,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                     orderHistory={orderHistory}
                     products={products}
                     adminViewMode={adminViewMode}
+                    onOpenOrder={(order: any) => setSelectedOrderForDetails(order)}
                     onNavigateToOrders={() => {
                       setAdminTab("orders");
                       setShowOnlyPreOrders(false);
@@ -752,6 +761,9 @@ export default function AdminPanel(props: AdminPanelProps) {
                 )}
                 {adminTab === "orders" && (
                   <AdminOrdersTab
+                    products={products}
+                    getProductPrice={getProductPrice}
+                    onCreateOrder={handleCompleteIncompleteOrder}
                     orderHistory={orderHistory}
                     filteredOrders={filteredOrders}
                     reportTimeframe={reportTimeframe}
@@ -834,6 +846,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                 )}
                 {adminTab === "products" && (
                   <AdminProductsTab
+                    isSavingProduct={isSavingProduct}
                     editingProduct={editingProduct}
                     setEditingProduct={setEditingProduct}
                     saveProduct={saveProduct}
@@ -862,6 +875,7 @@ export default function AdminPanel(props: AdminPanelProps) {
                 )}
                 {adminTab === "categories" && (
                   <AdminCategoriesTab
+                    products={products}
                     categories={categories}
                     editingCategory={editingCategory}
                     setEditingCategory={setEditingCategory}
@@ -2467,6 +2481,54 @@ export default function AdminPanel(props: AdminPanelProps) {
                                 />
                               </div>
                             </div>
+                            {/* Separate phone banner: shown on phones instead of the computer banner */}
+                            <div>
+                              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                                Phone Banner (optional)
+                              </label>
+                              <p className="text-[11px] text-gray-400 mb-2">
+                                ফোনে এই ছবিটা দেখাবে। বর্গাকার বা লম্বাটে ছবি দিন (যেমন 1080 × 1080 বা 1080 × 1350)। না দিলে কম্পিউটারের ব্যানারটাই দেখাবে।
+                              </p>
+                              <div className="flex gap-3 items-stretch">
+                                <div
+                                  onClick={() => document.getElementById("banner-mobile-upload-settings")?.click()}
+                                  className="w-32 aspect-[4/5] border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors bg-gray-50 relative overflow-hidden shrink-0"
+                                >
+                                  {(editingBanner ? editingBanner.mobileImage : newBanner.mobileImage) ? (
+                                    <img
+                                      src={editingBanner ? editingBanner.mobileImage : newBanner.mobileImage}
+                                      className="w-full h-full object-cover"
+                                      alt="Phone banner preview"
+                                    />
+                                  ) : (
+                                    <>
+                                      <Upload size={20} className="text-gray-300 mb-1.5" />
+                                      <span className="text-[10px] font-semibold text-gray-500 text-center px-2">Upload phone image</span>
+                                    </>
+                                  )}
+                                  <input
+                                    id="banner-mobile-upload-settings"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleAdminImageUpload(e, "banner-mobile")}
+                                    className="hidden"
+                                  />
+                                </div>
+                                {(editingBanner ? editingBanner.mobileImage : newBanner.mobileImage) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      editingBanner
+                                        ? setEditingBanner({ ...editingBanner, mobileImage: "" })
+                                        : setNewBanner({ ...newBanner, mobileImage: "" })
+                                    }
+                                    className="self-end text-xs font-bold text-red-600 hover:underline"
+                                  >
+                                    Remove phone image
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                             <div className="flex gap-2">
                               <button
                                 onClick={handleSaveBanner}
@@ -2540,10 +2602,15 @@ export default function AdminPanel(props: AdminPanelProps) {
                                       <span className={`text-[7px] font-bold uppercase px-1 rounded-sm ${banner.type === 'secondary' ? 'bg-emerald-50 text-emerald-500' : 'bg-blue-50 text-blue-500'}`}>
                                         {banner.type === 'hero' || !banner.type ? 'Hero' : 'Secondary'}
                                       </span>
+                                      {banner.mobileImage && (
+                                        <span className="text-[7px] font-bold uppercase px-1 rounded-sm bg-amber-50 text-amber-600">
+                                          + Phone
+                                        </span>
+                                      )}
                                     </div>
                                     {banner.linkedProductId && (
                                       <p className="text-[8px] text-primary font-bold uppercase mt-1">
-                                        You will be contacted shortly.
+                                        Linked to a product
                                       </p>
                                     )}
                                   </div>

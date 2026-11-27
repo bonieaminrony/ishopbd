@@ -1,7 +1,7 @@
 import React from 'react';
-import { Helmet } from 'react-helmet-async';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence, motion } from 'motion/react';
+import { normalizeBdPhone } from '../utils/courierDisplay';
 import {
   ChevronDown,
   Download,
@@ -131,13 +131,6 @@ export default function LandingPageView({
 
   return (
     <div className="min-h-screen bg-cream flex flex-col font-sans relative overflow-x-hidden">
-      <Helmet>
-        <title>i SHOP BD (আই শপ বিডি) - Online Shopping in Bangladesh | Gadgets &amp; Electronics</title>
-        <meta
-          name="description"
-          content="i SHOP BD (আই শপ বিডি) - বাংলাদেশের সেরা অনলাইন শপিং শপ। এখানে পাবেন লেটেস্ট গ্যাজেট, ইলেকট্রনিক্স এবং হোম এক্সেসরিজ সবচেয়ে কম দামে। দ্রুত হোম ডেলিভারি ও গুণগত মানের নিশ্চয়তা।"
-        />
-      </Helmet>
       <Toaster position="top-right" reverseOrder={false} />
 
       {/* Sticky Header */}
@@ -348,16 +341,17 @@ export default function LandingPageView({
                 </label>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   required
-                  maxLength={11}
                   value={landingPhone}
-                  onChange={(e) => setLandingPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                  onChange={(e) => setLandingPhone(normalizeBdPhone(e.target.value).slice(0, 11))}
                   onFocus={() => setLandingPhoneFocused(true)}
                   onBlur={() => {
                     setTimeout(() => setLandingPhoneFocused(false), 200);
                   }}
                   placeholder="যেমন: 017XXXXXXXX"
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 font-bold text-sm focus:border-primary outline-none transition-all"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 font-bold text-base sm:text-sm focus:border-primary outline-none transition-all"
                 />
                 {landingPhoneFocused && savedProfiles.filter((p) => p.phone.includes(landingPhone)).length > 0 && (
                   <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-48 overflow-y-auto">

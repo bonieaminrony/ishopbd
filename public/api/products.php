@@ -94,14 +94,14 @@ function parseFirestoreDoc($doc) {
     
     // Convert Base64 primary image to lightweight URL proxy
     if (!empty($product['image']) && is_string($product['image']) && strpos($product['image'], 'data:image/') === 0) {
-        $product['image'] = "/api/product-image/{$id}";
+        $product['image'] = "/api/product-image/" . rawurlencode($id) . "?v=" . substr(md5($product['image']), 0, 10);
     }
     
     // Convert Base64 gallery images to lightweight URL proxies
     if (!empty($product['images']) && is_array($product['images'])) {
         foreach ($product['images'] as $idx => $img) {
             if (is_string($img) && strpos($img, 'data:image/') === 0) {
-                $product['images'][$idx] = "/api/product-image/{$id}?idx={$idx}";
+                $product['images'][$idx] = "/api/product-image/" . rawurlencode($id) . "?idx={$idx}&v=" . substr(md5($img), 0, 10);
             }
         }
     }
@@ -109,8 +109,9 @@ function parseFirestoreDoc($doc) {
     // Convert Base64 variant images
     if (!empty($product['variants']) && is_array($product['variants'])) {
         foreach ($product['variants'] as $vIdx => $variant) {
-            if (is_array($variant) && !empty($variant['image']) && strpos($variant['image'], 'data:image/') === 0) {
-                $product['variants'][$vIdx]['image'] = "/api/product-image/{$id}";
+            if (is_array($variant) && !empty($variant['image']) && is_string($variant['image']) && strpos($variant['image'], 'data:image/') === 0) {
+                // Each colour variant keeps its own photo (previously all variants showed the main photo)
+                $product['variants'][$vIdx]['image'] = "/api/product-image/" . rawurlencode($id) . "?variant={$vIdx}&v=" . substr(md5($variant['image']), 0, 10);
             }
         }
     }

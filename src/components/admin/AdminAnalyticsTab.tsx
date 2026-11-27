@@ -1,1301 +1,643 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  TrendingUp,
-  TrendingDown,
-  Users,
-  Eye,
-  ShoppingBag,
-  CheckCircle2,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
   RefreshCcw,
-  DollarSign,
-  Activity,
-  Share2,
-  Search,
   Youtube,
+  Facebook,
+  Search,
   Globe,
   Smartphone,
   Monitor,
-  Flame,
   ExternalLink,
-  ArrowRight,
-  Zap,
-  BarChart3,
-  LineChart,
-  Clock
+  Music2,
+  Users,
+  MousePointerClick,
+  ShoppingBag,
+  Wallet,
+  Percent,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 import axios from 'axios';
 import { db } from '../../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { resolveOrderTrafficSource, TrafficPlatform } from '../../utils/tracking';
+import { getAdminAuthHeaders } from '../../utils/adminAuth';
 
 export interface AdminAnalyticsTabProps {
   orderHistory: any[];
   products: any[];
   onNavigateToOrders?: () => void;
+  /** Opens the full order details (customer, address, items) */
+  onOpenOrder?: (order: any) => void;
   adminViewMode?: string;
 }
 
-type TimeframeOption = 'today' | 'yesterday' | '7days' | '28days' | 'this_month' | 'all';
-type MetricView = 'revenue' | 'orders' | 'visits';
-type ChartStyle = 'curve' | 'bar';
+type Timeframe = 'today' | 'yesterday' | '7days' | '28days' | 'this_month';
 
-export default function AdminAnalyticsTab({
-  orderHistory = [],
-  products = [],
-  onNavigateToOrders,
-}: AdminAnalyticsTabProps) {
-  const [timeframe, setTimeframe] = useState<TimeframeOption>('28days');
-  const [activeMetric, setActiveMetric] = useState<MetricView>('revenue');
-  const [chartStyle, setChartStyle] = useState<ChartStyle>('curve');
-  const [hoveredPoint, setHoveredPoint] = useState<any | null>(null);
-  const [hoveredHeatmapCell, setHoveredHeatmapCell] = useState<{ day: string; hour: number; visits: number; orders: number } | null>(null);
-  const [trafficStats, setTrafficStats] = useState<{
-    daily: any[];
-    recent: any[];
-    activeVisitors: number;
-    realtime?: {
-      activeShoppers: number;
-      last60Minutes: number;
-      last48Hours: number;
-      sources: Record<string, number>;
-    };
-  }>({
-    daily: [],
-    recent: [],
-    activeVisitors: 1
-  });
-  const [isLoadingTraffic, setIsLoadingTraffic] = useState(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+const TIMEFRAMES: { id: Timeframe; label: string }[] = [
+  { id: 'today', label: 'আজ' },
+  { id: 'yesterday', label: 'গতকাল' },
+  { id: '7days', label: '৭ দিন' },
+  { id: '28days', label: '২৮ দিন' },
+  { id: 'this_month', label: 'এই মাস' },
+];
 
-  // 1. Direct Real-time Firebase Firestore Sync for daily aggregates
+const SOURCES: { id: TrafficPlatform; name: string; icon: any; color: string }[] = [
+  { id: 'facebook', name: 'Facebook', icon: Facebook, color: '#4f8cff' },
+  { id: 'youtube', name: 'YouTube', icon: Youtube, color: '#ff4d4d' },
+  { id: 'tiktok', name: 'TikTok', icon: Music2, color: '#2ee6d6' },
+  { id: 'google', name: 'Google', icon: Search, color: '#34c77b' },
+  { id: 'direct', name: 'Direct', icon: Globe, color: '#c8c8d4' },
+  { id: 'other', name: 'Other', icon: ExternalLink, color: '#9b9ba7' },
+];
+const SOURCE_BY_ID = Object.fromEntries(SOURCES.map((s) => [s.id, s])) as Record<string, (typeof SOURCES)[number]>;
+
+const STATUS_STYLE: Record<string, string> = {
+  pending: 'bg-amber-50 text-amber-700',
+  confirmed: 'bg-blue-50 text-blue-700',
+  processing: 'bg-blue-50 text-blue-700',
+  shipped: 'bg-sky-50 text-sky-700',
+  delivered: 'bg-emerald-50 text-emerald-700',
+  cancelled: 'bg-red-50 text-red-700',
+  returned: 'bg-red-50 text-red-700',
+};
+
+const ORDERS_PAGE = 25;
+
+// ---------- date helpers (all in Dhaka time) ----------
+const dhakaDay = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(d);
+const dhakaHour = (d: Date) =>
+  parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', hour: 'numeric', hour12: false }).format(d), 10) % 24;
+const orderDate = (o: any): Date | null => {
+  const ts = o?.createdAt?.seconds ? o.createdAt.seconds * 1000 : o?.createdAt || o?.date;
+  if (!ts) return null;
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? null : d;
+};
+const daysFor = (tf: Timeframe, now: Date): string[] => {
+  const day = 24 * 3600 * 1000;
+  if (tf === 'today') return [dhakaDay(now)];
+  if (tf === 'yesterday') return [dhakaDay(new Date(now.getTime() - day))];
+  if (tf === '7days' || tf === '28days') {
+    const n = tf === '7days' ? 7 : 28;
+    return Array.from({ length: n }, (_, i) => dhakaDay(new Date(now.getTime() - (n - 1 - i) * day)));
+  }
+  const today = dhakaDay(now);
+  const dom = parseInt(today.slice(8, 10), 10);
+  return Array.from({ length: dom }, (_, i) => `${today.slice(0, 8)}${String(i + 1).padStart(2, '0')}`);
+};
+const previousDays = (days: string[]) => {
+  const first = new Date(`${days[0]}T12:00:00+06:00`);
+  return Array.from({ length: days.length }, (_, i) =>
+    dhakaDay(new Date(first.getTime() - (days.length - i) * 24 * 3600 * 1000))
+  );
+};
+
+const fmt = (n: number) => Math.round(n).toLocaleString('en-IN');
+const taka = (n: number) => `৳${fmt(n)}`;
+const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : 0);
+const timeAgo = (ts: number) => {
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (m < 1) return 'এইমাত্র';
+  if (m < 60) return `${m} মিনিট আগে`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} ঘণ্টা আগে` : `${Math.floor(h / 24)} দিন আগে`;
+};
+
+// Visitors of a day: people (unique) when recorded, otherwise page loads for older days
+const dayVisitors = (d: any) => Number(d?.uniqueVisitors) || Number(d?.totalVisits ?? d?.visits) || 0;
+const daySourceVisitors = (d: any, src: string) => {
+  if (!d) return 0;
+  if (d.uniqueBySource && typeof d.uniqueBySource === 'object') return Number(d.uniqueBySource[src]) || 0;
+  return Number(d.sources?.[src]) || 0;
+};
+
+export default function AdminAnalyticsTab({ orderHistory = [], onNavigateToOrders, onOpenOrder }: AdminAnalyticsTabProps) {
+  const [timeframe, setTimeframe] = useState<Timeframe>('today');
+  const [daily, setDaily] = useState<any[]>([]);
+  const [recent, setRecent] = useState<any[]>([]);
+  const [realtime, setRealtime] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<TrafficPlatform | 'all'>('all');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [ordersShown, setOrdersShown] = useState(ORDERS_PAGE);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  // Daily counters stored in Firestore (Node server)
   useEffect(() => {
     try {
-      const q = query(collection(db, 'traffic_daily'), orderBy('date', 'desc'), limit(30));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTrafficStats(prev => ({
-          ...prev,
-          daily: docs
-        }));
-        setLastRefreshedAt(new Date());
-      }, (err) => {
-        console.warn('Realtime traffic sync warning:', err.message);
-      });
-
-      return () => unsubscribe();
-    } catch (e) {
-      console.warn('Firestore onSnapshot setup fallback:', e);
+      const q = query(collection(db, 'traffic_daily'), orderBy('date', 'desc'), limit(62));
+      return onSnapshot(
+        q,
+        (snap) => {
+          const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          if (docs.length) setDaily((prev) => (prev.length ? prev : docs));
+        },
+        () => {}
+      );
+    } catch {
+      return undefined;
     }
   }, []);
 
-  // 2. Fetch server recent live visits
-  const fetchRecentTrafficStream = async () => {
-    setIsLoadingTraffic(true);
+  // Live numbers + daily counters from the server (live site: PHP)
+  const refresh = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get('/api/admin/traffic-stats', { timeout: 8000 });
+      const headers = await getAdminAuthHeaders();
+      const res = await axios.get('/api/admin/traffic-stats', { timeout: 10000, headers });
       if (res.data?.success) {
-        setTrafficStats(prev => ({
-          daily: res.data.daily && res.data.daily.length > 0 ? res.data.daily : prev.daily,
-          recent: res.data.recent || prev.recent,
-          activeVisitors: res.data.activeVisitors || prev.activeVisitors || 1,
-          realtime: res.data.realtime || prev.realtime
-        }));
+        if (Array.isArray(res.data.daily) && res.data.daily.length) setDaily(res.data.daily);
+        setRecent(res.data.recent || []);
+        setRealtime(res.data.realtime || null);
         setLastRefreshedAt(new Date());
       }
-    } catch (e) {
-      console.warn('Live stream fetch fallback:', e);
+    } catch {
+      // keep the last numbers on screen
     } finally {
-      setIsLoadingTraffic(false);
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRecentTrafficStream();
-    const interval = setInterval(fetchRecentTrafficStream, 20000);
-    return () => clearInterval(interval);
   }, []);
 
-  // Filter Orders based on selected timeframe
-  const filteredData = useMemo(() => {
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 30000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  useEffect(() => setOrdersShown(ORDERS_PAGE), [timeframe, sourceFilter, orderSearch]);
+
+  const data = useMemo(() => {
     const now = new Date();
-    const activeOrders = (orderHistory || []).filter((o: any) => !o.deleted);
+    const days = daysFor(timeframe, now);
+    const prevDaysList = previousDays(days);
+    const daySet = new Set(days);
+    const prevSet = new Set(prevDaysList);
+    const byDate = new Map<string, any>(daily.map((d: any) => [d.date || d.id, d]));
 
-    const getDhakaDateString = (d: Date) => {
-      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(d);
+    const liveOrders = (orderHistory || []).filter((o: any) => !o?.deleted);
+    const inRange = (o: any, set: Set<string>) => {
+      const d = orderDate(o);
+      return !!d && set.has(dhakaDay(d));
     };
+    const orders = liveOrders
+      .filter((o) => inRange(o, daySet))
+      .sort((a, b) => (orderDate(b)?.getTime() || 0) - (orderDate(a)?.getTime() || 0));
+    const prevOrders = liveOrders.filter((o) => inRange(o, prevSet));
+    const isSale = (o: any) => o.status !== 'cancelled' && o.status !== 'returned';
+    const revenue = (list: any[]) => list.filter(isSale).reduce((s, o) => s + (Number(o.total) || 0), 0);
 
-    const todayStr = getDhakaDateString(now);
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const yesterdayStr = getDhakaDateString(yesterday);
+    const sumDays = (list: string[], f: (d: any) => number) => list.reduce((s, k) => s + f(byDate.get(k)), 0);
+    const visitors = sumDays(days, dayVisitors);
+    const prevVisitors = sumDays(prevDaysList, dayVisitors);
+    const pageViews = sumDays(days, (d) => Number(d?.totalVisits ?? d?.visits) || 0);
+    const clicks = sumDays(days, (d) => Number(d?.productViews) || 0);
+    const prevClicks = sumDays(prevDaysList, (d) => Number(d?.productViews) || 0);
+    const clicksTracked = days.some((k) => byDate.get(k)?.productViews !== undefined) || daily.some((d) => d?.productViews !== undefined);
 
-    const getOrderDateObj = (o: any): Date | null => {
-      const ts = o.createdAt?.seconds ? o.createdAt.seconds * 1000 : o.createdAt || o.date;
-      if (!ts) return null;
-      const d = new Date(ts);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    const isOrderInTimeframe = (o: any, tf: TimeframeOption): boolean => {
-      const d = getOrderDateObj(o);
-      if (!d) return false;
-      const orderDateStr = getDhakaDateString(d);
-
-      if (tf === 'today') return orderDateStr === todayStr;
-      if (tf === 'yesterday') return orderDateStr === yesterdayStr;
-      if (tf === '7days') {
-        const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-        return diffDays >= 0 && diffDays <= 7;
-      }
-      if (tf === '28days') {
-        const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-        return diffDays >= 0 && diffDays <= 28;
-      }
-      if (tf === 'this_month') {
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      }
-      return true;
-    };
-
-    const currentOrders = activeOrders.filter((o) => isOrderInTimeframe(o, timeframe));
-
-    const prevDays = timeframe === 'today' || timeframe === 'yesterday' ? 1 : timeframe === '7days' ? 7 : 28;
-    const prevOrders = activeOrders.filter((o) => {
-      const d = getOrderDateObj(o);
-      if (!d) return false;
-      const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-      return diffDays > prevDays && diffDays <= prevDays * 2;
+    // Per source: visitors -> product clicks -> orders -> sales
+    const sources = SOURCES.map((s) => {
+      const srcOrders = orders.filter((o) => (resolveOrderTrafficSource(o) || 'other') === s.id);
+      let v = sumDays(days, (d) => daySourceVisitors(d, s.id));
+      const c = sumDays(days, (d) => Number(d?.productViewsBySource?.[s.id]) || 0);
+      // every order needed at least one visitor
+      v = Math.max(v, srcOrders.length);
+      return { ...s, visitors: v, clicks: c, orders: srcOrders.length, revenue: revenue(srcOrders) };
     });
 
-    const dailyMap = new Map<string, any>();
-    (trafficStats.daily || []).forEach((item) => {
-      dailyMap.set(item.date, item);
-    });
-
-    return {
-      currentOrders,
-      prevOrders,
-      dailyTrafficMap: dailyMap,
-      prevDays
-    };
-  }, [orderHistory, timeframe, trafficStats]);
-
-  const currentOrders = filteredData.currentOrders;
-  const prevOrders = filteredData.prevOrders;
-
-  const totalOrdersCount = currentOrders.length;
-  const prevOrdersCount = prevOrders.length;
-
-  const successfulOrders = currentOrders.filter((o) => o.status === 'delivered' || o.status === 'confirmed' || o.status === 'processing');
-  const cancelledOrders = currentOrders.filter((o) => o.status === 'cancelled' || o.status === 'returned');
-
-  const totalRevenue = currentOrders
-    .filter((o) => o.status !== 'cancelled' && o.status !== 'returned')
-    .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-
-  const prevRevenue = prevOrders
-    .filter((o) => o.status !== 'cancelled' && o.status !== 'returned')
-    .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-
-  const successRate = totalOrdersCount > 0 ? Math.round((successfulOrders.length / totalOrdersCount) * 100) : 100;
-  const revenueGrowthPct = prevRevenue > 0 ? Math.round(((totalRevenue - prevRevenue) / prevRevenue) * 100) : totalRevenue > 0 ? 100 : 0;
-  const orderGrowthPct = prevOrdersCount > 0 ? Math.round(((totalOrdersCount - prevOrdersCount) / prevOrdersCount) * 100) : totalOrdersCount > 0 ? 100 : 0;
-
-  // 100% Genuine, Real Multi-Channel Attribution (NO Dummy Data!)
-  const channelBreakdown = useMemo(() => {
-    const channels: Record<
-      TrafficPlatform,
-      {
-        name: string;
-        tag: string;
-        color: string;
-        badgeColor: string;
-        barColor: string;
-        icon: any;
-        clicks: number;
-        orders: number;
-        revenue: number;
-      }
-    > = {
-      youtube: {
-        name: 'YouTube',
-        tag: 'Videos & Description',
-        color: 'text-red-600',
-        badgeColor: 'bg-red-50 text-red-700 border-red-200',
-        barColor: 'bg-red-600',
-        icon: Youtube,
-        clicks: 0,
-        orders: 0,
-        revenue: 0,
-      },
-      facebook: {
-        name: 'Facebook & Meta',
-        tag: 'Ads & Social Posts',
-        color: 'text-blue-600',
-        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
-        barColor: 'bg-blue-600',
-        icon: Share2,
-        clicks: 0,
-        orders: 0,
-        revenue: 0,
-      },
-      tiktok: {
-        name: 'TikTok',
-        tag: 'Bio & Video Links',
-        color: 'text-gray-900',
-        badgeColor: 'bg-gray-100 text-gray-800 border-gray-300',
-        barColor: 'bg-gray-900',
-        icon: Smartphone,
-        clicks: 0,
-        orders: 0,
-        revenue: 0,
-      },
-      google: {
-        name: 'Google Search',
-        tag: 'Organic & Paid Search',
-        color: 'text-emerald-600',
-        badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-        barColor: 'bg-emerald-500',
-        icon: Search,
-        clicks: 0,
-        orders: 0,
-        revenue: 0,
-      },
-      direct: {
-        name: 'Direct & Other',
-        tag: 'Direct URLs',
-        color: 'text-indigo-600',
-        badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-        barColor: 'bg-indigo-500',
-        icon: Globe,
-        clicks: 0,
-        orders: 0,
-        revenue: 0,
-      },
-      other: {
-        name: 'Other Referrals',
-        tag: 'External Sites',
-        color: 'text-slate-600',
-        badgeColor: 'bg-slate-50 text-slate-700 border-slate-200',
-        barColor: 'bg-slate-400',
-        icon: ExternalLink,
-        clicks: 0,
-        orders: 0,
-        revenue: 0,
-      },
-    };
-
-    // 1. Accumulate verified clicks from Firestore daily records
-    const daysLimit = timeframe === 'today' || timeframe === 'yesterday' ? 1 : timeframe === '7days' ? 7 : 28;
-    const now = new Date();
-    for (let i = 0; i < daysLimit; i++) {
-      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(d);
-      const doc = filteredData.dailyTrafficMap.get(dStr);
-      if (doc && doc.sources) {
-        Object.keys(doc.sources).forEach((srcKey) => {
-          const validKey = srcKey in channels ? (srcKey as TrafficPlatform) : 'other';
-          channels[validKey].clicks += Number(doc.sources[srcKey]) || 0;
-        });
-      }
+    // Trend: hours for a single day, days otherwise
+    let trend: { label: string; visitors: number; orders: number }[];
+    if (days.length === 1) {
+      const d = byDate.get(days[0]);
+      trend = Array.from({ length: 24 }, (_, h) => ({
+        label: `${h}`,
+        visitors: Number(d?.hourly?.[h] ?? d?.hourly?.[String(h)]) || 0,
+        orders: orders.filter((o) => dhakaHour(orderDate(o)!) === h).length,
+      }));
+    } else {
+      trend = days.map((k) => ({
+        label: k.slice(8, 10),
+        visitors: dayVisitors(byDate.get(k)),
+        orders: orders.filter((o) => dhakaDay(orderDate(o)!) === k).length,
+      }));
     }
 
-    // 2. Accumulate verified orders & revenue per channel from orderHistory
-    currentOrders.forEach((o) => {
-      const resolvedChannel = resolveOrderTrafficSource(o);
-      const target = channels[resolvedChannel] || channels.other;
-      target.orders += 1;
-      if (o.status !== 'cancelled' && o.status !== 'returned') {
-        target.revenue += Number(o.total) || 0;
-      }
-    });
-
-    // 3. Verified visitor integrity: Each converted order required at least 1 visit
-    Object.values(channels).forEach((ch) => {
-      if (ch.clicks < ch.orders) {
-        ch.clicks = ch.orders;
-      }
-    });
-
-    const totalClicks = Object.values(channels).reduce((acc, c) => acc + c.clicks, 0);
-
     return {
-      channels,
-      totalClicks,
+      days,
+      orders,
+      visitors,
+      prevVisitors,
+      pageViews,
+      clicks,
+      prevClicks,
+      clicksTracked,
+      ordersCount: orders.length,
+      prevOrdersCount: prevOrders.length,
+      revenue: revenue(orders),
+      prevRevenue: revenue(prevOrders),
+      sources,
+      trend,
+      singleDay: days.length === 1,
     };
-  }, [currentOrders, filteredData.dailyTrafficMap, timeframe]);
+  }, [daily, orderHistory, timeframe]);
 
-  // Real Day-by-Day Trend Points (Strictly Real Data)
-  const trendData = useMemo(() => {
-    const numDays = timeframe === 'today' || timeframe === 'yesterday' ? 1 : timeframe === '7days' ? 7 : 28;
-    const points: Array<{
-      dateStr: string;
-      label: string;
-      revenue: number;
-      orders: number;
-      visits: number;
-      prevRevenue: number;
-      prevOrders: number;
-    }> = [];
+  const conversion = pct(data.ordersCount, data.visitors);
+  const prevConversion = pct(data.prevOrdersCount, data.prevVisitors);
 
-    const now = new Date();
-    for (let i = numDays - 1; i >= 0; i--) {
-      const targetDate = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const prevTargetDate = new Date(now.getTime() - (i + numDays) * 24 * 60 * 60 * 1000);
-
-      const dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(targetDate);
-      const prevDStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(prevTargetDate);
-
-      const shortLabel = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' }).format(targetDate);
-
-      const dayOrders = currentOrders.filter((o) => {
-        const ts = o.createdAt?.seconds ? o.createdAt.seconds * 1000 : o.createdAt || o.date;
-        if (!ts) return false;
-        const od = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(ts));
-        return od === dStr;
-      });
-
-      const prevDayOrders = prevOrders.filter((o) => {
-        const ts = o.createdAt?.seconds ? o.createdAt.seconds * 1000 : o.createdAt || o.date;
-        if (!ts) return false;
-        const od = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date(ts));
-        return od === prevDStr;
-      });
-
-      const dayRevenue = dayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-      const prevDayRevenue = prevDayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
-
-      const trafficDoc = filteredData.dailyTrafficMap.get(dStr);
-      const dayVisits = trafficDoc ? Number(trafficDoc.totalVisits || 0) : dayOrders.length;
-
-      points.push({
-        dateStr: dStr,
-        label: shortLabel,
-        revenue: dayRevenue,
-        orders: dayOrders.length,
-        visits: dayVisits,
-        prevRevenue: prevDayRevenue,
-        prevOrders: prevDayOrders.length,
-      });
-    }
-
-    return points;
-  }, [currentOrders, prevOrders, filteredData.dailyTrafficMap, timeframe]);
-
-  // Compact 7-Day x 24-Hour Activity Heatmap
-  const heatmapData = useMemo(() => {
-    const dayNames = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-    const fullDayNames = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-
-    const matrix: Array<Array<{ visits: number; orders: number }>> = Array.from({ length: 7 }, () =>
-      Array.from({ length: 24 }, () => ({ visits: 0, orders: 0 }))
-    );
-
-    (orderHistory || []).forEach((o: any) => {
-      if (o.deleted) return;
-      const ts = o.createdAt?.seconds ? o.createdAt.seconds * 1000 : o.createdAt || o.date;
-      if (!ts) return;
-      const d = new Date(ts);
-      if (isNaN(d.getTime())) return;
-
-      const hourStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', hour: 'numeric', hour12: false }).format(d);
-      const weekdayStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Dhaka', weekday: 'short' }).format(d);
-
-      const hour = parseInt(hourStr, 10) % 24;
-      const dayMap: Record<string, number> = { Sat: 0, Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6 };
-      const dayIdx = dayMap[weekdayStr] ?? 0;
-
-      matrix[dayIdx][hour].orders += 1;
-      matrix[dayIdx][hour].visits += 1;
+  const filteredOrders = useMemo(() => {
+    const q = orderSearch.trim().toLowerCase();
+    return data.orders.filter((o: any) => {
+      if (sourceFilter !== 'all' && (resolveOrderTrafficSource(o) || 'other') !== sourceFilter) return false;
+      if (!q) return true;
+      return [o.customerName, o.customerPhone, o.phone, o.id, o.orderId, o.displayId]
+        .filter(Boolean)
+        .some((v: any) => String(v).toLowerCase().includes(q));
     });
+  }, [data.orders, sourceFilter, orderSearch]);
 
-    (trafficStats.daily || []).forEach((doc: any) => {
-      const dayMap: Record<string, number> = { Sat: 0, Sun: 1, Mon: 2, Tue: 3, Wed: 4, Thu: 5, Fri: 6 };
-      const dayIdx = dayMap[doc.dayOfWeek] ?? 0;
-      if (doc.hourly && typeof doc.hourly === 'object') {
-        Object.entries(doc.hourly).forEach(([hrStr, count]) => {
-          const hr = parseInt(hrStr, 10);
-          if (hr >= 0 && hr < 24) {
-            matrix[dayIdx][hr].visits += Number(count) || 0;
-          }
-        });
-      }
-    });
-
-    let maxActivity = 0;
-    let peakDayIdx = 0;
-    let peakHour = 20;
-
-    for (let d = 0; d < 7; d++) {
-      for (let h = 0; h < 24; h++) {
-        const score = matrix[d][h].orders * 8 + matrix[d][h].visits;
-        if (score > maxActivity) {
-          maxActivity = score;
-          peakDayIdx = d;
-          peakHour = h;
-        }
-      }
-    }
-
-    const formatHour = (h: number) => {
-      const period = h >= 12 ? 'PM' : 'AM';
-      const hr = h % 12 === 0 ? 12 : h % 12;
-      return `${hr}:00 ${period}`;
-    };
-
-    const bestWindowStart = formatHour(Math.max(0, peakHour - 1));
-    const bestWindowEnd = formatHour(Math.min(23, peakHour + 2));
-
-    return {
-      matrix,
-      dayNames,
-      fullDayNames,
-      maxActivity: Math.max(1, maxActivity),
-      peakDay: fullDayNames[peakDayIdx],
-      bestWindow: `${bestWindowStart} – ${bestWindowEnd}`,
-    };
-  }, [orderHistory, trafficStats.daily]);
-
-  // Premium, Clamped SVG Curve & Bar Renderer (Zero Negative Dipping!)
-  const svgGraph = useMemo(() => {
-    if (trendData.length < 2) return null;
-
-    const width = 800;
-    const height = 135;
-    const padding = { top: 14, right: 18, bottom: 22, left: 52 };
-    const chartW = width - padding.left - padding.right;
-    const chartH = height - padding.top - padding.bottom;
-    const baselineY = padding.top + chartH;
-
-    const values = trendData.map((d) => (activeMetric === 'revenue' ? d.revenue : activeMetric === 'orders' ? d.orders : d.visits));
-    const prevValues = trendData.map((d) => (activeMetric === 'revenue' ? d.prevRevenue : activeMetric === 'orders' ? d.prevOrders : 0));
-
-    const maxVal = Math.max(5, ...values, ...prevValues);
-
-    const getX = (index: number) => padding.left + (index / (trendData.length - 1)) * chartW;
-    const getY = (val: number) => padding.top + chartH - (val / maxVal) * chartH;
-
-    const points = trendData.map((d, i) => ({ x: getX(i), y: getY(values[i]), raw: d, val: values[i] }));
-
-    // Clamped Monotone Spline (Zero dips below baselineY)
-    let curvePath = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i === 0 ? 0 : i - 1];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[i + 2] || p2;
-
-      const dx = p2.x - p1.x;
-
-      // When both are 0, flat line along the baseline
-      if (p1.val === 0 && p2.val === 0) {
-        curvePath += ` L ${p2.x} ${baselineY}`;
-        continue;
-      }
-
-      let cp1x = p1.x + dx / 3;
-      let cp1y = p1.y;
-      if (p1.val > 0) {
-        const slope1 = (p2.y - p0.y) / (p2.x - p0.x || 1);
-        cp1y = p1.y + slope1 * (dx / 3);
-      } else {
-        cp1y = baselineY; // Zero departure: never dip below baseline!
-      }
-
-      let cp2x = p2.x - dx / 3;
-      let cp2y = p2.y;
-      if (p2.val > 0) {
-        const slope2 = (p3.y - p1.y) / (p3.x - p1.x || 1);
-        cp2y = p2.y - slope2 * (dx / 3);
-      } else {
-        cp2y = baselineY; // Zero arrival: smooth landing on baseline!
-      }
-
-      // Hard clamp: never exceed baseline or top padding
-      cp1y = Math.min(baselineY, Math.max(padding.top, cp1y));
-      cp2y = Math.min(baselineY, Math.max(padding.top, cp2y));
-
-      curvePath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
-    }
-
-    const areaPath = `${curvePath} L ${points[points.length - 1].x} ${baselineY} L ${points[0].x} ${baselineY} Z`;
-
-    return {
-      width,
-      height,
-      padding,
-      points,
-      curvePath,
-      areaPath,
-      baselineY,
-      chartW,
-      chartH,
-      maxVal,
-    };
-  }, [trendData, activeMetric]);
-
-  // Combined Live Activity Stream (Recent Orders & Traffic Visits)
-  const recentLiveStream = useMemo(() => {
-    const fromServer = (trafficStats.recent || []).map((v: any) => ({
-      id: v.id || Math.random().toString(),
-      type: 'visit',
-      source: v.source || 'direct',
-      path: v.path || '/',
-      device: v.device || 'desktop',
-      timestamp: v.timestamp || Date.now(),
-      label: 'Visitor',
-    }));
-
-    const fromOrders = (orderHistory || [])
-      .filter((o: any) => !o.deleted)
-      .slice(0, 10)
-      .map((o: any) => {
-        const ts = o.createdAt?.seconds ? o.createdAt.seconds * 1000 : o.createdAt || o.date;
-        const timeMs = ts ? new Date(ts).getTime() : Date.now();
-        return {
-          id: o.id || Math.random().toString(),
-          type: 'order',
-          source: resolveOrderTrafficSource(o),
-          path: `/order/${o.id || ''}`,
-          device: 'mobile',
-          timestamp: isNaN(timeMs) ? Date.now() : timeMs,
-          label: `Order (৳${Number(o.total || 0).toLocaleString()})`,
-        };
-      });
-
-    const combined = [...fromServer, ...fromOrders].sort((a, b) => b.timestamp - a.timestamp);
-    return combined.slice(0, 8);
-  }, [trafficStats.recent, orderHistory]);
+  const maxSourceVisitors = Math.max(1, ...data.sources.map((s) => s.visitors));
+  const tfLabel = TIMEFRAMES.find((t) => t.id === timeframe)?.label || '';
 
   return (
-    <div className="space-y-3.5 pb-8 font-sans text-gray-900">
-      {/* ── Compact Top Bar: Title, Live Status & Timeframe Filter ── */}
-      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-xs">
-            <BarChart3 size={18} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-gray-900 tracking-tight">Analytics Dashboard</h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping"></span>
-                LIVE
-              </span>
-            </div>
-            <div className="text-[11px] text-gray-500 font-medium flex items-center gap-2 mt-0.5">
-              <span>Active Shoppers: <b className="text-gray-900 font-bold">{trafficStats.activeVisitors}</b></span>
-              <span>•</span>
-              <span className="text-gray-400">
-                Direct Firestore Sync ({lastRefreshedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})
-              </span>
-            </div>
-          </div>
+    <div className="space-y-4 pb-8">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Analytics</h2>
+          <p className="text-sm text-gray-500 mt-1">কতজন এলেন, কোথা থেকে এলেন, আর কতজন কিনলেন</p>
         </div>
-
-        {/* Timeframe Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200 text-xs font-bold overflow-x-auto no-scrollbar">
-            {[
-              { id: 'today', label: 'Today' },
-              { id: 'yesterday', label: 'Yesterday' },
-              { id: '7days', label: '7D' },
-              { id: '28days', label: '28D' },
-              { id: 'this_month', label: 'Month' },
-              { id: 'all', label: 'All' },
-            ].map((t) => (
+          <div className="flex bg-gray-50 border border-gray-200 rounded-xl p-1" role="tablist" aria-label="Time range">
+            {TIMEFRAMES.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTimeframe(t.id as TimeframeOption)}
-                className={`px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap cursor-pointer text-xs ${
-                  timeframe === t.id
-                    ? 'bg-primary text-white shadow-xs font-black'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+                type="button"
+                role="tab"
+                aria-selected={timeframe === t.id}
+                onClick={() => setTimeframe(t.id)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                  timeframe === t.id ? 'bg-primary text-white' : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
                 {t.label}
               </button>
             ))}
           </div>
-
-          {onNavigateToOrders && (
-            <button
-              onClick={onNavigateToOrders}
-              className="px-3 py-1.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
-            >
-              <ShoppingBag size={13} /> Orders <ArrowRight size={12} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── 4 Vibrant KPI Highlight Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Card 1: Gross Revenue */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-xs border-t-4 border-t-emerald-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Gross Sales</span>
-            <div className="p-1 rounded-lg bg-emerald-50 text-emerald-600">
-              <DollarSign size={15} />
-            </div>
-          </div>
-          <div className="mt-1.5 text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-            ৳{totalRevenue.toLocaleString()}
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-[10px] font-bold">
-            {revenueGrowthPct >= 0 ? (
-              <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center">
-                <ArrowUpRight size={11} className="mr-0.5" /> +{revenueGrowthPct}% vs prev
-              </span>
-            ) : (
-              <span className="text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 flex items-center">
-                <ArrowDownRight size={11} className="mr-0.5" /> {revenueGrowthPct}% vs prev
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Card 2: Total Orders */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-xs border-t-4 border-t-blue-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Orders</span>
-            <div className="p-1 rounded-lg bg-blue-50 text-blue-600">
-              <ShoppingBag size={15} />
-            </div>
-          </div>
-          <div className="mt-1.5 text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-            {totalOrdersCount.toLocaleString()}
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-[10px] font-bold">
-            {orderGrowthPct >= 0 ? (
-              <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 flex items-center">
-                <ArrowUpRight size={11} className="mr-0.5" /> +{orderGrowthPct}% growth
-              </span>
-            ) : (
-              <span className="text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded flex items-center">
-                {orderGrowthPct}% growth
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Card 3: Total Traffic & Clicks */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-xs border-t-4 border-t-indigo-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tracked Clicks</span>
-            <div className="p-1 rounded-lg bg-indigo-50 text-indigo-600">
-              <Eye size={15} />
-            </div>
-          </div>
-          <div className="mt-1.5 text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-            {channelBreakdown.totalClicks.toLocaleString()}
-          </div>
-          <div className="mt-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 inline-block">
-            Verified Traffic
-          </div>
-        </div>
-
-        {/* Card 4: Success Ratio */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 shadow-xs border-t-4 border-t-amber-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Order Success</span>
-            <div className="p-1 rounded-lg bg-amber-50 text-amber-600">
-              <CheckCircle2 size={15} />
-            </div>
-          </div>
-          <div className="mt-1.5 text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-            {successRate}%
-          </div>
-          <div className="mt-1 text-[10px] text-gray-500 font-medium truncate">
-            <b className="text-emerald-700">{successfulOrders.length}</b> done • <b className="text-red-500">{cancelledOrders.length}</b> cancelled
-          </div>
-        </div>
-      </div>
-
-      {/* ── Sleek, Clamped Performance Trend Chart (Height 135px) ── */}
-      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/90 shadow-xs space-y-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
-          <div className="flex items-center gap-2">
-            <TrendingUp size={16} className="text-primary" />
-            <span className="font-black text-xs sm:text-sm text-gray-900">Performance Trend Curve</span>
-            <span className="text-[11px] text-gray-400 font-normal hidden sm:inline">• Real-time sales trajectory</span>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Chart Style Switcher (Curve vs Bar) */}
-            <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-[10px] font-bold">
-              <button
-                onClick={() => setChartStyle('curve')}
-                className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1 ${
-                  chartStyle === 'curve' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
-                }`}
-                title="Smooth Curve View"
-              >
-                <LineChart size={12} /> Spline
-              </button>
-              <button
-                onClick={() => setChartStyle('bar')}
-                className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1 ${
-                  chartStyle === 'bar' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
-                }`}
-                title="Column Bar View"
-              >
-                <BarChart3 size={12} /> Bars
-              </button>
-            </div>
-
-            {/* Metric Selector Tabs */}
-            <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-[11px] font-bold self-start sm:self-auto">
-              <button
-                onClick={() => setActiveMetric('revenue')}
-                className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer ${
-                  activeMetric === 'revenue' ? 'bg-primary text-white shadow-xs font-black' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Revenue (৳)
-              </button>
-              <button
-                onClick={() => setActiveMetric('orders')}
-                className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer ${
-                  activeMetric === 'orders' ? 'bg-primary text-white shadow-xs font-black' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Orders
-              </button>
-              <button
-                onClick={() => setActiveMetric('visits')}
-                className={`px-2.5 py-0.5 rounded-md transition-all cursor-pointer ${
-                  activeMetric === 'visits' ? 'bg-primary text-white shadow-xs font-black' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Clicks
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* SVG Curve / Bar Chart */}
-        <div className="relative w-full overflow-x-auto no-scrollbar pt-0.5">
-          {svgGraph ? (
-            <div className="min-w-[550px] w-full">
-              <svg viewBox={`0 0 ${svgGraph.width} ${svgGraph.height}`} className="w-full h-auto overflow-visible">
-                <defs>
-                  <linearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1e3a8a" stopOpacity="0.22" />
-                    <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.0" />
-                  </linearGradient>
-                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2563eb" />
-                    <stop offset="100%" stopColor="#1e3a8a" />
-                  </linearGradient>
-                </defs>
-
-                {/* Horizontal Guide Lines */}
-                {[0, 0.5, 1].map((ratio, i) => {
-                  const y = svgGraph.padding.top + (1 - ratio) * (svgGraph.height - svgGraph.padding.top - svgGraph.padding.bottom);
-                  const labelVal = Math.round(ratio * svgGraph.maxVal);
-                  return (
-                    <g key={i}>
-                      <line
-                        x1={svgGraph.padding.left}
-                        y1={y}
-                        x2={svgGraph.width - svgGraph.padding.right}
-                        y2={y}
-                        stroke="#f1f5f9"
-                        strokeWidth="1"
-                      />
-                      <text
-                        x={svgGraph.padding.left - 6}
-                        y={y + 3}
-                        textAnchor="end"
-                        className="text-[9px] fill-gray-400 font-bold"
-                      >
-                        {activeMetric === 'revenue' ? `৳${labelVal.toLocaleString()}` : labelVal}
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {chartStyle === 'curve' ? (
-                  <>
-                    {/* Area Gradient Fill */}
-                    <path d={svgGraph.areaPath} fill="url(#curveGradient)" />
-
-                    {/* Smooth Clamped Curve (Zero Negative Dips) */}
-                    <path
-                      d={svgGraph.curvePath}
-                      fill="none"
-                      stroke="#1e3a8a"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-
-                    {/* Clean Anchor Dots: Rendered ONLY on active points (val > 0) or hovered point */}
-                    {svgGraph.points.map((pt, i) => {
-                      const isHovered = hoveredPoint?.raw?.dateStr === pt.raw.dateStr;
-                      const hasValue = pt.val > 0;
-
-                      return (
-                        <g
-                          key={i}
-                          className="cursor-pointer"
-                          onMouseEnter={() => setHoveredPoint(pt)}
-                          onMouseLeave={() => setHoveredPoint(null)}
-                        >
-                          {/* Invisible hover capture target */}
-                          <circle cx={pt.x} cy={pt.y} r={12} fill="transparent" />
-
-                          {/* Prominent dot only for active days or hovered */}
-                          {(hasValue || isHovered) && (
-                            <circle
-                              cx={pt.x}
-                              cy={pt.y}
-                              r={isHovered ? 5 : 3.5}
-                              className={`transition-all ${
-                                isHovered
-                                  ? 'fill-red-600 stroke-white stroke-2 shadow-md'
-                                  : 'fill-primary stroke-white stroke-1.5'
-                              }`}
-                            />
-                          )}
-
-                          {/* X-axis date labels */}
-                          {(trendData.length <= 14 || i % 4 === 0 || i === trendData.length - 1) && (
-                            <text
-                              x={pt.x}
-                              y={svgGraph.height - 4}
-                              textAnchor="middle"
-                              className="text-[9px] fill-gray-400 font-semibold"
-                            >
-                              {pt.raw.label}
-                            </text>
-                          )}
-                        </g>
-                      );
-                    })}
-                  </>
-                ) : (
-                  /* Modern Rounded Column Bars */
-                  svgGraph.points.map((pt, i) => {
-                    const isHovered = hoveredPoint?.raw?.dateStr === pt.raw.dateStr;
-                    const barW = Math.max(6, Math.min(18, (svgGraph.chartW / trendData.length) * 0.65));
-                    const barH = Math.max(pt.val > 0 ? 4 : 1, svgGraph.baselineY - pt.y);
-                    const barY = pt.val > 0 ? pt.y : svgGraph.baselineY - 1;
-
-                    return (
-                      <g
-                        key={i}
-                        className="cursor-pointer"
-                        onMouseEnter={() => setHoveredPoint(pt)}
-                        onMouseLeave={() => setHoveredPoint(null)}
-                      >
-                        <rect
-                          x={pt.x - barW / 2}
-                          y={barY}
-                          width={barW}
-                          height={barH}
-                          rx={3}
-                          className={`transition-all ${
-                            isHovered
-                              ? 'fill-red-600'
-                              : pt.val > 0
-                              ? 'fill-primary hover:fill-blue-600'
-                              : 'fill-gray-200'
-                          }`}
-                        />
-                        {(trendData.length <= 14 || i % 4 === 0 || i === trendData.length - 1) && (
-                          <text
-                            x={pt.x}
-                            y={svgGraph.height - 4}
-                            textAnchor="middle"
-                            className="text-[9px] fill-gray-400 font-semibold"
-                          >
-                            {pt.raw.label}
-                          </text>
-                        )}
-                      </g>
-                    );
-                  })
-                )}
-              </svg>
-
-              {/* Hover Floating Stat */}
-              {hoveredPoint && (
-                <div className="mt-1 px-3 py-1 bg-gray-900 text-white rounded-lg text-[11px] flex items-center justify-between shadow-md">
-                  <span className="font-bold text-gray-300">{hoveredPoint.raw.dateStr}</span>
-                  <div className="flex items-center gap-3 font-semibold">
-                    <span>Revenue: <b className="text-emerald-400">৳{hoveredPoint.raw.revenue.toLocaleString()}</b></span>
-                    <span>Orders: <b className="text-blue-400">{hoveredPoint.raw.orders}</b></span>
-                    <span>Clicks: <b className="text-amber-400">{hoveredPoint.raw.visits}</b></span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {/* ── YouTube Studio-Style Real-Time Traffic Overview ── */}
-      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/90 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex items-center justify-center">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping absolute"></span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 relative"></span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-xs sm:text-sm text-gray-900 tracking-tight">Realtime</span>
-                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Updating live
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-400 font-medium">Live shopper counter & incoming traffic volume</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-400 font-medium hidden sm:inline">Auto-syncs every 20s</span>
-            <button
-              onClick={fetchRecentTrafficStream}
-              disabled={isLoadingTraffic}
-              className="p-1.5 px-2.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-600 transition-all cursor-pointer flex items-center gap-1.5 text-[11px] font-bold"
-              title="Refresh Realtime Stats"
-            >
-              <RefreshCcw size={12} className={isLoadingTraffic ? 'animate-spin text-primary' : ''} />
-              <span>Sync</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 3 Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-          {/* Active Shoppers */}
-          <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200/80 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                <span>Active Shoppers</span>
-                <Activity size={14} className="text-emerald-600" />
-              </div>
-              <div className="mt-1.5 text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-baseline gap-2">
-                <span>{trafficStats.activeVisitors}</span>
-                <span className="text-[11px] font-semibold text-emerald-700">online now</span>
-              </div>
-            </div>
-            <p className="mt-1 text-[10px] text-gray-500 font-medium">
-              Shoppers active on site within the last 15 minutes.
-            </p>
-          </div>
-
-          {/* Last 60 Minutes */}
-          <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-200/80 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between text-[10px] font-bold text-blue-800 uppercase tracking-wider">
-                <span>Last 60 Minutes</span>
-                <Clock size={14} className="text-blue-600" />
-              </div>
-              <div className="mt-1.5 text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-baseline gap-2">
-                <span>
-                  {trafficStats.realtime?.last60Minutes ?? (trafficStats.recent?.length || 0)}
-                </span>
-                <span className="text-[11px] font-semibold text-blue-700">views</span>
-              </div>
-            </div>
-            <p className="mt-1 text-[10px] text-gray-500 font-medium">
-              Pageviews & clicks tracked in the last hour.
-            </p>
-          </div>
-
-          {/* Last 48 Hours */}
-          <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-200/80 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between text-[10px] font-bold text-indigo-800 uppercase tracking-wider">
-                <span>Last 48 Hours</span>
-                <BarChart3 size={14} className="text-indigo-600" />
-              </div>
-              <div className="mt-1.5 text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-baseline gap-2">
-                <span>
-                  {trafficStats.realtime?.last48Hours || (trafficStats.daily?.slice(0, 2).reduce((sum, d) => sum + (Number(d.totalVisits || d.visits) || 0), 0)) || (channelBreakdown.totalClicks || 0)}
-                </span>
-                <span className="text-[11px] font-semibold text-indigo-700">views</span>
-              </div>
-            </div>
-            <p className="mt-1 text-[10px] text-gray-500 font-medium">
-              Accumulated visitor volume over the past 48 hours.
-            </p>
-          </div>
-        </div>
-
-        {/* Live Channel Breakdown Quick Badges */}
-        <div className="pt-1.5 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2 text-xs">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Real-time Inflow Sources:</span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {[
-              { label: 'TikTok', count: Math.max(trafficStats.realtime?.sources?.tiktok || 0, channelBreakdown.channels.tiktok.clicks), icon: Smartphone, color: 'text-gray-900 bg-gray-100 border-gray-200' },
-              { label: 'Facebook', count: Math.max(trafficStats.realtime?.sources?.facebook || 0, channelBreakdown.channels.facebook.clicks), icon: Share2, color: 'text-blue-700 bg-blue-50 border-blue-200' },
-              { label: 'YouTube', count: Math.max(trafficStats.realtime?.sources?.youtube || 0, channelBreakdown.channels.youtube.clicks), icon: Youtube, color: 'text-red-700 bg-red-50 border-red-200' },
-              { label: 'Google', count: Math.max(trafficStats.realtime?.sources?.google || 0, channelBreakdown.channels.google.clicks), icon: Search, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-              { label: 'Direct', count: Math.max(trafficStats.realtime?.sources?.direct || 0, channelBreakdown.channels.direct.clicks), icon: Globe, color: 'text-indigo-700 bg-indigo-50 border-indigo-200' }
-            ].map(item => (
-              <span key={item.label} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${item.color}`}>
-                <item.icon size={11} />
-                <span>{item.label}:</span>
-                <b className="font-black">{item.count || 0}</b>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Multi-Channel Attribution Cards (YouTube, Facebook, TikTok, Google, Direct) ── */}
-      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/90 shadow-xs space-y-2.5">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-          <div className="flex items-center gap-2">
-            <Share2 size={16} className="text-primary" />
-            <span className="font-black text-xs sm:text-sm text-gray-900">Traffic Acquisition Channels</span>
-          </div>
-          <span className="text-[11px] font-bold text-gray-400">
-            Total Inflow: {channelBreakdown.totalClicks.toLocaleString()} Clicks
-          </span>
-        </div>
-
-        {/* 5 Channel Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-          {(['youtube', 'facebook', 'tiktok', 'google', 'direct'] as TrafficPlatform[]).map((key) => {
-            const ch = channelBreakdown.channels[key];
-            const clickShare =
-              channelBreakdown.totalClicks > 0
-                ? Math.round((ch.clicks / channelBreakdown.totalClicks) * 100)
-                : 0;
-            const convRate = ch.clicks > 0 ? ((ch.orders / ch.clicks) * 100).toFixed(1) : '0.0';
-
-            return (
-              <div
-                key={key}
-                className="p-3 rounded-xl border border-gray-200/80 bg-gray-50/50 hover:bg-white hover:border-gray-300 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5">
-                      <ch.icon size={15} className={ch.color} />
-                      <span className="font-bold text-xs text-gray-900 truncate">{ch.name}</span>
-                    </div>
-                    <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-white border border-gray-200 text-gray-700">
-                      {clickShare}%
-                    </span>
-                  </div>
-
-                  <div className="mt-2">
-                    <div className="text-base sm:text-lg font-black text-gray-900">
-                      {ch.clicks.toLocaleString()}
-                    </div>
-                    <div className="text-[9px] text-gray-400 uppercase font-semibold">Tracked Clicks</div>
-                  </div>
-
-                  <div className="mt-1.5 pt-1.5 border-t border-gray-200/60 text-[11px] space-y-0.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Orders:</span>
-                      <b className="text-gray-800">{ch.orders}</b>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Conv. Rate:</span>
-                      <b className="text-emerald-700">{convRate}%</b>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Sales:</span>
-                      <b className="text-primary font-black">৳{ch.revenue.toLocaleString()}</b>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2 w-full h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className={`h-full ${ch.barColor}`} style={{ width: `${Math.min(100, Math.max(0, clickShare))}%` }}></div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Compact Shopper Peak Activity Heatmap (With Fixed 0-0 Hover Bar) ── */}
-      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/90 shadow-xs space-y-2.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-gray-100 pb-2">
-          <div className="flex items-center gap-2">
-            <Flame size={16} className="text-amber-500" />
-            <span className="font-black text-xs sm:text-sm text-gray-900">Shopper Activity Heatmap</span>
-            <span className="text-[11px] text-gray-400 font-normal hidden sm:inline">• When Shoppers Are Active</span>
-          </div>
-
-          <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
-            <span>Low</span>
-            <div className="flex items-center gap-0.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-gray-100 border border-gray-200"></span>
-              <span className="w-2.5 h-2.5 rounded-xs bg-primary/25"></span>
-              <span className="w-2.5 h-2.5 rounded-xs bg-primary/55"></span>
-              <span className="w-2.5 h-2.5 rounded-xs bg-primary/85"></span>
-              <span className="w-2.5 h-2.5 rounded-xs bg-primary"></span>
-            </div>
-            <span className="text-primary font-black">Peak</span>
-          </div>
-        </div>
-
-        {/* 1-Line Recommendation Strip */}
-        <div className="px-3 py-1.5 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 font-bold text-blue-900 text-[11px]">
-            <Flame size={13} className="text-amber-500" />
-            <span>Optimal Ad Window: <b>{heatmapData.peakDay} ({heatmapData.bestWindow})</b></span>
-          </div>
-          <span className="text-[10px] text-blue-700 font-medium">
-            Schedule Meta & YouTube budget boosts during this window for peak ROAS.
-          </span>
-        </div>
-
-        {/* Compact Grid */}
-        <div className="overflow-x-auto no-scrollbar">
-          <div className="min-w-[500px]">
-            <div className="grid grid-cols-[40px_repeat(24,_1fr)] gap-0.5 text-[9px] font-bold text-gray-400 text-center mb-1">
-              <div></div>
-              {Array.from({ length: 24 }).map((_, h) => (
-                <div key={h}>
-                  {h === 0 ? '12A' : h === 6 ? '6A' : h === 12 ? '12P' : h === 18 ? '6P' : h % 3 === 0 ? `${h % 12}` : ''}
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-0.5">
-              {heatmapData.matrix.map((row, dayIdx) => (
-                <div key={dayIdx} className="grid grid-cols-[40px_repeat(24,_1fr)] gap-0.5 items-center">
-                  <div className="text-[10px] font-bold text-gray-600 text-right pr-1">
-                    {heatmapData.dayNames[dayIdx]}
-                  </div>
-
-                  {row.map((cell, hour) => {
-                    const score = cell.orders * 8 + cell.visits;
-                    const ratio = heatmapData.maxActivity > 0 ? score / heatmapData.maxActivity : 0;
-
-                    let bgClass = 'bg-gray-100 hover:ring-1 hover:ring-gray-400';
-                    if (ratio > 0.75) bgClass = 'bg-primary text-white shadow-xs hover:ring-1 hover:ring-primary';
-                    else if (ratio > 0.45) bgClass = 'bg-primary/75 hover:ring-1 hover:ring-primary';
-                    else if (ratio > 0.2) bgClass = 'bg-primary/45 hover:ring-1 hover:ring-primary';
-                    else if (ratio > 0.05) bgClass = 'bg-primary/20 hover:ring-1 hover:ring-primary';
-
-                    return (
-                      <div
-                        key={hour}
-                        onMouseEnter={() =>
-                          setHoveredHeatmapCell({
-                            day: heatmapData.fullDayNames[dayIdx],
-                            hour,
-                            visits: cell.visits,
-                            orders: cell.orders,
-                          })
-                        }
-                        onMouseLeave={() => setHoveredHeatmapCell(null)}
-                        className={`h-3 rounded-xs transition-all cursor-pointer ${bgClass}`}
-                      ></div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-
-            {/* Fixed Details Bar (User requested: Always fixed, shows 0-0 when idle, never jumps layout!) */}
-            <div className="mt-2 h-7 px-3 rounded-lg bg-gray-900 text-white text-[10px] font-bold flex items-center justify-between border border-gray-800">
-              <span className="text-gray-300">
-                {hoveredHeatmapCell
-                  ? `🕒 ${hoveredHeatmapCell.day} ${hoveredHeatmapCell.hour % 12 === 0 ? 12 : hoveredHeatmapCell.hour % 12}:00 ${hoveredHeatmapCell.hour >= 12 ? 'PM' : 'AM'}`
-                  : '🕒 Hover over any time slot to inspect details'}
-              </span>
-              <div className="flex items-center gap-3">
-                <span>Clicks: <b className="text-amber-400">{hoveredHeatmapCell ? hoveredHeatmapCell.visits : 0}</b></span>
-                <span>Orders: <b className="text-emerald-400">{hoveredHeatmapCell ? hoveredHeatmapCell.orders : 0}</b></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Real-Time Live Activity Stream (Orders & Live Clicks) ── */}
-      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/90 shadow-xs space-y-2">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
-          <div className="flex items-center gap-2">
-            <Zap size={15} className="text-amber-500" />
-            <span className="font-black text-xs sm:text-sm text-gray-900">Real-Time Inflow Stream</span>
-          </div>
-
           <button
-            onClick={fetchRecentTrafficStream}
-            disabled={isLoadingTraffic}
-            className="p-1 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-500 transition-all cursor-pointer"
-            title="Refresh stream"
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className="h-9 px-3 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Refresh"
           >
-            <RefreshCcw size={12} className={isLoadingTraffic ? 'animate-spin' : ''} />
+            <RefreshCcw size={13} className={loading ? 'animate-spin' : ''} />
+            {lastRefreshedAt
+              ? lastRefreshedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+              : 'Refresh'}
           </button>
         </div>
+      </div>
 
-        {recentLiveStream.length > 0 ? (
-          <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider text-[9px]">
-                  <th className="py-1 px-2">Channel</th>
-                  <th className="py-1 px-2">Activity / Event</th>
-                  <th className="py-1 px-2">Path / Target</th>
-                  <th className="py-1 px-2">Device</th>
-                  <th className="py-1 px-2 text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 font-medium">
-                {recentLiveStream.map((v: any, idx: number) => {
-                  const minutesAgo = Math.max(1, Math.round((Date.now() - v.timestamp) / 60000));
-                  return (
-                    <tr key={v.id || idx} className="hover:bg-gray-50/60 transition-colors">
-                      <td className="py-1.5 px-2">
-                        <span className="inline-flex items-center gap-1 font-bold text-gray-800 text-[11px]">
-                          {v.source === 'youtube' && <Youtube size={12} className="text-red-600" />}
-                          {v.source === 'facebook' && <Share2 size={12} className="text-blue-600" />}
-                          {v.source === 'tiktok' && <Smartphone size={12} className="text-gray-900" />}
-                          {v.source === 'google' && <Search size={12} className="text-emerald-600" />}
-                          {v.source === 'direct' && <Globe size={12} className="text-indigo-600" />}
-                          <span className="capitalize">{v.source}</span>
+      {/* Live right now */}
+      <div className="bg-white border border-gray-200 rounded-2xl grid grid-cols-3 divide-x divide-gray-200">
+        {[
+          { label: 'এই মুহূর্তে সাইটে', sub: 'গত ৫ মিনিট', value: realtime?.activeShoppers, live: true },
+          { label: 'গত ৬০ মিনিটে', sub: 'জন এসেছেন', value: realtime?.last60Minutes },
+          {
+            label: 'গত ২৪ ঘণ্টায়',
+            sub: realtime && realtime.last24HoursComplete === false ? 'জন (আংশিক হিসাব)' : 'জন এসেছেন',
+            value: realtime?.last24HoursVisitors,
+          },
+        ].map((c, i) => (
+          <div key={i} className="px-3 py-3 md:px-5 md:py-4">
+            <div className="flex items-center gap-1.5 text-[11px] md:text-xs font-semibold text-gray-500">
+              {c.live && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+              )}
+              {c.label}
+            </div>
+            <div className="text-2xl md:text-3xl font-extrabold text-gray-900 mt-1 price-num">
+              {c.value === undefined || c.value === null ? '—' : fmt(c.value)}
+            </div>
+            <div className="text-[11px] text-gray-400">{c.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* KPIs for the chosen range */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        {[
+          { label: 'ভিজিটর', value: fmt(data.visitors), now: data.visitors, prev: data.prevVisitors, icon: Users, gold: true,
+            note: `${fmt(data.pageViews)} পেজ ভিউ` },
+          { label: 'প্রোডাক্টে ক্লিক', value: data.clicksTracked ? fmt(data.clicks) : '—', now: data.clicks, prev: data.prevClicks,
+            icon: MousePointerClick, note: data.clicksTracked ? `${pct(data.clicks, data.visitors).toFixed(0)}% ভিজিটর ক্লিক করেছেন` : 'আজ থেকে গোনা শুরু' },
+          { label: 'অর্ডার', value: fmt(data.ordersCount), now: data.ordersCount, prev: data.prevOrdersCount, icon: ShoppingBag },
+          { label: 'বিক্রি', value: taka(data.revenue), now: data.revenue, prev: data.prevRevenue, icon: Wallet, note: 'বাতিল/ফেরত বাদে' },
+          { label: 'কনভার্সন', value: `${conversion.toFixed(1)}%`, now: conversion, prev: prevConversion, icon: Percent, note: 'ভিজিটর থেকে অর্ডার' },
+        ].map((k) => {
+          const diff = k.prev > 0 ? ((k.now - k.prev) / k.prev) * 100 : null;
+          const Icon = k.icon;
+          return (
+            <div key={k.label} className={`bg-white border rounded-2xl p-4 ${k.gold ? 'border-primary/40' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500">{k.label}</span>
+                <Icon size={15} className={k.gold ? 'text-primary' : 'text-gray-400'} />
+              </div>
+              <div className={`text-2xl md:text-[28px] font-extrabold mt-2 price-num leading-none ${k.gold ? 'text-primary' : 'text-gray-900'}`}>
+                {k.value}
+              </div>
+              <div className="mt-2 flex items-center gap-2 text-[11px]">
+                {diff !== null && (
+                  <span className={`font-bold ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {diff >= 0 ? '▲' : '▼'} {Math.abs(diff).toFixed(0)}%
+                  </span>
+                )}
+                <span className="text-gray-400 truncate">{k.note || 'আগের সময়ের তুলনায়'}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Trend */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm md:text-base font-extrabold text-gray-900">
+            {data.singleDay ? `${tfLabel} — ঘণ্টা অনুযায়ী` : `${tfLabel} — দিন অনুযায়ী`}
+          </h3>
+          <div className="flex items-center gap-3 text-[11px] font-semibold text-gray-500">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-primary rounded" /> {data.singleDay ? 'পেজ ভিউ' : 'ভিজিটর'}</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 bg-gray-600 rounded-sm" /> অর্ডার</span>
+          </div>
+        </div>
+        <TrendChart points={data.trend} hoverIdx={hoverIdx} setHoverIdx={setHoverIdx} singleDay={data.singleDay} />
+      </div>
+
+      {/* Sources: visitors -> clicks -> orders */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="px-4 md:px-5 pt-4 pb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm md:text-base font-extrabold text-gray-900">কোথা থেকে এসেছেন</h3>
+            <p className="text-xs text-gray-500 mt-0.5">প্রতিটা প্ল্যাটফর্ম থেকে ভিজিটর, ক্লিক আর অর্ডার — সারিতে চাপলে নিচে সেই অর্ডারগুলো দেখাবে</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] font-semibold text-gray-400 border-y border-gray-200">
+                <th className="text-left font-semibold px-3 md:px-5 py-2">প্ল্যাটফর্ম</th>
+                <th className="text-right font-semibold px-2 sm:px-3 py-2">ভিজিটর</th>
+                <th className="text-right font-semibold px-2 sm:px-3 py-2">ক্লিক</th>
+                <th className="text-right font-semibold px-2 sm:px-3 py-2">অর্ডার</th>
+                <th className="hidden sm:table-cell text-right font-semibold px-3 py-2">বিক্রি</th>
+                <th className="text-right font-semibold px-3 md:px-5 py-2">কনভার্সন</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.sources.map((s) => {
+                const Icon = s.icon;
+                const active = sourceFilter === s.id;
+                return (
+                  <tr
+                    key={s.id}
+                    onClick={() => setSourceFilter(active ? 'all' : s.id)}
+                    className={`border-b border-gray-100 last:border-0 cursor-pointer transition-colors ${active ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                  >
+                    <td className="px-3 md:px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="hidden sm:flex w-7 h-7 rounded-lg items-center justify-center bg-gray-100 shrink-0" style={{ color: s.color }}>
+                          <Icon size={15} />
                         </span>
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <span className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          v.type === 'order'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-blue-50 text-blue-700 border border-blue-200'
-                        }`}>
-                          {v.label}
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-2 text-gray-600 font-mono text-[10px] truncate max-w-[160px]">
-                        {v.path || '/'}
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <span className="inline-flex items-center gap-1 text-gray-500 text-[10px]">
-                          {v.device === 'mobile' ? <Smartphone size={11} /> : <Monitor size={11} />}
-                          <span className="capitalize">{v.device}</span>
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-gray-400 font-bold text-[10px]">
-                        {minutesAgo < 60 ? `${minutesAgo}m ago` : `${Math.floor(minutesAgo / 60)}h ago`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-gray-900">{s.name}</div>
+                          {/* funnel bar: visitors (track) -> clicks -> orders */}
+                          <div className="mt-1.5 h-1.5 w-full max-w-[220px] bg-gray-100 rounded-full relative overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 rounded-full opacity-35" style={{ width: `${(s.visitors / maxSourceVisitors) * 100}%`, background: s.color }} />
+                            <div className="absolute inset-y-0 left-0 rounded-full opacity-70" style={{ width: `${(s.clicks / maxSourceVisitors) * 100}%`, background: s.color }} />
+                            <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(s.orders / maxSourceVisitors) * 100}%`, background: s.color }} />
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-right px-2 sm:px-3 py-3 font-bold text-gray-900 price-num">{fmt(s.visitors)}</td>
+                    <td className="text-right px-2 sm:px-3 py-3 text-gray-700 price-num">{data.clicksTracked ? fmt(s.clicks) : '—'}</td>
+                    <td className="text-right px-2 sm:px-3 py-3 font-bold text-gray-900 price-num">{fmt(s.orders)}</td>
+                    <td className="hidden sm:table-cell text-right px-3 py-3 text-gray-700 price-num">{taka(s.revenue)}</td>
+                    <td className="text-right px-3 md:px-5 py-3 font-bold text-primary price-num">{pct(s.orders, s.visitors).toFixed(1)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Every order with its source */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="px-4 md:px-5 pt-4 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm md:text-base font-extrabold text-gray-900">
+              কোন অর্ডার কোথা থেকে এসেছে
+              <span className="ml-2 text-xs font-semibold text-gray-400 price-num">{fmt(filteredOrders.length)} টি</span>
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">অর্ডারে চাপলে কাস্টমারের নাম, ফোন, ঠিকানা আর পণ্যসহ পুরো তথ্য খুলবে</p>
+          </div>
+          <div className="relative md:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+              placeholder="নাম, ফোন বা অর্ডার আইডি"
+              className="w-full h-9 pl-8 pr-8 rounded-xl border border-gray-200 bg-gray-50 text-sm outline-none focus:border-primary"
+            />
+            {orderSearch && (
+              <button type="button" onClick={() => setOrderSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" aria-label="Clear search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-4 md:px-5 pb-3 flex gap-1.5 overflow-x-auto no-scrollbar">
+          {[{ id: 'all', name: 'সব', count: data.orders.length } as any, ...data.sources.map((s) => ({ id: s.id, name: s.name, count: s.orders }))].map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setSourceFilter(c.id)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors cursor-pointer ${
+                sourceFilter === c.id ? 'bg-primary text-white border-primary' : 'border-gray-200 text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {c.name} <span className="opacity-70 price-num">{c.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {filteredOrders.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-gray-500 border-t border-gray-100">
+            এই সময়ে {sourceFilter !== 'all' ? `${SOURCE_BY_ID[sourceFilter]?.name} থেকে ` : ''}কোনো অর্ডার নেই।
           </div>
         ) : (
-          <div className="py-3 text-center text-xs text-gray-400 font-medium">
-            Active streaming logs will populate automatically as visits and orders occur.
+          <div className="border-t border-gray-100 divide-y divide-gray-100">
+            {filteredOrders.slice(0, ordersShown).map((o: any) => {
+              const src = SOURCE_BY_ID[resolveOrderTrafficSource(o) || 'other'] || SOURCE_BY_ID.other;
+              const SrcIcon = src.icon;
+              const d = orderDate(o);
+              const firstItem = o.items?.[0]?.product?.name || o.items?.[0]?.name || '';
+              const moreItems = (o.items?.length || 0) - 1;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => (onOpenOrder ? onOpenOrder(o) : onNavigateToOrders?.())}
+                  className="w-full text-left px-4 md:px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors cursor-pointer group"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0" style={{ color: src.color }} title={src.name}>
+                    <SrcIcon size={15} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-900 truncate">{o.customerName || 'Customer'}</span>
+                      <span className="text-xs text-gray-500 price-num shrink-0">{o.customerPhone || o.phone || ''}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 truncate mt-0.5">
+                      {firstItem}
+                      {moreItems > 0 ? ` +${moreItems}` : ''}
+                    </div>
+                  </div>
+                  <div className="hidden sm:block text-right shrink-0">
+                    <div className="text-xs font-bold" style={{ color: src.color }}>{src.name}</div>
+                    <div className="text-[11px] text-gray-400">{d ? timeAgo(d.getTime()) : ''}</div>
+                  </div>
+                  <div className="text-right shrink-0 w-24">
+                    <div className="font-extrabold text-gray-900 price-num">{taka(Number(o.total) || 0)}</div>
+                    <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold capitalize ${STATUS_STYLE[o.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {o.status || 'pending'}
+                    </span>
+                  </div>
+                  <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500 shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {filteredOrders.length > ordersShown && (
+          <div className="p-3 border-t border-gray-100 text-center">
+            <button
+              type="button"
+              onClick={() => setOrdersShown((n) => n + ORDERS_PAGE)}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:text-gray-900 cursor-pointer"
+            >
+              আরো দেখুন ({fmt(filteredOrders.length - ordersShown)} টি বাকি)
+            </button>
           </div>
         )}
       </div>
+
+      {/* Latest visits */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-5">
+        <h3 className="text-sm md:text-base font-extrabold text-gray-900 mb-3">সর্বশেষ ভিজিট</h3>
+        {recent.length === 0 ? (
+          <p className="text-sm text-gray-500">নতুন কেউ সাইটে এলে এখানে দেখা যাবে।</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-x-6">
+            {recent.slice(0, 12).map((v: any, i: number) => {
+              const src = SOURCE_BY_ID[v.source] || SOURCE_BY_ID.other;
+              return (
+                <div key={v.id || i} className="flex items-center gap-2.5 py-2 border-b border-gray-100 text-xs">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: src.color }} />
+                  <span className="font-bold text-gray-800 w-16 shrink-0">{src.name}</span>
+                  <span className="text-gray-500 truncate flex-1">
+                    {v.kind === 'product_view' ? 'প্রোডাক্ট দেখেছেন · ' : ''}
+                    {v.path || '/'}
+                  </span>
+                  {v.device === 'mobile' ? <Smartphone size={12} className="text-gray-400 shrink-0" /> : <Monitor size={12} className="text-gray-400 shrink-0" />}
+                  <span className="text-gray-400 shrink-0 w-24 text-right">{v.timestamp ? timeAgo(v.timestamp) : ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TrendChart({
+  points,
+  hoverIdx,
+  setHoverIdx,
+  singleDay,
+}: {
+  points: { label: string; visitors: number; orders: number }[];
+  hoverIdx: number | null;
+  setHoverIdx: (i: number | null) => void;
+  singleDay: boolean;
+}) {
+  const W = 1000;
+  const H = 220;
+  const padL = 36;
+  const padR = 12;
+  const padT = 12;
+  const padB = 26;
+  const n = Math.max(points.length, 1);
+  const maxV = Math.max(1, ...points.map((p) => p.visitors));
+  const maxO = Math.max(1, ...points.map((p) => p.orders));
+  const step = (W - padL - padR) / n;
+  const x = (i: number) => padL + step * i + step / 2;
+  const yV = (v: number) => padT + (H - padT - padB) * (1 - v / maxV);
+  const barH = (o: number) => ((H - padT - padB) * 0.45 * o) / maxO;
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${yV(p.visitors).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(n - 1).toFixed(1)},${H - padB} L${x(0).toFixed(1)},${H - padB} Z`;
+  const labelEvery = n > 16 ? Math.ceil(n / 12) : 1;
+  const hp = hoverIdx !== null ? points[hoverIdx] : null;
+  const ticks = [0, 0.5, 1].map((f) => Math.round(maxV * f));
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[200px] md:h-[240px]" preserveAspectRatio="none" onMouseLeave={() => setHoverIdx(null)}>
+        <defs>
+          <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={yV(t)} y2={yV(t)} stroke="var(--color-gray-200)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+            <text x={padL - 6} y={yV(t) + 4} textAnchor="end" fontSize="11" fill="var(--color-gray-400)">{t}</text>
+          </g>
+        ))}
+        {points.map((p, i) =>
+          p.orders > 0 ? (
+            <rect key={`o${i}`} x={x(i) - Math.min(10, step * 0.3)} width={Math.min(20, step * 0.6)} y={H - padB - barH(p.orders)} height={barH(p.orders)} rx="3" fill="var(--color-gray-600)" opacity="0.8" />
+          ) : null
+        )}
+        <path d={area} fill="url(#goldFill)" />
+        <path d={line} fill="none" stroke="var(--color-primary)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+        {points.map((p, i) => (
+          <g key={i}>
+            <rect x={x(i) - step / 2} width={step} y={0} height={H} fill="transparent" onMouseEnter={() => setHoverIdx(i)} />
+            {hoverIdx === i && <circle cx={x(i)} cy={yV(p.visitors)} r="4" fill="var(--color-primary)" />}
+            {i % labelEvery === 0 && (
+              <text x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--color-gray-400)">
+                {p.label}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+      {hp && (
+        <div className="absolute top-0 right-0 bg-gray-100 border border-gray-200 rounded-xl px-3 py-2 text-xs">
+          <div className="font-bold text-gray-900">{singleDay ? `${hp.label}:00 – ${hp.label}:59` : `তারিখ ${hp.label}`}</div>
+          <div className="text-primary font-bold price-num">{hp.visitors} {singleDay ? 'পেজ ভিউ' : 'ভিজিটর'}</div>
+          <div className="text-gray-600 price-num">{hp.orders} অর্ডার</div>
+        </div>
+      )}
     </div>
   );
 }

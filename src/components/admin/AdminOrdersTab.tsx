@@ -1,4 +1,9 @@
 import React from 'react';
+import { orderStatusChip, orderStatusCard, orderStatusRow, ORDER_STATUSES, ORDER_STATUS_LABEL } from './orderTone';
+import IncompleteOrderModal, { CompleteIncompleteOrderPayload } from './IncompleteOrderModal';
+import { doc, updateDoc } from 'firebase/firestore';
+import toast from 'react-hot-toast';
+import { db } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Ban,
@@ -28,6 +33,7 @@ import {
   TrendingUp,
   Truck,
   X,
+  StickyNote,
 } from 'lucide-react';
 import {
   formatSafeDateTime,
@@ -98,6 +104,10 @@ export interface AdminOrdersTabProps {
   toggleBlacklist: (phone: string) => void;
   blacklist: string[];
   deleteOrder: (id: string) => void;
+  /** Create Order (orders taken by phone). Shown only when these are passed. */
+  products?: any[];
+  getProductPrice?: (product: any, qty: number) => number;
+  onCreateOrder?: (draft: any, payload: CompleteIncompleteOrderPayload) => Promise<void>;
 }
 
 function resolveCourierPortalUrl(service: string, trackId?: string): string | null {
@@ -204,6 +214,136 @@ function getCourierDisplayMeta(order: any) {
   };
 }
 
+/**
+ * Shop-only note on an order that is not booked yet: the reason for a cancel, "will take it in
+ * 7 days", and so on. Stored as `internalNote`, never sent to the courier (booking uses `note`),
+ * and hidden once the order is booked with a courier.
+ */
+function InternalOrderNote({ order, compact = false }: { order: any; compact?: boolean }) {
+  const saved = typeof order?.internalNote === 'string' ? order.internalNote : '';
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(saved);
+  const [saving, setSaving] = React.useState(false);
+  React.useEffect(() => {
+    if (!editing) setDraft(saved);
+  }, [saved, editing]);
+
+  const save = async () => {
+    const text = draft.trim().slice(0, 500);
+    if (text === saved.trim()) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'orders', String(order.id)), {
+        internalNote: text,
+        internalNoteUpdatedAt: Date.now(),
+      });
+      setEditing(false);
+      toast.success(text ? 'নোট সেভ হয়েছে' : 'নোট মুছে ফেলা হয়েছে');
+    } catch (err) {
+      console.error('Internal note save failed', err);
+      toast.error('নোট সেভ হয়নি, আবার চেষ্টা করুন');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="w-full space-y-1.5" onClick={(e) => e.stopPropagation()}>
+        <textarea
+          autoFocus
+          rows={3}
+          maxLength={500}
+          value={draft}
+          aria-label="Order note"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setDraft(saved);
+              setEditing(false);
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              save();
+            }
+          }}
+          placeholder="যেমন: ৭ দিন পরে নেবে, বা ক্যান্সেলের কারণ"
+          className="w-full text-[11px] leading-snug bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+        />
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(saved);
+              setEditing(false);
+            }}
+            className="h-7 px-2.5 rounded-md text-[10px] font-bold bg-gray-100 text-gray-600 hover:bg-gray-200"
+          >
+            বাতিল
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={save}
+            className="h-7 px-2.5 rounded-md text-[10px] font-bold bg-gray-100 text-primary border border-gray-200 hover:bg-gray-200 disabled:opacity-60 flex items-center gap-1"
+          >
+            {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+            সেভ
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (saved.trim()) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+        title={`নোট (শুধু আপনি দেখবেন, কুরিয়ারে যাবে না):\n${saved}\n\nএডিট করতে ক্লিক করুন`}
+        className={`w-full text-left tone-neutral tone-chip px-2 py-1.5 flex items-start gap-1.5 transition ${compact ? 'text-[11px]' : 'text-[10.5px]'}`}
+      >
+        <StickyNote size={11} className="shrink-0 mt-[1px] text-primary" />
+        <span className={`font-semibold text-gray-700 leading-snug break-words ${compact ? 'line-clamp-3' : 'line-clamp-2'}`}>{saved}</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      title="শুধু আপনার জন্য নোট (কুরিয়ারে যাবে না)"
+      className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-500 hover:text-primary transition-colors"
+    >
+      <Plus size={11} /> Add note
+    </button>
+  );
+}
+
+/** Small, calm "not booked yet" label. */
+function NotBookedLabel({ onClick }: { onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="এখনো কুরিয়ারে বুক হয়নি (পাঠাতে ডানদিকের ⋮ মেনু ব্যবহার করুন)"
+      className="inline-flex items-center gap-1.5 h-6 px-2 rounded-md bg-gray-100 border border-gray-200 text-gray-500 hover:text-gray-700 text-[10px] font-bold transition-colors cursor-pointer"
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+      Not booked
+    </button>
+  );
+}
+
 function OrderCourierBadge({
   order,
   compact = false,
@@ -234,10 +374,14 @@ function OrderCourierBadge({
   } = getCourierDisplayMeta(order);
   if (!isDispatched) {
     return (
-      <div className={compact ? 'pt-1 border-t border-gray-100/80 flex items-center justify-between' : 'mt-1.5'}>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100/90 text-slate-400 border border-slate-200/80 text-[10px] font-semibold">
-          Not Booked
-        </span>
+      <div
+        className={compact ? 'pt-2 border-t border-gray-100/80 space-y-1.5' : 'mt-1.5 space-y-1.5'}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <NotBookedLabel onClick={onOpenDetails} />
+        </div>
+        <InternalOrderNote order={order} compact={compact} />
       </div>
     );
   }
@@ -419,7 +563,14 @@ export default function AdminOrdersTab({
   toggleBlacklist,
   blacklist,
   deleteOrder,
+  products = [],
+  getProductPrice,
+  onCreateOrder,
 }: AdminOrdersTabProps) {
+  // A blank draft opens the Create Order form; it is never saved as an incomplete order.
+  const [createDraft, setCreateDraft] = React.useState<any | null>(null);
+  const openCreateOrder = () =>
+    setCreateDraft({ id: `new_${Date.now()}`, __createdByAdmin: true, items: [], name: '', phone: '', address: '', district: '' });
   return (
     <div className="space-y-6">
       {/* Dashboard Analytics */}
@@ -539,19 +690,32 @@ export default function AdminOrdersTab({
         })()}
       </div>
 
-      {/* Filters & Action Bar */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+      {/* Recent Orders — title, status tabs, then toolbar */}
+      <div className="mt-6 mb-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
           <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
             <History size={20} className="text-primary" />
             Recent Orders
           </h4>
+          {onCreateOrder && (
+            <button
+              type="button"
+              onClick={openCreateOrder}
+              className="h-10 px-4 rounded-xl bg-primary text-white font-bold text-sm flex items-center gap-2 shadow-sm hover:opacity-90 transition-all shrink-0"
+            >
+              <Plus size={16} />
+              Create Order
+            </button>
+          )}
+        </div>
 
-          <div className="flex flex-wrap items-center gap-1 bg-gray-100/80 p-1 rounded-2xl border border-gray-200/30">
+        <div className="-mx-1 px-1 overflow-x-auto no-scrollbar">
+          <div className="inline-flex items-center gap-1 bg-gray-100/80 p-1 rounded-xl border border-gray-200/40 min-w-max">
             {[
               { id: 'all', label: 'All' },
               { id: 'pending', label: 'Pending' },
               { id: 'confirmed', label: 'Confirmed' },
+              { id: 'processing', label: 'Processing' },
               { id: 'shipped', label: 'Shipped' },
               { id: 'delivered', label: 'Delivered' },
               { id: 'returned', label: 'Returned' },
@@ -560,7 +724,7 @@ export default function AdminOrdersTab({
               <button
                 key={tab.id}
                 onClick={() => setSelectedOrderStatusFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                className={`h-8 px-3.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   selectedOrderStatusFilter === tab.id
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-gray-500 hover:text-secondary hover:bg-white/50'
@@ -571,50 +735,49 @@ export default function AdminOrdersTab({
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
+
+        <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:items-center">
+          <div className="col-span-2 flex items-center gap-2 lg:col-span-1">
             <input
               type="date"
               value={adminStartDate}
               onChange={(e) => setAdminStartDate(e.target.value)}
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-600 outline-none focus:ring-2 focus:ring-primary shadow-sm"
+              className="h-10 bg-white border border-gray-200 rounded-xl px-3 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-primary/40 flex-1 min-w-0 lg:w-[140px] lg:flex-none"
             />
-            <span className="text-gray-400 text-xs">-</span>
+            <span className="text-gray-400 text-xs">to</span>
             <input
               type="date"
               value={adminEndDate}
               onChange={(e) => setAdminEndDate(e.target.value)}
-              className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-600 outline-none focus:ring-2 focus:ring-primary shadow-sm"
+              className="h-10 bg-white border border-gray-200 rounded-xl px-3 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-primary/40 flex-1 min-w-0 lg:w-[140px] lg:flex-none"
             />
           </div>
           <select
             value={adminOrderAreaFilter}
             onChange={(e) => setAdminOrderAreaFilter(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs font-bold text-gray-600 outline-none focus:ring-2 focus:ring-primary shadow-sm cursor-pointer"
+            className="h-10 bg-white border border-gray-200 rounded-xl px-3 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
           >
             <option value="all">All Areas</option>
             <option value="inside">Inside Dhaka</option>
             <option value="outside">Outside Dhaka</option>
           </select>
-          <div className="flex gap-2 flex-1 min-w-[150px]">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search Phone, Order ID or Tracking ID..."
-                value={orderSearchQuery}
-                onChange={(e) => setOrderSearchQuery(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-primary text-xs font-bold shadow-sm transition-all"
-              />
-              {orderSearchQuery && (
-                <button
-                  onClick={() => setOrderSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+          <div className="relative col-span-2 order-first lg:order-none lg:flex-1 lg:min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search Phone, Order ID or Tracking ID..."
+              value={orderSearchQuery}
+              onChange={(e) => setOrderSearchQuery(e.target.value)}
+              className="h-10 bg-white border border-gray-200 rounded-xl px-3 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-primary/40 w-full pl-10 pr-9"
+            />
+            {orderSearchQuery && (
+              <button
+                onClick={() => setOrderSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary transition-colors"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
           {syncAllCourierStatuses && (
             <button
@@ -622,7 +785,7 @@ export default function AdminOrdersTab({
               disabled={isSyncingCourier}
               onClick={() => syncAllCourierStatuses(false)}
               title="Steadfast ও Pathao থেকে সব অ্যাক্টিভ অর্ডারের ডেলিভারি স্ট্যাটাস সিঙ্ক করুন"
-              className="bg-sky-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-sky-700 transition-all shadow-lg shadow-sky-600/20 disabled:opacity-60 cursor-pointer"
+              className="h-10 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-all disabled:opacity-60 cursor-pointer"
             >
               <RefreshCcw size={15} className={isSyncingCourier ? 'animate-spin' : ''} />
               {isSyncingCourier ? 'Syncing...' : 'Sync Courier'}
@@ -633,16 +796,16 @@ export default function AdminOrdersTab({
               type="button"
               onClick={onBulkPrintStickers}
               title="সিলেক্ট করা অর্ডারগুলোর পার্সেল স্টিকার প্রিন্ট করুন"
-              className="bg-slate-900 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95 cursor-pointer"
+              className="h-10 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-all active:scale-95 cursor-pointer"
             >
               <Printer size={15} />
               Stickers ({selectedOrderIds.length})
             </button>
           )}
-          <div className="relative font-sans" ref={exportDropdownRef}>
+          <div className="relative font-sans col-span-2 lg:col-span-1" ref={exportDropdownRef}>
             <button
               onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-              className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
+              className="h-10 w-full px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-primary text-white shadow-sm hover:opacity-90 transition-all"
             >
               <Landmark size={16} /> Excel Export <ChevronDown size={14} />
             </button>
@@ -692,7 +855,7 @@ export default function AdminOrdersTab({
       </div>
 
       {/* Mobile View */}
-      <div className="lg:hidden space-y-3">
+      <div className="lg:hidden space-y-2.5">
         {(() => {
           let lastDateText = '';
           const safeFiltered = Array.isArray(filteredOrders) ? filteredOrders : [];
@@ -709,245 +872,166 @@ export default function AdminOrdersTab({
             return (
               <React.Fragment key={order.id}>
                 {isNewDateGroup && (
-                  <div className="flex items-center gap-3 py-3 px-1 mt-4 first:mt-1">
-                    <div
-                      className={`h-[1.5px] flex-1 ${
-                        isToday
-                          ? 'bg-gradient-to-r from-transparent to-primary/40'
-                          : 'bg-gradient-to-r from-transparent to-secondary/30'
-                      }`}
-                    ></div>
-                    <div
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-[11px] font-bold shadow-sm shrink-0 transition-all ${
-                        isToday
-                          ? 'bg-primary/[0.06] text-primary border-primary/20 shadow-primary/5'
-                          : 'bg-secondary/[0.04] text-secondary border-secondary/15 shadow-secondary/5'
-                      }`}
-                    >
-                      {isToday ? (
-                        <Calendar size={12} className="text-primary animate-pulse" />
-                      ) : (
-                        <Clock size={12} className="text-secondary/70" />
-                      )}
-                      {dateText}
-                    </div>
-                    <div
-                      className={`h-[1.5px] flex-1 ${
-                        isToday
-                          ? 'bg-gradient-to-l from-transparent to-primary/40'
-                          : 'bg-gradient-to-l from-transparent to-secondary/30'
-                      }`}
-                    ></div>
+                  <div className="flex items-center gap-2 pt-3 pb-1 px-0.5 first:pt-0">
+                    {isToday ? <Calendar size={13} className="text-primary" /> : <Clock size={13} className="text-gray-400" />}
+                    <span className={`text-xs font-bold ${isToday ? 'text-primary' : 'text-gray-500'}`}>{dateText}</span>
+                    <span className="h-px flex-1 bg-gray-200" />
                   </div>
                 )}
+                {/* Phone order card: one tidy block per order, status shown by a light tint + left edge */}
                 <div
                   onClick={() => setSelectedOrderForDetails(order)}
-                  className={`rounded-2xl shadow-xs border p-2.5 flex flex-col gap-2.5 cursor-pointer active:scale-[0.99] transition-all ${
-                    order.status === 'pending'
-                      ? 'bg-[#faf5ff] border-[#ede9fe] hover:bg-purple-50/80'
-                      : order.status === 'confirmed'
-                      ? 'bg-blue-50/40 border-blue-100 hover:bg-blue-50/70'
-                      : order.status === 'shipped'
-                      ? 'bg-indigo-50/40 border-indigo-100 hover:bg-indigo-50/70'
-                      : order.status === 'delivered'
-                      ? 'bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50/70'
-                      : order.status === 'returned'
-                      ? 'bg-amber-50/40 border-amber-100 hover:bg-amber-50/70'
-                      : order.status === 'cancelled'
-                      ? 'bg-rose-50/40 border-rose-100 hover:bg-rose-50/70'
-                      : 'bg-white border-gray-200 hover:bg-gray-50/50'
-                  }`}
+                  className={`${orderStatusCard(order.status)} rounded-xl p-3 flex flex-col gap-2.5 cursor-pointer active:scale-[0.995] transition-transform`}
                 >
-                  <div className="flex gap-2.5 items-start">
-                    <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200/60 bg-white shrink-0 self-start">
+                  {/* Row 1: photo + products + price */}
+                  <div className="flex gap-3 items-start">
+                    <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 shrink-0">
                       <img
                         loading="lazy"
                         src={orderItems[0]?.variantImage || orderItems[0]?.product?.image || '/logo.png'}
                         className="w-full h-full object-cover"
                         alt=""
                       />
-                      <div
+                      <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleSelectOrder(e, order.id);
+                          handleSelectOrder(e as any, order.id);
                         }}
-                        className="absolute top-1.5 left-1.5 bg-white/95 rounded-[6px] w-[22px] h-[22px] flex items-center justify-center border border-gray-300 shadow-2xs cursor-pointer hover:border-primary transition-colors"
+                        className="absolute top-1 left-1 w-5 h-5 rounded-[5px] bg-black/55 backdrop-blur-sm flex items-center justify-center cursor-pointer"
+                        aria-label="Select order"
                       >
                         <input
                           type="checkbox"
-                          className="w-3.5 h-3.5 rounded-[3px] border-gray-300 text-primary focus:ring-primary pointer-events-none cursor-pointer"
+                          className="w-3.5 h-3.5 rounded-[3px] accent-[var(--color-primary)] pointer-events-none"
                           checked={Array.isArray(selectedOrderIds) && selectedOrderIds.includes(order.id)}
                           onChange={() => {}}
+                          tabIndex={-1}
                         />
-                      </div>
+                      </button>
                     </div>
-
-                    <div className="flex flex-col flex-1 min-w-0 justify-between min-h-[80px]">
-                      <div
-                        className="flex items-center gap-1.5 w-full min-w-0 group cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickEditOrderItems(order);
-                        }}
-                      >
-                        <span className="text-[13px] font-bold text-[#1e1b4b] truncate leading-tight group-hover:text-primary transition-colors">
-                          {orderItems.length > 0
-                            ? orderItems
-                                .map((i: any) => `${i?.product?.name || i?.name || 'Unknown'} x${i?.quantity || 1}`)
-                                .join(', ')
-                            : 'No items'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-1.5 min-w-0 mt-1">
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span
-                            className="text-[13px] font-bold text-[#e11d48] truncate leading-tight"
-                            title={order.customerName}
-                          >
-                            {order.customerName || 'Customer'}
-                          </span>
-                          <span className="text-[12.5px] font-extrabold text-[#1e293b] leading-tight tracking-tight mt-0.5 select-all">
-                            {order.customerPhone || 'No phone'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          {(() => {
-                            const stats = getCustomerStats(order.customerPhone || '');
-                            const report = getCourierReportForPhone(courierReports, order.customerPhone);
-                            const isLoadingRate = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
-                            const rateDisplay = getOrderCourierRateDisplay(report, stats, isLoadingRate);
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!order.customerPhone) return;
-                                  setCourierModalPhone(order.customerPhone);
-                                  setIsCourierHistoryModalOpen(true);
-                                  if (!report) checkCourierReport(order.customerPhone);
-                                }}
-                                title={rateDisplay.tooltip}
-                                className="flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <span className="text-[10px] font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-full border border-slate-200/80 shadow-2xs whitespace-nowrap">
-                                  Total: {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.mobileTotalText}
-                                </span>
-                                <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs whitespace-nowrap ${
-                                    rateDisplay.fraudCount > 0
-                                      ? 'text-rose-700 bg-rose-50 border-rose-200'
-                                      : 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                  }`}
-                                >
-                                  SCS: {isLoadingRate && rateDisplay.source === 'website' ? '...' : rateDisplay.mobileScsText}
-                                </span>
-                              </button>
-                            );
-                          })()}
-
-                          {formatWhatsAppUrl(order.customerPhone) && (
-                            <a
-                              href={formatWhatsAppUrl(order.customerPhone)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-7 h-7 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all border border-emerald-200/70 shadow-2xs"
-                              title="Chat on WhatsApp"
-                            >
-                              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-                              </svg>
-                            </a>
-                          )}
-                          {order.customerPhone && (
-                            <a
-                              href={`tel:${order.customerPhone}`}
-                              className="w-7 h-7 flex items-center justify-center bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 hover:scale-105 active:scale-95 transition-all border border-teal-200/70 shadow-2xs"
-                              title="Call"
-                            >
-                              <Phone size={13} />
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-gray-800 leading-snug line-clamp-2">
+                        {orderItems.length > 0
+                          ? orderItems
+                              .map((i: any) => `${i?.product?.name || i?.name || 'Unknown'} ×${i?.quantity || 1}`)
+                              .join(', ')
+                          : 'No items'}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5 price-num">
+                        #{String(order.displayId || order.id).slice(-6).toUpperCase()}
+                        {order.deliveryArea ? ` · ${order.deliveryArea === 'inside' ? 'Inside Dhaka' : 'Outside Dhaka'}` : ''}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[15px] font-extrabold text-gray-900 price-num leading-tight">৳{Number(order.total) || 0}</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 w-full pt-0.5" onClick={(e) => e.stopPropagation()}>
-                    <div
-                      className="bg-white flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-gray-200 text-xs text-gray-600 font-medium truncate shadow-2xs"
-                      title={order.address}
+                  {/* Row 2: customer + status */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-bold text-gray-900 truncate" title={order.customerName}>
+                        {order.customerName || 'Customer'}
+                      </div>
+                      <div className="text-[12px] text-gray-500 price-num select-all">{order.customerPhone || 'No phone'}</div>
+                    </div>
+                    <select
+                      value={order.status}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
+                      className={`${orderStatusChip(order.status)} text-xs font-bold h-8 pl-2.5 pr-1 outline-none cursor-pointer shrink-0`}
+                      aria-label="Order status"
                     >
-                      {order.address && order.address.trim() !== '' && order.address !== 'N/A'
-                        ? order.address.split(' - (')[0]
-                        : 'No address found'}
-                    </div>
-                    <div className="shrink-0">
-                      <select
-                        value={order.status}
-                        onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                        className={`text-xs font-bold border rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 shadow-2xs cursor-pointer ${
-                          order.status === 'pending'
-                            ? 'bg-purple-50 text-purple-700 border-purple-200 focus:ring-purple-300'
-                            : order.status === 'confirmed'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-300'
-                            : order.status === 'shipped'
-                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-indigo-300'
-                            : order.status === 'delivered'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-300'
-                            : order.status === 'returned'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-300'
-                            : order.status === 'cancelled'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-300'
-                            : 'bg-white border-gray-200 text-secondary focus:ring-primary'
-                        }`}
+                      {ORDER_STATUSES.map((st) => (
+                        <option key={st} value={st}>{ORDER_STATUS_LABEL[st]}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Row 3: address */}
+                  <div className="text-[12px] text-gray-500 truncate -mt-1" title={order.address}>
+                    {order.address && order.address.trim() !== '' && order.address !== 'N/A'
+                      ? order.address.split(' - (')[0]
+                      : 'No address found'}
+                  </div>
+
+                  {/* Row 4: courier check (fraud / success) + quick actions + payment */}
+                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const stats = getCustomerStats(order.customerPhone || '');
+                      const report = getCourierReportForPhone(courierReports, order.customerPhone);
+                      const isLoadingRate = isPhoneLoadingInRecord(loadingCourierReports, order.customerPhone);
+                      const rateDisplay = getOrderCourierRateDisplay(report, stats, isLoadingRate);
+                      const loading = isLoadingRate && rateDisplay.source === 'website';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!order.customerPhone) return;
+                            setCourierModalPhone(order.customerPhone);
+                            setIsCourierHistoryModalOpen(true);
+                            if (!report) checkCourierReport(order.customerPhone);
+                          }}
+                          title={rateDisplay.tooltip}
+                          className={`h-8 px-2.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                            rateDisplay.fraudCount > 0 ? 'tone-cancelled tone-chip' : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          <span>Total: {loading ? '…' : rateDisplay.mobileTotalText}</span>
+                          <span className="opacity-40">|</span>
+                          <span>SCS: {loading ? '…' : rateDisplay.mobileScsText}</span>
+                        </button>
+                      );
+                    })()}
+                    <span className="flex-1" />
+                    {formatWhatsAppUrl(order.customerPhone) && (
+                      <a
+                        href={formatWhatsAppUrl(order.customerPhone)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:text-gray-900 transition-colors"
+                        title="Chat on WhatsApp"
+                        aria-label="WhatsApp"
                       >
-                        <option value="pending" className="bg-white text-gray-800 font-semibold">
-                          Pending
-                        </option>
-                        <option value="confirmed" className="bg-white text-gray-800 font-semibold">
-                          Confirmed
-                        </option>
-                        <option value="shipped" className="bg-white text-gray-800 font-semibold">
-                          Shipped
-                        </option>
-                        <option value="delivered" className="bg-white text-gray-800 font-semibold">
-                          Delivered
-                        </option>
-                        <option value="returned" className="bg-white text-gray-800 font-semibold">
-                          Returned
-                        </option>
-                        <option value="cancelled" className="bg-white text-gray-800 font-semibold">
-                          Cancelled
-                        </option>
-                      </select>
-                    </div>
-                    <div className="shrink-0">
-                      <select
-                        value={order.paymentMethod || 'CASH'}
-                        onChange={(e) => handleUpdatePaymentMethod(order.id, e.target.value)}
-                        className={`text-xs font-bold px-2.5 py-1.5 rounded-xl uppercase border cursor-pointer outline-none shadow-2xs ${
-                          (order.paymentMethod || 'CASH').toUpperCase() === 'CASH' ||
-                          (order.paymentMethod || 'CASH').toUpperCase() === 'COD'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-200'
-                            : (order.paymentMethod || 'CASH').toUpperCase() === 'BKASH'
-                            ? 'bg-pink-50 text-pink-700 border-pink-200 focus:ring-pink-200'
-                            : (order.paymentMethod || 'CASH').toUpperCase() === 'NAGAD'
-                            ? 'bg-orange-50 text-orange-700 border-orange-200 focus:ring-orange-200'
-                            : (order.paymentMethod || 'CASH').toUpperCase() === 'DUE'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-200'
-                        }`}
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                              </svg>
+                      </a>
+                    )}
+                    {order.customerPhone && (
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:text-gray-900 transition-colors"
+                        title="Call"
+                        aria-label="Call"
                       >
-                        <option value="CASH">CASH</option>
-                        <option value="BKASH">BKASH</option>
-                        <option value="NAGAD">NAGAD</option>
-                        <option value="DUE">DUE</option>
-                        <option value="BANK">BANK</option>
-                        <option value="ONLINE">ONLINE</option>
-                        <option value="N/A">N/A</option>
-                      </select>
-                    </div>
+                        <Phone size={14} />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleQuickEditOrderItems(order)}
+                      className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-700 rounded-lg hover:text-gray-900 transition-colors cursor-pointer"
+                      title="Edit Order"
+                      aria-label="Edit order"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <select
+                      value={order.paymentMethod || 'CASH'}
+                      onChange={(e) => handleUpdatePaymentMethod(order.id, e.target.value)}
+                      className="h-8 pl-2 pr-1 rounded-lg text-[11px] font-bold uppercase bg-gray-100 text-gray-700 border-0 outline-none cursor-pointer"
+                      aria-label="Payment method"
+                    >
+                      <option value="CASH">CASH</option>
+                      <option value="BKASH">BKASH</option>
+                      <option value="NAGAD">NAGAD</option>
+                      <option value="DUE">DUE</option>
+                      <option value="BANK">BANK</option>
+                      <option value="ONLINE">ONLINE</option>
+                      <option value="N/A">N/A</option>
+                    </select>
                   </div>
 
                   <OrderCourierBadge
@@ -966,7 +1050,7 @@ export default function AdminOrdersTab({
 
       {/* Desktop View */}
       <div className="hidden lg:block overflow-x-auto rounded-2xl border border-gray-100 bg-slate-50">
-        <table className="w-full text-left min-w-[1220px] border-separate border-spacing-y-2">
+        <table className="w-full text-left min-w-[1220px] border-separate border-spacing-y-1">
           <thead>
             <tr className="text-[10px] text-slate-500 uppercase font-bold tracking-widest bg-slate-50">
               <th className="px-4 py-3 w-10">
@@ -985,8 +1069,8 @@ export default function AdminOrdersTab({
               <th className="px-3 py-3 w-[235px]">Product Info</th>
               <th className="px-3 py-3 text-left w-[125px]">Total Price</th>
               <th className="px-3 py-3 min-w-[195px] max-w-[240px]">Customer Info</th>
-              <th className="px-3 py-3 text-center w-[166px]">Courier History</th>
-              <th className="px-3 py-3 text-center w-[150px]">Courier</th>
+              <th className="px-3 py-3 text-left w-[166px]">Courier History</th>
+              <th className="px-3 py-3 text-left w-[190px]">Courier &amp; Note</th>
               <th className="px-3 py-3 text-center w-[124px]">Status &amp; Payment</th>
               <th className="px-3 py-3 w-[216px]">
                 <div className="flex items-center justify-end gap-2 ml-auto">
@@ -1028,23 +1112,7 @@ export default function AdminOrdersTab({
                     )}
                     <tr
                       onClick={() => setSelectedOrderForDetails(order)}
-                      className={`transition-colors overflow-hidden cursor-pointer ${
-                        order.status === 'pending'
-                          ? 'bg-purple-100/40 hover:bg-purple-100/60'
-                          : order.status === 'confirmed'
-                          ? 'bg-blue-100/40 hover:bg-blue-100/60'
-                          : order.status === 'shipped'
-                          ? 'bg-indigo-100/40 hover:bg-indigo-100/60'
-                          : order.status === 'delivered'
-                          ? 'bg-emerald-100/45 hover:bg-emerald-100/65'
-                          : order.status === 'returned'
-                          ? 'bg-amber-100/50 hover:bg-amber-100/70'
-                          : order.status === 'cancelled'
-                          ? 'bg-red-100/45 hover:bg-red-100/65'
-                          : idx % 2 === 0
-                          ? 'bg-white hover:bg-gray-50/50'
-                          : 'bg-[#f4f7fa] hover:bg-[#ebf0f5]'
-                      }`}
+                      className={`transition-colors overflow-hidden cursor-pointer ${orderStatusRow(order.status)}`}
                     >
                       <td className="p-4 w-10" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -1079,10 +1147,10 @@ export default function AdminOrdersTab({
                                   e.stopPropagation();
                                   handleQuickEditOrderItems(order);
                                 }}
-                                className="text-secondary hover:text-primary shrink-0 opacity-40 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                className="text-amber-600 hover:text-primary shrink-0 opacity-75 group-hover:opacity-100 transition-opacity cursor-pointer"
                                 title="Edit Order Items"
                               >
-                                <Edit3 size={12} />
+                                <Edit3 size={13} />
                               </button>
                             </div>
                             <span className="text-[11px] font-bold text-gray-400 mt-1">
@@ -1094,7 +1162,7 @@ export default function AdminOrdersTab({
                       </td>
                       <td className="px-3 py-4 text-left w-[125px] align-middle">
                         <div className="flex flex-col items-start">
-                          <span className="text-xl font-bold text-red-600">৳{Number(order.total) || 0}</span>
+                          <span className="text-xl font-extrabold text-gray-900 price-num">৳{Number(order.total) || 0}</span>
                           <span
                             className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase mt-1 border whitespace-nowrap ${
                               order.deliveryArea === 'inside'
@@ -1215,7 +1283,7 @@ export default function AdminOrdersTab({
 
                           if (!hasCourier && isChecking) {
                             return (
-                              <div className="w-[152px] mx-auto px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white/80 flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500 min-h-[64px] shadow-2xs">
+                              <div className="w-[152px] px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white/80 flex items-center justify-center gap-1.5 text-[10px] font-bold text-slate-500 min-h-[64px] shadow-2xs">
                                 <Loader2 size={11} className="animate-spin text-indigo-500 shrink-0" />
                                 <span>Steadfast লোড...</span>
                               </div>
@@ -1246,7 +1314,7 @@ export default function AdminOrdersTab({
                                   setIsCourierHistoryModalOpen(true);
                                 }}
                                 title={rateDisplay.tooltip}
-                                className={`w-[154px] mx-auto text-[9.5px] font-bold px-2.5 py-2 rounded-xl border flex flex-col justify-center gap-1 min-h-[64px] shadow-2xs transition-all hover:scale-[1.02] cursor-pointer ${
+                                className={`w-[154px] text-[9.5px] font-bold px-2.5 py-2 rounded-xl border flex flex-col justify-center gap-1 min-h-[64px] shadow-2xs transition-all hover:scale-[1.02] cursor-pointer ${
                                   isFraud
                                     ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/60'
                                     : isCourierRisky
@@ -1310,7 +1378,7 @@ export default function AdminOrdersTab({
                                 checkCourierReport(order.customerPhone, true);
                               }}
                               title={rateDisplay.tooltip}
-                              className="w-[152px] mx-auto text-[9.5px] font-bold px-2.5 py-2 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 flex flex-col justify-center gap-1 min-h-[64px] shadow-2xs transition-all cursor-pointer text-left"
+                              className="w-[152px] text-[9.5px] font-bold px-2.5 py-2 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 flex flex-col justify-center gap-1 min-h-[64px] shadow-2xs transition-all cursor-pointer text-left"
                             >
                               <div className="flex items-center justify-between gap-1 w-full">
                                 <span className="text-[9px] uppercase tracking-wide text-slate-400">Courier History</span>
@@ -1318,7 +1386,7 @@ export default function AdminOrdersTab({
                               </div>
                               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 whitespace-nowrap">
                                 <div>
-                                  Total: <span className="text-slate-900">{stats.total || 1}</span>
+                                  Total: <span className="text-slate-900">{stats.total || 0}</span>
                                 </div>
                                 <div>
                                   Success: <span className="text-emerald-600">{stats.delivered}</span>
@@ -1334,7 +1402,7 @@ export default function AdminOrdersTab({
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-4 align-middle w-[150px]">
+                      <td className="px-3 py-4 align-middle w-[190px]">
                         {(() => {
                           const {
                             cConsignment,
@@ -1357,7 +1425,7 @@ export default function AdminOrdersTab({
                           );
                           return (
                             <div
-                              className="flex flex-col items-center justify-center gap-1 w-[136px] shrink-0 mx-auto min-h-[68px]"
+                              className={`flex flex-col justify-center gap-1 w-[176px] shrink-0 min-h-[68px] ${isDispatched ? 'items-center' : 'items-start'}`}
                               onClick={(e) => e.stopPropagation()}
                             >
                               {isDispatched ? (
@@ -1471,14 +1539,10 @@ export default function AdminOrdersTab({
                                   })()}
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedOrderForDetails(order)}
-                                  className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-100/90 hover:bg-slate-200/70 text-slate-400 hover:text-slate-600 border border-slate-200/80 text-[11px] font-semibold transition-colors cursor-pointer"
-                                  title="অর্ডার ও কুরিয়ার বিস্তারিত দেখুন (পাঠাতে ডানদিকের ⋮ মেনু ব্যবহার করুন)"
-                                >
-                                  Not Booked
-                                </button>
+                                <>
+                                  <NotBookedLabel onClick={() => setSelectedOrderForDetails(order)} />
+                                  <InternalOrderNote order={order} />
+                                </>
                               )}
                             </div>
                           );
@@ -1489,76 +1553,54 @@ export default function AdminOrdersTab({
                           <select
                             value={order.status}
                             onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                            className={`text-[11px] font-bold border rounded-lg px-3 h-8 outline-none focus:ring-2 shadow-sm w-[100px] transition-colors cursor-pointer ${
-                              order.status === 'pending'
-                                ? 'bg-purple-50 text-purple-700 border-purple-200 focus:ring-purple-300'
-                                : order.status === 'confirmed'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200 focus:ring-blue-300'
-                                : order.status === 'shipped'
-                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-indigo-300'
-                                : order.status === 'delivered'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-300'
-                                : order.status === 'returned'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-300'
-                                : order.status === 'cancelled'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-300'
-                                : 'bg-white border-gray-200 text-secondary focus:ring-primary'
-                            }`}
+                            className={`text-[11px] font-bold border rounded-lg px-3 h-8 outline-none focus:ring-2 shadow-sm w-[100px] transition-colors cursor-pointer ${orderStatusChip(order.status)}`}
                           >
-                            <option value="pending" className="bg-white text-gray-800 font-semibold">
+                            <option value="pending">
                               Pending
                             </option>
-                            <option value="confirmed" className="bg-white text-gray-800 font-semibold">
+                            <option value="confirmed">
                               Confirmed
                             </option>
-                            <option value="shipped" className="bg-white text-gray-800 font-semibold">
+                            <option value="processing">
+                              Processing
+                            </option>
+                            <option value="shipped">
                               Shipped
                             </option>
-                            <option value="delivered" className="bg-white text-gray-800 font-semibold">
+                            <option value="delivered">
                               Delivered
                             </option>
-                            <option value="returned" className="bg-white text-gray-800 font-semibold">
+                            <option value="returned">
                               Returned
                             </option>
-                            <option value="cancelled" className="bg-white text-gray-800 font-semibold">
+                            <option value="cancelled">
                               Cancelled
                             </option>
                           </select>
                           <select
                             value={order.paymentMethod || 'CASH'}
                             onChange={(e) => handleUpdatePaymentMethod(order.id, e.target.value)}
-                            className={`text-[11px] font-bold border rounded-lg px-3 h-8 outline-none focus:ring-2 shadow-sm w-[100px] uppercase transition-colors cursor-pointer ${
-                              (order.paymentMethod || 'CASH').toUpperCase() === 'CASH' ||
-                              (order.paymentMethod || 'CASH').toUpperCase() === 'COD'
-                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200 focus:ring-emerald-300'
-                                : (order.paymentMethod || 'CASH').toUpperCase() === 'BKASH'
-                                ? 'bg-pink-100 text-pink-700 border-pink-200 focus:ring-pink-300'
-                                : (order.paymentMethod || 'CASH').toUpperCase() === 'NAGAD'
-                                ? 'bg-orange-100 text-orange-700 border-orange-200 focus:ring-orange-300'
-                                : (order.paymentMethod || 'CASH').toUpperCase() === 'DUE'
-                                ? 'bg-rose-100 text-rose-700 border-rose-200 focus:ring-rose-300'
-                                : 'bg-blue-100 text-blue-700 border-blue-200 focus:ring-blue-300'
-                            }`}
+                            className={`text-[11px] font-bold border rounded-lg px-3 h-8 outline-none focus:ring-2 shadow-sm w-[100px] uppercase transition-colors cursor-pointer bg-gray-100 text-gray-700 border-gray-200`}
                           >
-                            <option value="CASH" className="bg-white text-gray-800 font-bold">
+                            <option value="CASH">
                               CASH
                             </option>
-                            <option value="BKASH" className="bg-white text-gray-800 font-bold">
+                            <option value="BKASH">
                               BKASH
                             </option>
-                            <option value="NAGAD" className="bg-white text-gray-800 font-bold">
+                            <option value="NAGAD">
                               NAGAD
                             </option>
-                            <option value="DUE" className="bg-white text-gray-800 font-bold">
+                            <option value="DUE">
                               DUE
                             </option>
-                            <option value="BANK" className="bg-white text-gray-800 font-bold">
+                            <option value="BANK">
                               BANK
                             </option>
-                            <option value="ONLINE" className="bg-white text-gray-800 font-bold">
+                            <option value="ONLINE">
                               ONLINE
                             </option>
-                            <option value="N/A" className="bg-white text-gray-800 font-bold">
+                            <option value="N/A">
                               N/A
                             </option>
                           </select>
@@ -1724,6 +1766,18 @@ export default function AdminOrdersTab({
                             </button>
                             <div className="absolute top-1/2 right-full -translate-y-1/2 mr-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all flex items-center gap-1.5 bg-white p-2 rounded-xl border border-gray-100 shadow-xl z-50">
                               <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleQuickEditOrderItems(order);
+                                }}
+                                className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-600 w-8 h-8 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-90 shrink-0 cursor-pointer"
+                                title="Edit Order"
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                              <button
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -1770,6 +1824,21 @@ export default function AdminOrdersTab({
             <Plus size={18} /> Load More ({filteredOrders.length - adminOrdersLimit} remaining)
           </button>
         </div>
+      )}
+      {createDraft && onCreateOrder && (
+        <IncompleteOrderModal
+          mode="create"
+          order={createDraft}
+          onClose={() => setCreateDraft(null)}
+          products={products}
+          getProductPrice={getProductPrice}
+          getCustomerStats={getCustomerStats}
+          courierReports={courierReports}
+          loadingCourierReports={loadingCourierReports}
+          checkCourierReport={checkCourierReport}
+          siteConfig={siteConfig}
+          onCompleteOrder={onCreateOrder}
+        />
       )}
     </div>
   );

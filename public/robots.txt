@@ -1,56 +1,14 @@
+# iShopBD (ishopbd.com)
+# Pages that must stay out of search (admin, order confirmation) say so with a noindex tag instead.
 User-agent: *
 Allow: /
-Allow: /llms.txt
-Allow: /api/merchant-feed.xml
-Allow: /api/product-image/
+Disallow: /api/
 Allow: /api/products
 Allow: /api/banners
 Allow: /api/marketing/public-config
-Disallow: /api/admin/
-Disallow: /api/courier/
-Disallow: /api/send-
-Disallow: /api/verify-admin
-Disallow: /api/confirm-order
-Disallow: /api/upload
-Disallow: /api/chat
-Disallow: /api/ai-search
-Disallow: /api/track-event
-Disallow: /api/invalidate-
-Disallow: /api/steadfast-
-Disallow: /api/ping
+Allow: /api/product-image/
+Allow: /api/img_cache/
+Allow: /api/merchant-feed.xml
 Disallow: /scratch/
 
-# Allow AI Search & Answer Engines (ChatGPT, Gemini, Perplexity, Claude) to discover catalog
-User-agent: OAI-SearchBot
-Allow: /
-Allow: /p/
-Allow: /category/
-Allow: /llms.txt
-
-User-agent: GPTBot
-Allow: /
-Allow: /p/
-Allow: /category/
-Allow: /llms.txt
-
-User-agent: ChatGPT-User
-Allow: /
-Allow: /llms.txt
-
-User-agent: Google-Extended
-Allow: /
-Allow: /p/
-Allow: /category/
-Allow: /llms.txt
-
-User-agent: PerplexityBot
-Allow: /
-Allow: /llms.txt
-
-# Allow Googlebot to crawl images
-User-agent: Googlebot-Image
-Allow: /
-Allow: /api/product-image/
-
-# Sitemap & Catalog Feed locations
 Sitemap: https://ishopbd.com/sitemap.xml

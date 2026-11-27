@@ -15,3 +15,13 @@ scratch/
 *.tmp
 *.bundle
 .git_backup*
+
+# Runtime caches rebuilt automatically from Firestore (large, change constantly - never commit)
+public/api/products_cache*.json
+public/api/banners_cache*.json
+public/api/img_cache/
+restart.txt
+
+# Local data backups (contain customer data - never commit or deploy)
+live_backup/
+_archive/

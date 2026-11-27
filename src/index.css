@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Hind Siliguri", "Anek Bangla", "Noto Sans Bengali", "Inter", "SolaimanLipi", "Kalpurush", "Vrinda", system-ui, sans-serif;
+  /* Manrope draws Latin letters & prices (crisp, tech feel); Bengali falls through to Hind Siliguri */
+  --font-sans: "Manrope", "Hind Siliguri", "Anek Bangla", "Noto Sans Bengali", "SolaimanLipi", "Kalpurush", "Vrinda", system-ui, sans-serif;
   --font-sulaiman: "SolaimanLipi", "Hind Siliguri", "Noto Sans Bengali", sans-serif;
   --font-lalsalu: "Anek Bangla", "Hind Siliguri", "Noto Sans Bengali", sans-serif;
   --font-ador: "Mina", "Hind Siliguri", "Noto Sans Bengali", sans-serif;
@@ -10,9 +11,14 @@
   --font-tiro: "Tiro Bangla", serif;
   --font-noto: "Noto Sans Bengali", "Hind Siliguri", sans-serif;
   --font-baloo: "Baloo Da 2", cursive;
-  --color-primary: #ec2029; /* User defined vibrant red-pink */
-  --color-secondary: #26225a;
-  --color-cream: #FAF9F6;
+  /* i SHOP BD palette taken from the logo: deep bag red + logo navy + clean white cards */
+  --color-primary: #da1522;      /* logo deep red (darker red of the bag) - buttons, prices, offers */
+  --color-primary-dark: #b5101b; /* hover / pressed */
+  --color-secondary: #26225a;    /* logo navy - text, headings, footer */
+  --color-navy: #1c1946;         /* darker logo navy for hover */
+  --color-cream: #f3f5f9;        /* cool page background (was warm cream) */
+  --color-line: #e4e8f0;         /* hairline borders */
+  --color-muted: #5d667a;        /* secondary text */
 }
 
 @layer base {
@@ -40,14 +46,15 @@
   }
   
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Hind Siliguri", "Anek Bangla", "Noto Sans Bengali", "Inter", sans-serif;
+    font-family: "Manrope", "Hind Siliguri", "Anek Bangla", "Noto Sans Bengali", sans-serif;
+    letter-spacing: -0.01em;
     font-feature-settings: "liga" 1, "calt" 1, "blwf" 1, "akhn" 1, "rphf" 1;
     text-rendering: optimizeLegibility;
     word-break: break-word;
   }
 
   input, select, textarea, button, optgroup, option {
-    font-family: "Hind Siliguri", "Anek Bangla", "Noto Sans Bengali", "Inter", sans-serif;
+    font-family: "Manrope", "Hind Siliguri", "Anek Bangla", "Noto Sans Bengali", sans-serif;
     font-feature-settings: "liga" 1, "calt" 1, "blwf" 1, "akhn" 1;
     touch-action: manipulation;
   }
@@ -157,3 +164,383 @@ input::-webkit-calendar-picker-indicator {
   }
 }
 
+
+/* Prices: equal-width digits so ৳ amounts line up and never jitter */
+.price-num {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Visible keyboard focus everywhere (premium + accessible) */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =====================================================================
+   ADMIN DASHBOARD - black, white and gray, with light status tints.
+   The class "admin-dark" is put on <html> only while the admin panel is open,
+   so the customer site keeps its light design. Tailwind colours are CSS
+   variables, so re-mapping them here re-colours every admin screen at once.
+   ===================================================================== */
+html.admin-dark {
+  color-scheme: dark;
+  --admin-bg: #0c0c0e;        /* page black */
+  --admin-sidebar: #111114;   /* sidebar */
+  --admin-surface: #17171b;   /* cards */
+  --admin-raised: #202026;    /* raised chips / dark badges */
+  /* Accent: no yellow or gold anywhere in the admin. A light, neutral gray (names kept for the code). */
+  --admin-gold: #d4d4dc;
+  --admin-gold-strong: #f2f2f5;
+  --color-primary: #d4d4dc;
+  --color-primary-dark: #b4b4be;
+  --color-secondary: #f5f5f7;
+  --color-cream: #0c0c0e;
+  --color-line: #2a2a31;
+  --color-muted: #9b9ba7;
+  --color-gray-50: #141417;
+  --color-slate-50: #141417;
+  --color-zinc-50: #141417;
+  --color-neutral-50: #141417;
+  --color-stone-50: #141417;
+  --color-gray-100: #1d1d22;
+  --color-slate-100: #1d1d22;
+  --color-zinc-100: #1d1d22;
+  --color-neutral-100: #1d1d22;
+  --color-stone-100: #1d1d22;
+  --color-gray-200: #2a2a31;
+  --color-slate-200: #2a2a31;
+  --color-zinc-200: #2a2a31;
+  --color-neutral-200: #2a2a31;
+  --color-stone-200: #2a2a31;
+  --color-gray-300: #3a3a43;
+  --color-slate-300: #3a3a43;
+  --color-zinc-300: #3a3a43;
+  --color-neutral-300: #3a3a43;
+  --color-stone-300: #3a3a43;
+  --color-gray-400: #7f7f8b;
+  --color-slate-400: #7f7f8b;
+  --color-zinc-400: #7f7f8b;
+  --color-neutral-400: #7f7f8b;
+  --color-stone-400: #7f7f8b;
+  --color-gray-500: #9b9ba7;
+  --color-slate-500: #9b9ba7;
+  --color-zinc-500: #9b9ba7;
+  --color-neutral-500: #9b9ba7;
+  --color-stone-500: #9b9ba7;
+  --color-gray-600: #b5b5c0;
+  --color-slate-600: #b5b5c0;
+  --color-zinc-600: #b5b5c0;
+  --color-neutral-600: #b5b5c0;
+  --color-stone-600: #b5b5c0;
+  --color-gray-700: #cfcfd8;
+  --color-slate-700: #cfcfd8;
+  --color-zinc-700: #cfcfd8;
+  --color-neutral-700: #cfcfd8;
+  --color-stone-700: #cfcfd8;
+  --color-gray-800: #e6e6ec;
+  --color-slate-800: #e6e6ec;
+  --color-zinc-800: #e6e6ec;
+  --color-neutral-800: #e6e6ec;
+  --color-stone-800: #e6e6ec;
+  --color-gray-900: #f5f5f7;
+  --color-slate-900: #f5f5f7;
+  --color-zinc-900: #f5f5f7;
+  --color-neutral-900: #f5f5f7;
+  --color-stone-900: #f5f5f7;
+  --color-gray-950: #ffffff;
+  --color-slate-950: #ffffff;
+  --color-zinc-950: #ffffff;
+  --color-neutral-950: #ffffff;
+  --color-stone-950: #ffffff;
+  --color-red-50: color-mix(in oklab, #ef4444 12%, transparent);
+  --color-red-100: color-mix(in oklab, #ef4444 18%, transparent);
+  --color-red-200: color-mix(in oklab, #ef4444 32%, transparent);
+  --color-red-700: #fca5a5;
+  --color-red-800: #fca5a5;
+  --color-red-900: #fca5a5;
+  --color-rose-50: color-mix(in oklab, #f43f5e 12%, transparent);
+  --color-rose-100: color-mix(in oklab, #f43f5e 18%, transparent);
+  --color-rose-200: color-mix(in oklab, #f43f5e 32%, transparent);
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fda4af;
+  --color-rose-900: #fda4af;
+  --color-emerald-50: color-mix(in oklab, #10b981 12%, transparent);
+  --color-emerald-100: color-mix(in oklab, #10b981 18%, transparent);
+  --color-emerald-200: color-mix(in oklab, #10b981 32%, transparent);
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #6ee7b7;
+  --color-emerald-900: #6ee7b7;
+  --color-green-50: color-mix(in oklab, #22c55e 12%, transparent);
+  --color-green-100: color-mix(in oklab, #22c55e 18%, transparent);
+  --color-green-200: color-mix(in oklab, #22c55e 32%, transparent);
+  --color-green-700: #86efac;
+  --color-green-800: #86efac;
+  --color-green-900: #86efac;
+  --color-blue-50: color-mix(in oklab, #3b82f6 12%, transparent);
+  --color-blue-100: color-mix(in oklab, #3b82f6 18%, transparent);
+  --color-blue-200: color-mix(in oklab, #3b82f6 32%, transparent);
+  --color-blue-700: #93c5fd;
+  --color-blue-800: #93c5fd;
+  --color-blue-900: #93c5fd;
+  --color-sky-50: color-mix(in oklab, #0ea5e9 12%, transparent);
+  --color-sky-100: color-mix(in oklab, #0ea5e9 18%, transparent);
+  --color-sky-200: color-mix(in oklab, #0ea5e9 32%, transparent);
+  --color-sky-700: #7dd3fc;
+  --color-sky-800: #7dd3fc;
+  --color-sky-900: #7dd3fc;
+  --color-amber-50: color-mix(in oklab, #f59e0b 12%, transparent);
+  --color-amber-100: color-mix(in oklab, #f59e0b 18%, transparent);
+  --color-amber-200: color-mix(in oklab, #f59e0b 32%, transparent);
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fcd34d;
+  --color-yellow-50: color-mix(in oklab, #eab308 12%, transparent);
+  --color-yellow-100: color-mix(in oklab, #eab308 18%, transparent);
+  --color-yellow-200: color-mix(in oklab, #eab308 32%, transparent);
+  --color-yellow-700: #fde047;
+  --color-yellow-800: #fde047;
+  --color-yellow-900: #fde047;
+  --color-orange-50: color-mix(in oklab, #f97316 12%, transparent);
+  --color-orange-100: color-mix(in oklab, #f97316 18%, transparent);
+  --color-orange-200: color-mix(in oklab, #f97316 32%, transparent);
+  --color-orange-700: #fdba74;
+  --color-orange-800: #fdba74;
+  --color-orange-900: #fdba74;
+  --color-indigo-50: color-mix(in oklab, #6366f1 12%, transparent);
+  --color-indigo-100: color-mix(in oklab, #6366f1 18%, transparent);
+  --color-indigo-200: color-mix(in oklab, #6366f1 32%, transparent);
+  --color-indigo-700: #a5b4fc;
+  --color-indigo-800: #a5b4fc;
+  --color-indigo-900: #a5b4fc;
+  --color-purple-50: color-mix(in oklab, #a855f7 12%, transparent);
+  --color-purple-100: color-mix(in oklab, #a855f7 18%, transparent);
+  --color-purple-200: color-mix(in oklab, #a855f7 32%, transparent);
+  --color-purple-700: #d8b4fe;
+  --color-purple-800: #d8b4fe;
+  --color-purple-900: #d8b4fe;
+  --color-violet-50: color-mix(in oklab, #8b5cf6 12%, transparent);
+  --color-violet-100: color-mix(in oklab, #8b5cf6 18%, transparent);
+  --color-violet-200: color-mix(in oklab, #8b5cf6 32%, transparent);
+  --color-violet-700: #c4b5fd;
+  --color-violet-800: #c4b5fd;
+  --color-violet-900: #c4b5fd;
+  --color-teal-50: color-mix(in oklab, #14b8a6 12%, transparent);
+  --color-teal-100: color-mix(in oklab, #14b8a6 18%, transparent);
+  --color-teal-200: color-mix(in oklab, #14b8a6 32%, transparent);
+  --color-teal-700: #5eead4;
+  --color-teal-800: #5eead4;
+  --color-teal-900: #5eead4;
+  --color-cyan-50: color-mix(in oklab, #06b6d4 12%, transparent);
+  --color-cyan-100: color-mix(in oklab, #06b6d4 18%, transparent);
+  --color-cyan-200: color-mix(in oklab, #06b6d4 32%, transparent);
+  --color-cyan-700: #67e8f9;
+  --color-cyan-800: #67e8f9;
+  --color-cyan-900: #67e8f9;
+  --color-pink-50: color-mix(in oklab, #ec4899 12%, transparent);
+  --color-pink-100: color-mix(in oklab, #ec4899 18%, transparent);
+  --color-pink-200: color-mix(in oklab, #ec4899 32%, transparent);
+  --color-pink-700: #f9a8d4;
+  --color-pink-800: #f9a8d4;
+  --color-pink-900: #f9a8d4;
+  --color-lime-50: color-mix(in oklab, #84cc16 12%, transparent);
+  --color-lime-100: color-mix(in oklab, #84cc16 18%, transparent);
+  --color-lime-200: color-mix(in oklab, #84cc16 32%, transparent);
+  --color-lime-700: #bef264;
+  --color-lime-800: #bef264;
+  --color-lime-900: #bef264;
+}
+
+/* Colour overrides live in cascade layers with :where(), so hover/focus utilities and
+   explicit colour classes on an element still win over these defaults. */
+@layer base {
+  /* Lines without an explicit colour would otherwise use the (now white) text colour */
+  :where(html.admin-dark) :where(*, ::before, ::after) { border-color: #2a2a31; }
+  /* Form fields: dark by default */
+  :where(html.admin-dark) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+    background-color: #111114;
+    color: #f5f5f7;
+  }
+  :where(html.admin-dark) ::placeholder { color: #6b6b76; }
+  :where(html.admin-dark) option { background-color: #17171b; color: #f5f5f7; }
+}
+
+@layer utilities {
+  /* Cards: "white" becomes a dark surface (text-white is untouched) */
+  :where(html.admin-dark) .bg-white { background-color: var(--admin-surface); }
+  :where(html.admin-dark) [class*="bg-white/"] { background-color: color-mix(in oklab, var(--admin-surface) 92%, transparent); }
+  /* Dark badges/buttons must stay dark (the gray scale is inverted above) */
+  :where(html.admin-dark) :is(.bg-gray-700, .bg-gray-800, .bg-gray-900, .bg-gray-950, .bg-slate-800, .bg-slate-900) { background-color: var(--admin-raised); }
+  :where(html.admin-dark) .text-black { color: #f5f5f7; }
+  /* "navy" text became white in the admin, so navy backgrounds become a raised dark surface */
+  :where(html.admin-dark) .bg-secondary { background-color: var(--admin-raised); }
+  /* Gold buttons get dark text for contrast */
+  :where(html.admin-dark) .bg-primary { color: #f5f5f7; }
+  :where(html.admin-dark) .bg-primary .text-white { color: #f5f5f7; }
+  /* Admin shell */
+  :where(html.admin-dark) .admin-shell { background-color: var(--admin-bg); }
+  :where(html.admin-dark) .admin-sidebar { background-color: var(--admin-sidebar); border-color: #1f1f24; }
+  :where(html.admin-dark) .admin-gold { color: var(--admin-gold); }
+}
+html.admin-dark .admin-shell ::-webkit-scrollbar-thumb { background: #2a2a31; }
+html.admin-dark .hover\:bg-gray-800:hover, html.admin-dark .hover\:bg-gray-900:hover,
+html.admin-dark .hover\:bg-black:hover { background-color: #2c2c33; }
+
+/* One calm, standard colour in the admin: decorative colours (blue, green, yellow, pink ...) become
+   neutral gray. Only red stays for danger, and order statuses use the .tone-* colours below. */
+html.admin-dark {
+  --color-blue-50: rgba(255, 255, 255, 0.045);
+  --color-blue-100: rgba(255, 255, 255, 0.07);
+  --color-blue-200: rgba(255, 255, 255, 0.12);
+  --color-blue-700: #d4d4dc;
+  --color-blue-800: #d4d4dc;
+  --color-blue-900: #d4d4dc;
+  --color-sky-50: rgba(255, 255, 255, 0.045);
+  --color-sky-100: rgba(255, 255, 255, 0.07);
+  --color-sky-200: rgba(255, 255, 255, 0.12);
+  --color-sky-700: #d4d4dc;
+  --color-sky-800: #d4d4dc;
+  --color-sky-900: #d4d4dc;
+  --color-indigo-50: rgba(255, 255, 255, 0.045);
+  --color-indigo-100: rgba(255, 255, 255, 0.07);
+  --color-indigo-200: rgba(255, 255, 255, 0.12);
+  --color-indigo-700: #d4d4dc;
+  --color-indigo-800: #d4d4dc;
+  --color-indigo-900: #d4d4dc;
+  --color-violet-50: rgba(255, 255, 255, 0.045);
+  --color-violet-100: rgba(255, 255, 255, 0.07);
+  --color-violet-200: rgba(255, 255, 255, 0.12);
+  --color-violet-700: #d4d4dc;
+  --color-violet-800: #d4d4dc;
+  --color-violet-900: #d4d4dc;
+  --color-purple-50: rgba(255, 255, 255, 0.045);
+  --color-purple-100: rgba(255, 255, 255, 0.07);
+  --color-purple-200: rgba(255, 255, 255, 0.12);
+  --color-purple-700: #d4d4dc;
+  --color-purple-800: #d4d4dc;
+  --color-purple-900: #d4d4dc;
+  --color-cyan-50: rgba(255, 255, 255, 0.045);
+  --color-cyan-100: rgba(255, 255, 255, 0.07);
+  --color-cyan-200: rgba(255, 255, 255, 0.12);
+  --color-cyan-700: #d4d4dc;
+  --color-cyan-800: #d4d4dc;
+  --color-cyan-900: #d4d4dc;
+  --color-teal-50: rgba(255, 255, 255, 0.045);
+  --color-teal-100: rgba(255, 255, 255, 0.07);
+  --color-teal-200: rgba(255, 255, 255, 0.12);
+  --color-teal-700: #d4d4dc;
+  --color-teal-800: #d4d4dc;
+  --color-teal-900: #d4d4dc;
+  --color-emerald-50: rgba(255, 255, 255, 0.045);
+  --color-emerald-100: rgba(255, 255, 255, 0.07);
+  --color-emerald-200: rgba(255, 255, 255, 0.12);
+  --color-emerald-700: #d4d4dc;
+  --color-emerald-800: #d4d4dc;
+  --color-emerald-900: #d4d4dc;
+  --color-green-50: rgba(255, 255, 255, 0.045);
+  --color-green-100: rgba(255, 255, 255, 0.07);
+  --color-green-200: rgba(255, 255, 255, 0.12);
+  --color-green-700: #d4d4dc;
+  --color-green-800: #d4d4dc;
+  --color-green-900: #d4d4dc;
+  --color-lime-50: rgba(255, 255, 255, 0.045);
+  --color-lime-100: rgba(255, 255, 255, 0.07);
+  --color-lime-200: rgba(255, 255, 255, 0.12);
+  --color-lime-700: #d4d4dc;
+  --color-lime-800: #d4d4dc;
+  --color-lime-900: #d4d4dc;
+  --color-amber-50: rgba(255, 255, 255, 0.045);
+  --color-amber-100: rgba(255, 255, 255, 0.07);
+  --color-amber-200: rgba(255, 255, 255, 0.12);
+  --color-amber-700: #d4d4dc;
+  --color-amber-800: #d4d4dc;
+  --color-amber-900: #d4d4dc;
+  --color-yellow-50: rgba(255, 255, 255, 0.045);
+  --color-yellow-100: rgba(255, 255, 255, 0.07);
+  --color-yellow-200: rgba(255, 255, 255, 0.12);
+  --color-yellow-700: #d4d4dc;
+  --color-yellow-800: #d4d4dc;
+  --color-yellow-900: #d4d4dc;
+  --color-orange-50: rgba(255, 255, 255, 0.045);
+  --color-orange-100: rgba(255, 255, 255, 0.07);
+  --color-orange-200: rgba(255, 255, 255, 0.12);
+  --color-orange-700: #d4d4dc;
+  --color-orange-800: #d4d4dc;
+  --color-orange-900: #d4d4dc;
+  --color-pink-50: rgba(255, 255, 255, 0.045);
+  --color-pink-100: rgba(255, 255, 255, 0.07);
+  --color-pink-200: rgba(255, 255, 255, 0.12);
+  --color-pink-700: #d4d4dc;
+  --color-pink-800: #d4d4dc;
+  --color-pink-900: #d4d4dc;
+  --color-fuchsia-50: rgba(255, 255, 255, 0.045);
+  --color-fuchsia-100: rgba(255, 255, 255, 0.07);
+  --color-fuchsia-200: rgba(255, 255, 255, 0.12);
+  --color-fuchsia-700: #d4d4dc;
+  --color-fuchsia-800: #d4d4dc;
+  --color-fuchsia-900: #d4d4dc;
+}
+@layer utilities {
+  :where(html.admin-dark) :is(.bg-blue-400, .bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-sky-400, .bg-sky-500, .bg-sky-600, .bg-sky-700, .bg-indigo-400, .bg-indigo-500, .bg-indigo-600, .bg-indigo-700, .bg-violet-400, .bg-violet-500, .bg-violet-600, .bg-violet-700, .bg-purple-400, .bg-purple-500, .bg-purple-600, .bg-purple-700, .bg-cyan-400, .bg-cyan-500, .bg-cyan-600, .bg-cyan-700, .bg-teal-400, .bg-teal-500, .bg-teal-600, .bg-teal-700, .bg-emerald-400, .bg-emerald-500, .bg-emerald-600, .bg-emerald-700, .bg-green-400, .bg-green-500, .bg-green-600, .bg-green-700, .bg-lime-400, .bg-lime-500, .bg-lime-600, .bg-lime-700, .bg-amber-400, .bg-amber-500, .bg-amber-600, .bg-amber-700, .bg-yellow-400, .bg-yellow-500, .bg-yellow-600, .bg-yellow-700, .bg-orange-400, .bg-orange-500, .bg-orange-600, .bg-orange-700, .bg-pink-400, .bg-pink-500, .bg-pink-600, .bg-pink-700, .bg-fuchsia-400, .bg-fuchsia-500, .bg-fuchsia-600, .bg-fuchsia-700) { background-color: #2a2a31; color: #f5f5f7; }
+  :where(html.admin-dark) :is(.hover\:bg-blue-500:hover, .hover\:bg-blue-600:hover, .hover\:bg-blue-700:hover, .hover\:bg-blue-800:hover, .hover\:bg-sky-500:hover, .hover\:bg-sky-600:hover, .hover\:bg-sky-700:hover, .hover\:bg-sky-800:hover, .hover\:bg-indigo-500:hover, .hover\:bg-indigo-600:hover, .hover\:bg-indigo-700:hover, .hover\:bg-indigo-800:hover, .hover\:bg-violet-500:hover, .hover\:bg-violet-600:hover, .hover\:bg-violet-700:hover, .hover\:bg-violet-800:hover, .hover\:bg-purple-500:hover, .hover\:bg-purple-600:hover, .hover\:bg-purple-700:hover, .hover\:bg-purple-800:hover, .hover\:bg-cyan-500:hover, .hover\:bg-cyan-600:hover, .hover\:bg-cyan-700:hover, .hover\:bg-cyan-800:hover, .hover\:bg-teal-500:hover, .hover\:bg-teal-600:hover, .hover\:bg-teal-700:hover, .hover\:bg-teal-800:hover, .hover\:bg-emerald-500:hover, .hover\:bg-emerald-600:hover, .hover\:bg-emerald-700:hover, .hover\:bg-emerald-800:hover, .hover\:bg-green-500:hover, .hover\:bg-green-600:hover, .hover\:bg-green-700:hover, .hover\:bg-green-800:hover, .hover\:bg-lime-500:hover, .hover\:bg-lime-600:hover, .hover\:bg-lime-700:hover, .hover\:bg-lime-800:hover, .hover\:bg-amber-500:hover, .hover\:bg-amber-600:hover, .hover\:bg-amber-700:hover, .hover\:bg-amber-800:hover, .hover\:bg-yellow-500:hover, .hover\:bg-yellow-600:hover, .hover\:bg-yellow-700:hover, .hover\:bg-yellow-800:hover, .hover\:bg-orange-500:hover, .hover\:bg-orange-600:hover, .hover\:bg-orange-700:hover, .hover\:bg-orange-800:hover, .hover\:bg-pink-500:hover, .hover\:bg-pink-600:hover, .hover\:bg-pink-700:hover, .hover\:bg-pink-800:hover, .hover\:bg-fuchsia-500:hover, .hover\:bg-fuchsia-600:hover, .hover\:bg-fuchsia-700:hover, .hover\:bg-fuchsia-800:hover) { background-color: #34343c; }
+  :where(html.admin-dark) :is(.text-blue-400, .text-blue-500, .text-blue-600, .text-sky-400, .text-sky-500, .text-sky-600, .text-indigo-400, .text-indigo-500, .text-indigo-600, .text-violet-400, .text-violet-500, .text-violet-600, .text-purple-400, .text-purple-500, .text-purple-600, .text-cyan-400, .text-cyan-500, .text-cyan-600, .text-teal-400, .text-teal-500, .text-teal-600, .text-emerald-400, .text-emerald-500, .text-emerald-600, .text-green-400, .text-green-500, .text-green-600, .text-lime-400, .text-lime-500, .text-lime-600, .text-amber-400, .text-amber-500, .text-amber-600, .text-yellow-400, .text-yellow-500, .text-yellow-600, .text-orange-400, .text-orange-500, .text-orange-600, .text-pink-400, .text-pink-500, .text-pink-600, .text-fuchsia-400, .text-fuchsia-500, .text-fuchsia-600) { color: #c4c4cc; }
+  :where(html.admin-dark) :is(.border-blue-300, .border-blue-400, .border-blue-500, .border-blue-600, .border-sky-300, .border-sky-400, .border-sky-500, .border-sky-600, .border-indigo-300, .border-indigo-400, .border-indigo-500, .border-indigo-600, .border-violet-300, .border-violet-400, .border-violet-500, .border-violet-600, .border-purple-300, .border-purple-400, .border-purple-500, .border-purple-600, .border-cyan-300, .border-cyan-400, .border-cyan-500, .border-cyan-600, .border-teal-300, .border-teal-400, .border-teal-500, .border-teal-600, .border-emerald-300, .border-emerald-400, .border-emerald-500, .border-emerald-600, .border-green-300, .border-green-400, .border-green-500, .border-green-600, .border-lime-300, .border-lime-400, .border-lime-500, .border-lime-600, .border-amber-300, .border-amber-400, .border-amber-500, .border-amber-600, .border-yellow-300, .border-yellow-400, .border-yellow-500, .border-yellow-600, .border-orange-300, .border-orange-400, .border-orange-500, .border-orange-600, .border-pink-300, .border-pink-400, .border-pink-500, .border-pink-600, .border-fuchsia-300, .border-fuchsia-400, .border-fuchsia-500, .border-fuchsia-600) { border-color: #34343c; }
+  :where(html.admin-dark) :is(.shadow-blue-500, .shadow-blue-600, .shadow-sky-500, .shadow-sky-600, .shadow-indigo-500, .shadow-indigo-600, .shadow-violet-500, .shadow-violet-600, .shadow-purple-500, .shadow-purple-600, .shadow-cyan-500, .shadow-cyan-600, .shadow-teal-500, .shadow-teal-600, .shadow-emerald-500, .shadow-emerald-600, .shadow-green-500, .shadow-green-600, .shadow-lime-500, .shadow-lime-600, .shadow-amber-500, .shadow-amber-600, .shadow-yellow-500, .shadow-yellow-600, .shadow-orange-500, .shadow-orange-600, .shadow-pink-500, .shadow-pink-600, .shadow-fuchsia-500, .shadow-fuchsia-600) { --tw-shadow-color: transparent; }
+  /* Main buttons, selected tabs and switches: a light, see-through gray with white text (computer and
+     phone alike). No solid blocks of colour. */
+  :where(html.admin-dark) .bg-primary.bg-primary,
+  :where(html.admin-dark) .hover\:bg-primary.hover\:bg-primary:hover {
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #f5f5f7;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+  :where(html.admin-dark) .bg-primary.bg-primary :is(.text-white, svg) { color: #f5f5f7; }
+  :where(html.admin-dark) .bg-primary.bg-primary.hover\:opacity-90:hover { opacity: 1; background-color: rgba(255, 255, 255, 0.12); }
+  /* Stars and other light-yellow fills/text: gray in the admin (no yellow anywhere). */
+  :where(html.admin-dark) :is(.fill-amber-100, .fill-amber-200, .fill-amber-300, .fill-amber-400, .fill-amber-500, .fill-yellow-300, .fill-yellow-400, .fill-yellow-500) { fill: #d4d4dc; }
+  :where(html.admin-dark) :is(.text-amber-100, .text-amber-200, .text-amber-300, .text-yellow-200, .text-yellow-300, .text-yellow-400) { color: #d4d4dc; }
+  /* Active menu item: quiet highlight with a light edge */
+  :where(html.admin-dark) .admin-sidebar .bg-primary.bg-primary {
+    background-color: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+    box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.55);
+  }
+}
+
+/* Order status colours: light, see-through tints so pending / confirmed / cancelled are easy to tell
+   apart without shouting. Used by the order screens through orderTone.ts. */
+@layer components {
+  .tone-pending    { --tone: #b39dfc; }
+  .tone-confirmed  { --tone: #3fdc9a; }
+  .tone-processing { --tone: #5cc8ff; }
+  .tone-shipped    { --tone: #7fa8ff; }
+  .tone-delivered  { --tone: #2ee5a0; }
+  .tone-returned   { --tone: #ff9a6b; }
+  .tone-cancelled  { --tone: #ff6b7a; }
+  .tone-neutral    { --tone: #a1a1ab; }
+  .tone-chip {
+    color: var(--tone);
+    background-color: color-mix(in oklab, var(--tone) 18%, transparent);
+    border: 1px solid color-mix(in oklab, var(--tone) 30%, transparent);
+    border-radius: 6px;
+  }
+  .tone-card {
+    background-color: color-mix(in oklab, var(--tone) 7%, var(--admin-surface, #ffffff));
+    border: 1px solid color-mix(in oklab, var(--tone) 18%, var(--color-line, #e4e8f0));
+    box-shadow: inset 3px 0 0 color-mix(in oklab, var(--tone) 85%, transparent);
+  }
+  .tone-row > td { background-color: color-mix(in oklab, var(--tone) 6%, var(--admin-surface, #ffffff)); }
+  .tone-row > td:first-child { box-shadow: inset 3px 0 0 color-mix(in oklab, var(--tone) 85%, transparent); }
+  .tone-row:hover > td { background-color: color-mix(in oklab, var(--tone) 11%, var(--admin-surface, #ffffff)); }
+  .tone-dot { background-color: var(--tone); }
+  .tone-chip option { color: #f5f5f7; background-color: #17171b; }
+}

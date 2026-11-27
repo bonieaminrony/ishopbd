@@ -18,6 +18,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteRule ^index\.html$ app.php [L]
   RewriteRule ^index\.php$ app.php [L]
   RewriteRule ^llms\.txt$ api/llms.php [L]
+  RewriteRule ^sitemap\.xml$ api/sitemap.php [L]
   RewriteRule ^api/ping$ api/ping.php [L]
   RewriteRule ^api/merchant-feed\.xml$ api/merchant-feed.php [L]
 
@@ -51,6 +52,15 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
   RewriteRule ^api/courier/webhook/steadfast$ api/courier-sync.php?action=webhook [L,QSA]
   RewriteRule ^api/admin/keys$ api/courier-sync.php?action=keys [L,QSA]
   RewriteRule ^api/admin/site-config$ api/courier-sync.php?action=save-site-config [L,QSA]
+  # Product photos that already have a compressed copy on disk are sent as plain files: no PHP,
+  # and Hostinger's CDN can cache them. Otherwise product-image.php makes the copy (first view only).
+  RewriteCond %{QUERY_STRING} ^v=([A-Za-z0-9]{1,16})$
+  RewriteRule ^api/product-image/([A-Za-z0-9_]+)$ - [E=PIMG:$1_v%1]
+  RewriteCond %{QUERY_STRING} ^$
+  RewriteRule ^api/product-image/([A-Za-z0-9_]+)$ - [E=PIMG:$1]
+  RewriteCond %{ENV:PIMG} ^[A-Za-z0-9_]+$
+  RewriteCond %{DOCUMENT_ROOT}/api/img_cache/%{ENV:PIMG}.opt.webp -f
+  RewriteRule ^api/product-image/[A-Za-z0-9_]+$ api/img_cache/%{ENV:PIMG}.opt.webp [L]
   RewriteRule ^api/product-image/(.*)$ api/product-image.php?id=$1 [L,QSA]
 
   # Route Firebase Auth endpoints to PHP proxy
@@ -144,7 +154,7 @@ AddCharset UTF-8 .html .css .js .json .xml .php .svg .webmanifest
 </FilesMatch>
 
 # Allow only the specific API and entry PHP files
-<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|ping|marketing|track-event|courier-sync|llms|merchant-feed)\.php$">
+<FilesMatch "^(index|app|products|invalidate-product-cache|banners|invalidate-banner-cache|send-sms|send-bulk-sms|send-push|confirm-order|send-email|product-image|chat|ai-search|steadfast-bulk|steadfast-status|steadfast-fraud|verify-admin|test_dns|auth-proxy|ping|marketing|track-event|courier-sync|llms|merchant-feed|sitemap)\.php$">
   <IfModule mod_authz_core.c>
     Require all granted
   </IfModule>

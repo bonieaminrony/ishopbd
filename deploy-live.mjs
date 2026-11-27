@@ -84,7 +84,15 @@ async function uploadDirectoryRecursive(clientContext, localDir, remoteDir) {
       entry.name.endsWith('.ts') ||
       entry.name.endsWith('.tsx');
 
-    if (isSensitive) {
+    // Data safety: never overwrite the LIVE server's own runtime caches with old local copies.
+    // FTP gives the uploaded file a fresh timestamp, so an old local products_cache.json was
+    // treated as "fresh" on live for 24h (old prices/stock/photos). img_cache holds product
+    // photos that live generated itself; a local copy may contain photos the admin has since changed.
+    const isRuntimeCache =
+      /^(products|banners)_cache.*\.json$/i.test(entry.name) ||
+      (entry.isDirectory() && entry.name === 'img_cache');
+
+    if (isSensitive || isRuntimeCache) {
       continue;
     }
 
@@ -166,6 +174,11 @@ async function deploy() {
       console.log('📤 Uploading public/api folder (chat.php, products.php, etc.)...');
       await uploadDirectoryRecursive(clientContext, path.join(__dirname, 'public', 'api'), `${REMOTE_DIR}/api`);
       console.log('✅ api folder uploaded!');
+
+      // Let live rebuild its product list from Firestore with the new code (fresh prices, stock
+      // and photo links). This only removes a regenerable cache file, never product data.
+      await clientContext.client.remove(`${REMOTE_DIR}/api/products_cache.json`).catch(() => {});
+      console.log('♻️  Live product cache reset (rebuilds from Firestore on next visit)');
     }
 
     // 7.1 Upload public/uploads directory if exists locally
@@ -183,9 +196,14 @@ async function deploy() {
       console.log('✅ index.php & app.php uploaded!');
     }
 
-    if (fs.existsSync(path.join(__dirname, 'htaccess.txt'))) {
+    // public/.htaccess is the single source of truth (htaccess.txt was an outdated copy that
+    // was missing the /api/sms-balance rule, so a full deploy broke the SMS balance on live).
+    const htaccessSource = fs.existsSync(path.join(__dirname, 'public', '.htaccess'))
+      ? path.join(__dirname, 'public', '.htaccess')
+      : path.join(__dirname, 'htaccess.txt');
+    if (fs.existsSync(htaccessSource)) {
       console.log('📤 Uploading .htaccess...');
-      await uploadFileSafe(clientContext, path.join(__dirname, 'htaccess.txt'), `${REMOTE_DIR}/.htaccess`);
+      await uploadFileSafe(clientContext, htaccessSource, `${REMOTE_DIR}/.htaccess`);
       console.log('✅ .htaccess uploaded!');
     }
 
@@ -215,12 +233,11 @@ async function deploy() {
       'icon-144x144.png',
       'icon-96x96.png',
       'icon-48x48.png',
-      'sitemap.xml',
       'robots.txt',
       'sw.js'
     ];
 
-    console.log('📤 Uploading static files (sitemap.xml, robots.txt, icons, etc.)...');
+    console.log('📤 Uploading static files (robots.txt, icons, etc.; sitemap.xml is built live by api/sitemap.php)...');
     for (const file of staticFiles) {
       let localFilePath = path.join(__dirname, 'dist', file);
       if (!fs.existsSync(localFilePath)) {
@@ -244,10 +261,56 @@ async function deploy() {
 
     console.log('\n🎉 ALL FILES DEPLOYED TO HOSTINGER SUCCESSFULLY!');
     clientContext.client.close();
+    await warmProductPhotos();
   } catch (e) {
     console.error('❌ Deployment error:', e.message);
     if (clientContext?.client) clientContext.client.close();
     process.exit(1);
+  }
+}
+
+/**
+ * Opens every product photo once right after a deploy, so the server makes its compressed copy
+ * (api/img_cache/*.opt.webp) now instead of making the first customer wait for it.
+ * Never fails the deploy; skip with SKIP_PHOTO_WARMUP=1.
+ */
+async function warmProductPhotos() {
+  if (process.env.SKIP_PHOTO_WARMUP === '1' || typeof fetch !== 'function') return;
+  const site = process.env.SITE_URL || 'https://ishopbd.com';
+  try {
+    const res = await fetch(`${site}/api/products?warm=${Date.now()}`, { signal: AbortSignal.timeout(30000) });
+    const list = await res.json();
+    if (!Array.isArray(list)) return;
+    const urls = new Set();
+    const add = (u) => {
+      if (typeof u === 'string' && u.startsWith('/api/product-image/')) urls.add(u);
+    };
+    for (const p of list) {
+      add(p?.image);
+      (Array.isArray(p?.images) ? p.images : []).forEach(add);
+      (Array.isArray(p?.variants) ? p.variants : []).forEach((v) => add(v?.image));
+    }
+    const all = [...urls];
+    console.log(`🖼️  Preparing ${all.length} product photos (compressing once on the server)...`);
+    let done = 0;
+    let failed = 0;
+    const worker = async () => {
+      while (all.length) {
+        const u = all.shift();
+        try {
+          const r = await fetch(site + u, { signal: AbortSignal.timeout(20000) });
+          await r.arrayBuffer();
+          if (!r.ok) failed++;
+        } catch {
+          failed++;
+        }
+        done++;
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
+    console.log(`✅ Product photos ready (${done - failed} ok${failed ? `, ${failed} failed` : ''})`);
+  } catch (err) {
+    console.log(`⚠️  Photo warm-up skipped: ${err.message}`);
   }
 }
 

@@ -152,7 +152,7 @@ export default function CartDrawerModal({
                     setIsCheckoutOpen(true);
                     if (detectLocation) detectLocation();
                   }}
-                  className="w-full bg-gradient-to-r from-primary to-red-600 hover:from-red-600 hover:to-primary text-white font-black py-3 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 text-xs sm:text-sm text-center touch-manipulation"
+                  className="w-full bg-primary hover:bg-primary-dark text-white font-black py-3 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95 text-xs sm:text-sm text-center touch-manipulation"
                 >
                   Complete Order
                 </button>

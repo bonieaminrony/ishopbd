@@ -544,6 +544,60 @@ export const normalizeProducts = (prods: any[]): any[] => {
   return prods.map(normalizeProduct);
 };
 
+const isProxyImage = (v: any): v is string => typeof v === 'string' && /^\/api\/product-image\//.test(v);
+
+const proxyParam = (url: string, names: string[]): number | null => {
+  const q = url.split('?')[1] || '';
+  for (const part of q.split('&')) {
+    const [k, val] = part.split('=');
+    if (names.includes(k) && val !== undefined && /^\d+$/.test(val)) return Number(val);
+  }
+  return null;
+};
+
+/**
+ * Replaces lean /api/product-image/... links (which only point at a photo) with the real photo
+ * stored in Firestore, so an admin edit never overwrites a product photo with a link to itself.
+ * A link is only replaced when the stored value at the matching place is a real photo.
+ */
+export const restoreProxyImages = (
+  data: { image?: any; images?: any[]; variants?: any[] },
+  stored: { image?: any; images?: any[]; variants?: any[] }
+): { image: any; images: any[]; variants: any[] } => {
+  const real = (v: any) => (typeof v === 'string' && v.length > 0 && !isProxyImage(v) ? v : null);
+  const resolve = (link: string): string => {
+    const variantIdx = proxyParam(link, ['variant']);
+    if (variantIdx !== null) return real(stored.variants?.[variantIdx]?.image) || link;
+    const idx = proxyParam(link, ['index', 'idx']);
+    if (idx !== null) return real(stored.images?.[idx]) || link;
+    return real(stored.image) || real(stored.images?.[0]) || link;
+  };
+  const image = isProxyImage(data.image) ? resolve(data.image) : data.image;
+  const images = (Array.isArray(data.images) ? data.images : []).map((img: any) => (isProxyImage(img) ? resolve(img) : img));
+  const variants = (Array.isArray(data.variants) ? data.variants : []).map((v: any) =>
+    v && isProxyImage(v.image) ? { ...v, image: resolve(v.image) } : v
+  );
+  return { image, images, variants };
+};
+
+/**
+ * Cheap, stable fingerprint of an image string (FNV-1a over its length and a sample of characters).
+ * Used as ?v= so that a changed product photo gets a new URL and no cache shows the old photo.
+ */
+export const quickImageVersion = (img: string): string => {
+  let h = 0x811c9dc5;
+  const s = String(img || '');
+  const step = Math.max(1, Math.floor(s.length / 4096));
+  const mix = (c: number) => {
+    h ^= c;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  };
+  mix(s.length & 0xff); mix((s.length >>> 8) & 0xff); mix((s.length >>> 16) & 0xff);
+  for (let i = 0; i < s.length; i += step) mix(s.charCodeAt(i));
+  for (let i = Math.max(0, s.length - 256); i < s.length; i++) mix(s.charCodeAt(i));
+  return h.toString(36);
+};
+
 /**
  * Strips massive base64 payloads and bulky fields (landingConfig, excessive descriptions)
  * so products can be stored compactly in localStorage (~50 KB vs ~9,000 KB).
@@ -557,21 +611,34 @@ export const toLeanProductCache = (products: any[]): any[] => {
     // 1. Remove bulky landingConfig from offline cache
     delete lean.landingConfig;
 
+    const pid = encodeURIComponent(p.id || '');
+
     // 2. Replace huge base64 main image with proxy URL or lightweight string
     if (typeof lean.image === 'string' && lean.image.startsWith('data:')) {
-      lean.image = `/api/product-image/${p.id || ''}`;
+      lean.image = `/api/product-image/${pid}?v=${quickImageVersion(p.image)}`;
     }
 
-    // 3. Compact gallery images array
+    // 3. Compact gallery images array (map before filter so indexes match Firestore positions)
     if (Array.isArray(lean.images)) {
       lean.images = lean.images
-        .filter((img: any) => typeof img === 'string' && img.trim().length > 0)
-        .map((img: string, idx: number) => {
+        .map((img: any, idx: number) => {
+          if (typeof img !== 'string' || img.trim().length === 0) return null;
           if (img.startsWith('data:')) {
-            return `/api/product-image/${p.id || ''}?index=${idx}`;
+            return `/api/product-image/${pid}?index=${idx}&v=${quickImageVersion(img)}`;
           }
           return img;
-        });
+        })
+        .filter((img: any) => typeof img === 'string');
+    }
+
+    // 3b. Variant (colour) photos keep their own image instead of the main photo
+    if (Array.isArray(lean.variants)) {
+      lean.variants = lean.variants.map((v: any, vIdx: number) => {
+        if (v && typeof v.image === 'string' && v.image.startsWith('data:')) {
+          return { ...v, image: `/api/product-image/${pid}?variant=${vIdx}&v=${quickImageVersion(v.image)}` };
+        }
+        return v;
+      });
     }
 
     // 4. Truncate oversized descriptions in offline cache
@@ -654,4 +721,49 @@ export const saveProductsToCache = (products: any[], updatedAt?: string): boolea
     } catch (e) {}
   }
   return success;
+};
+/** Category and subcategory slugs from a /category/<cat>/<sub>, /c/<cat>/<sub> or ?category= link. */
+export const getCategorySlugsFromLocation = (
+  pathname: string,
+  search: string,
+): { categorySlug: string; subcategorySlug: string } | null => {
+  const params = new URLSearchParams(search || '');
+  let categorySlug = params.get('category') || params.get('cat') || '';
+  let subcategorySlug = params.get('subcategory') || params.get('sub') || '';
+  const m = /^\/(?:category|c)\/([^/]+)(?:\/([^/]+))?/.exec(pathname || '');
+  if (!categorySlug && m) {
+    categorySlug = m[1] || '';
+    if (m[2]) subcategorySlug = m[2];
+  }
+  return categorySlug ? { categorySlug, subcategorySlug } : null;
+};
+
+/**
+ * Works out which category (and subcategory) a link points to on the very first render, so a
+ * customer arriving from an ad sees the category straight away instead of the home page first.
+ * Uses the saved category list when there is one, otherwise the category names of the products
+ * that arrive with the page.
+ */
+export const resolveCategoryFromLocation = (
+  pathname: string,
+  search: string,
+  categories: any[],
+  products: any[],
+): { category: string; subcategory: string } | null => {
+  const slugs = getCategorySlugsFromLocation(pathname, search);
+  if (!slugs) return null;
+  let pool: any[] = Array.isArray(categories) ? categories.filter(Boolean) : [];
+  if (pool.length === 0 && Array.isArray(products)) {
+    const names = Array.from(
+      new Set(products.map((p) => String(p?.category || '').trim()).filter(Boolean)),
+    );
+    pool = names.map((name) => ({ name, subcategories: [] }));
+  }
+  const matched = findCategoryBySlug(pool, slugs.categorySlug);
+  if (!matched) return null;
+  const category = typeof matched === 'string' ? matched : matched.name;
+  const subcategory = slugs.subcategorySlug
+    ? findSubcategoryFromProductsOrCategory(matched, slugs.subcategorySlug, products) || 'all'
+    : 'all';
+  return { category, subcategory };
 };

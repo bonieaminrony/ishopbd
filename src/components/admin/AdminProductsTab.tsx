@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   Activity,
   ArrowUpDown,
@@ -58,6 +59,7 @@ export interface AdminProductsTabProps {
   handleDuplicateProduct: (p: any) => void;
   openLandingEditor: (p: any) => void;
   deleteProduct: (id: string) => void;
+  isSavingProduct?: boolean;
 }
 
 export default function AdminProductsTab({
@@ -85,7 +87,38 @@ export default function AdminProductsTab({
   handleDuplicateProduct,
   openLandingEditor,
   deleteProduct,
+  isSavingProduct = false,
 }: AdminProductsTabProps) {
+  // The add / edit form opens in its own panel; the product list is the page.
+  const [isFormOpen, setIsFormOpen] = React.useState(false);
+  const [listFilter, setListFilter] = React.useState<'all' | 'live' | 'hidden' | 'low' | 'out'>('all');
+  const wasSavingRef = React.useRef(false);
+  React.useEffect(() => {
+    if (editingProduct) setIsFormOpen(true);
+  }, [editingProduct]);
+  React.useEffect(() => {
+    // A successful save clears the form; close the panel then. A failed save keeps it open.
+    if (wasSavingRef.current && !isSavingProduct && !editingProduct) setIsFormOpen(false);
+    wasSavingRef.current = isSavingProduct;
+  }, [isSavingProduct, editingProduct]);
+  React.useEffect(() => {
+    if (!isFormOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeForm();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isFormOpen]);
+  const openNewProductForm = () => {
+    setEditingProduct(null);
+    setProductFormErrors({});
+    setIsFormOpen(true);
+  };
+  const closeForm = () => {
+    setIsFormOpen(false);
+    setEditingProduct(null);
+    setProductFormErrors({});
+  };
   const [isGeneratingTags, setIsGeneratingTags] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = React.useState('all');
@@ -214,30 +247,221 @@ export default function AdminProductsTab({
     }
   };
 
+  const isLowStock = (p: any) => {
+    const st = getEffectiveStock(p);
+    return st > 0 && st <= 5;
+  };
+  const listCounts = React.useMemo(() => {
+    const base = sortedAndFilteredProducts;
+    return {
+      all: base.length,
+      live: base.filter((p: any) => p.isPublished !== false).length,
+      hidden: base.filter((p: any) => p.isPublished === false).length,
+      low: base.filter((p: any) => isLowStock(p)).length,
+      out: base.filter((p: any) => getEffectiveStock(p) <= 0).length,
+    };
+  }, [sortedAndFilteredProducts]);
+  const visibleProducts = React.useMemo(() => {
+    switch (listFilter) {
+      case 'live':
+        return sortedAndFilteredProducts.filter((p: any) => p.isPublished !== false);
+      case 'hidden':
+        return sortedAndFilteredProducts.filter((p: any) => p.isPublished === false);
+      case 'low':
+        return sortedAndFilteredProducts.filter((p: any) => isLowStock(p));
+      case 'out':
+        return sortedAndFilteredProducts.filter((p: any) => getEffectiveStock(p) <= 0);
+      default:
+        return sortedAndFilteredProducts;
+    }
+  }, [sortedAndFilteredProducts, listFilter]);
+
+  const openEditForm = (p: any) => {
+    setProductFormErrors({});
+    setEditingProduct({
+      ...p,
+      variants: p.variants || [],
+      bundleProductIds: p.bundleProductIds || [],
+      bundleDiscount: p.bundleDiscount || 0,
+      bundleDiscountType: p.bundleDiscountType || 'percentage',
+    });
+    setIsFormOpen(true);
+  };
+
+  // Stock: one chip per variant (red when 5 or fewer), then the total.
+  const renderStockSummary = (p: any, compact: boolean) => {
+    const total = getEffectiveStock(p);
+    const totalTone = total <= 0 ? 'tone-cancelled' : total <= 5 ? 'tone-returned' : 'tone-neutral';
+    if (Array.isArray(p.variants) && p.variants.length > 0) {
+      if (compact) {
+        return (
+          <span className={`${totalTone} tone-chip px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap`}>
+            {total <= 0 ? 'Out of stock' : `${total} in stock`} · {p.variants.length} var
+          </span>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap gap-1">
+            {p.variants.map((v: any, i: number) => {
+              const vs = Number(v.stock || 0);
+              const label = [v.name, v.size].filter(Boolean).join(' · ') || `#${i + 1}`;
+              return (
+                <span
+                  key={i}
+                  className={`${vs <= 0 ? 'tone-cancelled' : vs <= 5 ? 'tone-returned' : 'tone-neutral'} tone-chip px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap`}
+                >
+                  {label}: {vs}
+                </span>
+              );
+            })}
+          </div>
+          <span className="text-[11px] font-bold text-gray-500">Total: <span className="text-gray-800">{total}</span></span>
+        </div>
+      );
+    }
+    return (
+      <span className={`${totalTone} tone-chip px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap`}>
+        {total <= 0 ? 'Out of stock' : `Stock: ${total}`}
+      </span>
+    );
+  };
+
+  // Live switch + edit + menu (copy link, duplicate, landing page, delete).
+  const renderProductActions = (p: any) => (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <button
+        type="button"
+        onClick={() => togglePublishStatus(p)}
+        title={p.isPublished !== false ? 'Live on the website (tap to hide)' : 'Hidden (tap to make live)'}
+        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ${
+          p.isPublished !== false ? 'bg-[#3fdc9a]/60' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+            p.isPublished !== false ? 'translate-x-4' : 'translate-x-0'
+          }`}
+        />
+      </button>
+      <button
+        type="button"
+        onClick={() => openEditForm(p)}
+        title="Edit product"
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-primary transition-colors"
+      >
+        <Edit3 size={16} />
+      </button>
+      <div className="relative font-sans" ref={activeProductDropdown === p.id ? productDropdownRef : null}>
+        <button
+          type="button"
+          onClick={() => setActiveProductDropdown(activeProductDropdown === p.id ? null : p.id)}
+          title="More"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+        >
+          <MoreVertical size={18} />
+        </button>
+        {activeProductDropdown === p.id && (
+          <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden text-sm">
+            <button
+              onClick={() => {
+                openEditForm(p);
+                setActiveProductDropdown(null);
+              }}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+            >
+              <Edit3 size={16} className="text-gray-400" />
+              <span>Edit Details</span>
+            </button>
+            <button
+              onClick={() => {
+                copyLandingPageLink(p.id);
+                setActiveProductDropdown(null);
+              }}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-100"
+            >
+              <Share2 size={16} className="text-gray-400" />
+              <span>Copy Link</span>
+            </button>
+            <button
+              onClick={() => {
+                handleDuplicateProduct(p);
+                setActiveProductDropdown(null);
+              }}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-100"
+            >
+              <Copy size={16} className="text-gray-400" />
+              <span>Duplicate</span>
+            </button>
+            <button
+              onClick={() => {
+                openLandingEditor(p);
+                setActiveProductDropdown(null);
+              }}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-100"
+            >
+              <LayoutTemplate size={16} className="text-gray-400" />
+              <span>Landing Page</span>
+            </button>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteProduct(p.id);
+                setActiveProductDropdown(null);
+              }}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 tone-cancelled border-t border-gray-100"
+              style={{ color: 'var(--tone)' }}
+            >
+              <Trash2 size={16} />
+              <span>Delete Product</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-10">
-      {/* Top Grid: Form on Left (7 cols) & Live Preview on Right (5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <div className="space-y-6">
+      {/* Rendered on <body> so it always covers the whole screen, above the admin panel */}
+      {isFormOpen && typeof document !== 'undefined' && createPortal(
+      <div className="fixed inset-0 z-[550] flex justify-end bg-black/55 backdrop-blur-[2px]">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingProduct?.id ? 'Edit product' : 'Add new product'}
+          className="w-full lg:max-w-[1180px] h-full flex flex-col bg-gray-50 border-l border-gray-200 shadow-2xl"
+        >
+          {/* Panel header */}
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16 shrink-0 border-b border-gray-200 bg-white">
+            <div className="min-w-0">
+              <h4 className="text-base sm:text-lg font-bold text-secondary flex items-center gap-2">
+                {editingProduct?.id ? <Edit3 size={18} className="text-primary shrink-0" /> : <PlusCircle size={18} className="text-primary shrink-0" />}
+                <span className="truncate">{editingProduct?.id ? 'Edit Product' : 'Add New Product'}</span>
+              </h4>
+              {editingProduct?.id && editingProduct?.name && (
+                <p className="text-[11px] text-gray-500 truncate max-w-[60vw]">{editingProduct.name}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={closeForm}
+              title="Close (Esc)"
+              className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors shrink-0"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+      {/* Form on the left (7 cols), live preview on the right (5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start p-3 sm:p-6">
         {/* Add/Edit Form */}
         <div className="lg:col-span-7">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 sticky top-0">
-          <div className="flex justify-between items-center mb-6">
-            <h4 className="text-lg font-bold text-secondary flex items-center gap-2">
-              <PlusCircle size={20} className="text-primary" />
-              {editingProduct?.id ? 'Edit Product' : 'Add New Product'}
-            </h4>
-            {editingProduct && (
-              <button
-                onClick={() => setEditingProduct(null)}
-                className="text-[10px] font-bold text-primary hover:underline"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
+        <div className="bg-white p-3 sm:p-5 rounded-2xl border border-gray-100">
           <form
             onSubmit={saveProduct}
-            className="space-y-4 overflow-y-auto max-h-[calc(100vh-140px)] pr-1 no-scrollbar"
+            className="space-y-4"
           >
             {/* Step 1: Name & Code */}
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
@@ -858,7 +1082,7 @@ export default function AdminProductsTab({
                                 });
                               }}
                               placeholder="XL / Free"
-                              className="w-full bg-red-50 border border-primary/20 rounded-lg py-1.5 px-2 text-xs font-bold text-primary outline-none focus:ring-1 focus:ring-primary mt-0.5"
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs font-bold text-gray-900 outline-none focus:ring-1 focus:ring-primary mt-0.5"
                             />
                           </div>
                           <div>
@@ -1535,31 +1759,35 @@ export default function AdminProductsTab({
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex gap-2 pb-4">
+            {/* Save bar: stays at the bottom of the panel while scrolling */}
+            <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-5 -mb-3 sm:-mb-5 px-3 sm:px-5 py-3 bg-white border-t border-gray-100 rounded-b-2xl flex gap-2">
               <button
                 type="submit"
-                className="flex-1 bg-primary text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-primary/20 hover:bg-red-700 active:scale-95 transition-all text-sm"
+                disabled={isSavingProduct}
+                className="flex-1 h-12 bg-primary text-white font-bold rounded-xl shadow-sm hover:opacity-90 active:scale-[0.99] transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                {editingProduct?.id ? '✏️ Update Product' : '✅ Save Product'}
+                {isSavingProduct ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <CheckCircle2 size={16} />
+                )}
+                {isSavingProduct ? 'Saving...' : editingProduct?.id ? 'Update Product' : 'Save Product'}
               </button>
-              {editingProduct && (
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="bg-gray-100 text-gray-500 px-5 rounded-2xl hover:bg-gray-200 transition-all font-bold text-sm"
-                >
-                  Cancel
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={closeForm}
+                className="h-12 bg-gray-100 text-gray-600 px-5 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm"
+              >
+                Cancel
+              </button>
             </div>
           </form>
         </div>
       </div>
 
       {/* Right Column: Live Product Preview */}
-      <div className="lg:col-span-5 sticky top-4 space-y-4">
-        <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+      <div className="lg:col-span-5 lg:sticky lg:top-0 space-y-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100">
           {/* Header with Switcher */}
           <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
@@ -1600,7 +1828,7 @@ export default function AdminProductsTab({
           {/* Hint */}
           <p className="text-[11px] text-gray-500 mb-4 bg-amber-50/70 border border-amber-200/60 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
             <span>💡</span>
-            <span>Live preview updates in real-time as you enter product details on the left.</span>
+            <span>The preview updates as you fill in the form.</span>
           </p>
 
           {/* PREVIEW CONTENT */}
@@ -1804,7 +2032,7 @@ export default function AdminProductsTab({
               <div className="space-y-2 pt-2">
                 <button
                   type="button"
-                  className="w-full bg-primary text-white font-bold py-2.5 rounded-xl shadow-md shadow-primary/20 hover:bg-red-700 transition-all text-xs flex items-center justify-center gap-2"
+                  className="w-full bg-primary text-white font-bold py-2.5 rounded-xl shadow-md shadow-primary/20 hover:opacity-90 transition-all text-xs flex items-center justify-center gap-2"
                 >
                   <ShoppingBag size={14} />
                   Order Now
@@ -1816,30 +2044,45 @@ export default function AdminProductsTab({
       </div>
     </div>
 
-    {/* Bottom Section: Full Width Products List & Code Search */}
-    <div className="w-full bg-white rounded-3xl border border-gray-100 shadow-sm p-6 overflow-hidden">
-      {/* Header and Search Filters */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100">
-        <div>
-          <h3 className="text-lg font-bold text-secondary flex items-center gap-2">
-            <Package size={20} className="text-primary" />
-            Product Management &amp; Catalog
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Latest uploaded products appear at the top. Search instantly by Code or Name.
-          </p>
+          </div>
+        </div>
+      </div>,
+      document.body,
+      )}
+
+    {/* Product list */}
+    <div className="w-full bg-white rounded-2xl border border-gray-100">
+      {/* Title, search, filter, add */}
+      <div className="p-4 sm:p-5 space-y-4 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-secondary flex items-center gap-2">
+              <Package size={20} className="text-primary shrink-0" />
+              Products
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5 hidden sm:block">
+              Newest first. Search by code, name, brand or category.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openNewProductForm}
+            className="h-10 px-4 rounded-xl bg-primary text-white font-bold text-sm flex items-center gap-2 shadow-sm hover:opacity-90 transition-all shrink-0"
+          >
+            <Plus size={16} />
+            Add Product
+          </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search Input by Code or Name */}
-          <div className="relative min-w-[260px] sm:min-w-[340px]">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search by Code (e.g. SAM-A55) or Name..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl pl-9 pr-9 py-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              placeholder="Search by code (e.g. SAM-A55) or name..."
+              className="w-full h-10 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-9 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
             />
             {searchQuery && (
               <button
@@ -1851,238 +2094,180 @@ export default function AdminProductsTab({
               </button>
             )}
           </div>
+          <select
+            value={selectedCategoryFilter}
+            onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+            className="h-10 bg-gray-50 border border-gray-200 rounded-xl px-3 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary cursor-pointer transition-all"
+          >
+            <option value="all">All Categories ({products.length})</option>
+            {categories.map((c: any) => (
+              <option key={c.id || c.name} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          {/* Category Filter */}
-          <div className="relative">
-            <select
-              value={selectedCategoryFilter}
-              onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer transition-all"
-            >
-              <option value="all">All Categories ({products.length})</option>
-              {categories.map((c: any) => (
-                <option key={c.id || c.name} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+        {/* Quick filters with counts */}
+        <div className="-mx-1 px-1 overflow-x-auto no-scrollbar">
+          <div className="inline-flex gap-1.5 min-w-max">
+            {([
+              { id: 'all', label: 'All', count: listCounts.all },
+              { id: 'live', label: 'Live', count: listCounts.live },
+              { id: 'hidden', label: 'Hidden', count: listCounts.hidden },
+              { id: 'low', label: 'Low stock', count: listCounts.low },
+              { id: 'out', label: 'Out of stock', count: listCounts.out },
+            ] as const).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setListFilter(f.id)}
+                className={`h-8 px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                  listFilter === f.id
+                    ? 'bg-primary text-white border-transparent shadow-sm'
+                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                {f.label}
+                <span className={`text-[10px] tabular-nums ${listFilter === f.id ? 'opacity-80' : 'text-gray-400'}`}>{f.count}</span>
+              </button>
+            ))}
           </div>
-
-          {/* Total Count Badge */}
-          <span className="text-xs font-black bg-primary/10 text-primary px-3 py-2 rounded-2xl border border-primary/20">
-            Total: {sortedAndFilteredProducts.length}
-          </span>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto no-scrollbar min-h-[350px] pb-24">
-        <table className="w-full text-left min-w-[700px]">
-          <thead>
-            <tr className="bg-gray-50 text-[10px] text-gray-400 uppercase font-bold border-b border-gray-100">
-              <th className="px-6 py-4">Product &amp; Code</th>
-              <th className="px-6 py-4">Price &amp; Delivery</th>
-              <th className="px-6 py-4">Stock &amp; Variants</th>
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {sortedAndFilteredProducts.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                  <p className="text-sm font-bold">No products found!</p>
-                  {searchQuery && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      No product matches "{searchQuery}".{' '}
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        className="text-primary underline font-bold"
-                      >
-                        Clear Search
-                      </button>
-                    </p>
-                  )}
-                </td>
-              </tr>
-            ) : (
-              sortedAndFilteredProducts.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50/40 transition-colors">
-                  <td className="px-6 py-4 flex items-center gap-4">
-                    <img
-                      loading="lazy"
-                      src={p.image || p.images?.[0] || '/logo.webp'}
-                      className="w-14 h-14 rounded-2xl object-cover border border-gray-100 shrink-0"
-                      alt={p.name}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/logo.webp';
-                      }}
-                    />
-                    <div className="max-w-[200px] sm:max-w-[280px]">
-                      <p className="text-sm font-bold text-secondary line-clamp-1">{p.name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                          {p.category}
-                        </span>
-                        {p.code ? (
-                          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">
-                            <Hash size={10} />
-                            {p.code}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-mono text-gray-300">No Code</span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-bold text-secondary">৳{p.price}</p>
-                    {p.originalPrice > p.price && (
-                      <p className="text-xs text-gray-400 line-through">৳{p.originalPrice}</p>
-                    )}
-                    {p.isFreeDelivery ? (
-                      <span className="inline-block mt-1 text-[9px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-                        🚚 Free Delivery
-                      </span>
-                    ) : (p.deliveryCharge !== undefined && p.deliveryCharge !== null && p.deliveryCharge !== '' && Number(p.deliveryCharge) >= 0) ? (
-                      <span className="inline-block mt-1 text-[9px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-md">
-                        🚚 Delivery: ৳{p.deliveryCharge}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-6 py-4">
-                    {p.variants && p.variants.length > 0 ? (
-                      <div className="flex flex-col gap-1">
-                        <div className="flex flex-wrap gap-1">
-                          {p.variants.map((v: any, i: number) => (
-                            <span
-                              key={i}
-                              className={`text-[9px] px-1.5 py-[2px] rounded-full font-bold border ${
-                                Number(v.stock || 0) <= 5
-                                  ? 'bg-red-50 text-red-600 border-red-200'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200'
-                              }`}
-                            >
-                              {v.name}: {v.stock || 0}
-                            </span>
-                          ))}
-                        </div>
-                        <span className="text-[10px] font-extrabold text-emerald-700">
-                          Total: {getEffectiveStock(p)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span
-                        className={`text-[9px] px-1.5 py-[2px] rounded-full font-bold border ${
-                          getEffectiveStock(p) <= 5
-                            ? 'bg-red-50 text-red-600 border-red-200'
-                            : 'bg-gray-50 text-gray-700 border-gray-200'
-                        }`}
-                      >
-                        Stock: {getEffectiveStock(p)}
+      {visibleProducts.length === 0 ? (
+        <div className="px-6 py-16 text-center text-gray-400">
+          <p className="text-sm font-bold">No products found</p>
+          {(searchQuery || listFilter !== 'all' || selectedCategoryFilter !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setListFilter('all');
+                setSelectedCategoryFilter('all');
+              }}
+              className="mt-2 text-xs text-primary underline font-bold"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Phone: cards */}
+          <div className="lg:hidden divide-y divide-gray-100 pb-28">
+            {visibleProducts.map((p) => (
+              <div key={p.id} className="p-3 flex gap-3">
+                <img
+                  loading="lazy"
+                  src={p.image || p.images?.[0] || '/logo.webp'}
+                  className="w-16 h-16 rounded-xl object-cover border border-gray-100 shrink-0"
+                  alt={p.name}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo.webp';
+                  }}
+                />
+                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-bold text-secondary line-clamp-2 leading-snug">{p.name}</p>
+                    {renderProductActions(p)}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                    <span className="font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{p.category}</span>
+                    {p.code && (
+                      <span className="inline-flex items-center gap-0.5 font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                        <Hash size={9} />
+                        {p.code}
                       </span>
                     )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2 items-center">
-                      <button
-                        type="button"
-                        onClick={() => togglePublishStatus(p)}
-                        title={p.isPublished !== false ? 'Published (Live)' : 'Unpublished (Hidden)'}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none mr-2 ${
-                          p.isPublished !== false ? 'bg-green-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            p.isPublished !== false ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-
-                      <div
-                        className="relative font-sans"
-                        ref={activeProductDropdown === p.id ? productDropdownRef : null}
-                      >
-                        <button
-                          onClick={() => setActiveProductDropdown(activeProductDropdown === p.id ? null : p.id)}
-                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
-                        >
-                          <MoreVertical size={20} />
-                        </button>
-
-                        {activeProductDropdown === p.id && (
-                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden text-sm">
-                            <button
-                              onClick={() => {
-                                setEditingProduct({
-                                  ...p,
-                                  variants: p.variants || [],
-                                  bundleProductIds: p.bundleProductIds || [],
-                                  bundleDiscount: p.bundleDiscount || 0,
-                                  bundleDiscountType: p.bundleDiscountType || 'percentage',
-                                });
-                                setActiveProductDropdown(null);
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                            >
-                              <Edit3 size={16} className="text-primary" />
-                              <span>Edit Details</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                copyLandingPageLink(p.id);
-                                setActiveProductDropdown(null);
-                              }}
-                              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
-                            >
-                              <Share2 size={16} className="text-gray-400" />
-                              <span>Copy Link</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                handleDuplicateProduct(p);
-                                setActiveProductDropdown(null);
-                              }}
-                              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
-                            >
-                              <Copy size={16} className="text-gray-400" />
-                              <span>Duplicate</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                openLandingEditor(p);
-                                setActiveProductDropdown(null);
-                              }}
-                              className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-gray-700 border-t border-gray-50"
-                            >
-                              <LayoutTemplate size={16} className="text-gray-400" />
-                              <span>Landing Page</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                deleteProduct(p.id);
-                                setActiveProductDropdown(null);
-                              }}
-                              className="w-full text-left px-4 py-3 hover:bg-red-50 flex items-center gap-3 text-red-600 border-t border-gray-50"
-                            >
-                              <Trash2 size={16} className="text-red-500" />
-                              <span>Delete Product</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    {p.isPublished === false && <span className="tone-neutral tone-chip px-1.5 py-0.5 font-bold">Hidden</span>}
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-sm font-extrabold text-gray-900">৳{p.price}</span>
+                      {p.originalPrice > p.price && <span className="text-[11px] text-gray-400 line-through">৳{p.originalPrice}</span>}
                     </div>
-                  </td>
+                    {renderStockSummary(p, true)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Computer: table */}
+          <div className="hidden lg:block overflow-x-auto pb-24">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50 text-[10px] text-gray-400 uppercase font-bold border-b border-gray-100">
+                  <th className="px-5 py-3">Product &amp; Code</th>
+                  <th className="px-5 py-3 w-[160px]">Price &amp; Delivery</th>
+                  <th className="px-5 py-3">Stock &amp; Variants</th>
+                  <th className="px-5 py-3 w-[140px] text-right">Live / Actions</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {visibleProducts.map((p) => (
+                  <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          loading="lazy"
+                          src={p.image || p.images?.[0] || '/logo.webp'}
+                          className="w-12 h-12 rounded-xl object-cover border border-gray-100 shrink-0"
+                          alt={p.name}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/logo.webp';
+                          }}
+                        />
+                        <div className="min-w-0 max-w-[420px]">
+                          <button
+                            type="button"
+                            onClick={() => openEditForm(p)}
+                            className="text-sm font-bold text-secondary line-clamp-1 text-left hover:text-primary transition-colors"
+                            title="Edit product"
+                          >
+                            {p.name}
+                          </button>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[10px]">
+                            <span className="font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{p.category}</span>
+                            {p.code ? (
+                              <span className="inline-flex items-center gap-0.5 font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                                <Hash size={9} />
+                                {p.code}
+                              </span>
+                            ) : (
+                              <span className="font-mono text-gray-400">No code</span>
+                            )}
+                            {p.isPublished === false && <span className="tone-neutral tone-chip px-1.5 py-0.5 font-bold">Hidden</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <p className="text-sm font-extrabold text-gray-900">৳{p.price}</p>
+                      {p.originalPrice > p.price && <p className="text-[11px] text-gray-400 line-through">৳{p.originalPrice}</p>}
+                      {p.isFreeDelivery ? (
+                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                          <Truck size={10} /> Free delivery
+                        </span>
+                      ) : p.deliveryCharge !== undefined && p.deliveryCharge !== null && p.deliveryCharge !== '' && Number(p.deliveryCharge) >= 0 ? (
+                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+                          <Truck size={10} /> ৳{p.deliveryCharge}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-5 py-3">{renderStockSummary(p, false)}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex justify-end">{renderProductActions(p)}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   </div>
 );
